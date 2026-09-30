@@ -1,0 +1,56 @@
+1. Overview
+1.1. Mục tiêu
+Xây dựng nền tảng kết nối giữa Khách hàng (người có nhu cầu thuê sân) và Chủ sân bóng, 
+giúp tự động hóa quy trình tìm kiếm, đặt sân, thanh toán và quản lý lịch trình một cách nhanh chóng, chính xác.
+
+1.2. Phân Quyền người dùng
+Khách hàng (Customer): Tìm kiếm sân, đặt chỗ, thanh toán, đánh giá.
+Chủ sân (Field Manager): Quản lý sân, giá cả, duyệt lịch, xem báo cáo doanh thu.
+Quản trị viên (Admin): Quản lý người dùng, duyệt chủ sân mới, cấu hình hệ thống, xử lý tranh chấp.
+
+2. ĐẶC TẢ YÊU CẦU CHỨC NĂNG
+2.1. Phân hệ Khách hàng (Customer)
+
+| Tên chức năng                | Mô tả                              |
+| Đăng ký / Đăng nhập          | Người dùng chọn sân, giờ, ngày     |
+| Tìm kiếm & Lọc sân           | Thanh toán 30% khi đặt lịch        |
+| Xem thông tin sân            | Admin xác nhận hoặc từ chối        |
+| Đặt sân trực tuyến           | Thanh toán phần còn lại            |
+| Thanh toán                   | Hủy theo điều kiện                 |
+| Quản lý lịch đặt             | Admin xác nhận hoặc từ chối        |
+| Đánh giá & Phản hồi          | Thanh toán phần còn lại            |
+| Tìm đối/Gộp đội              | Hủy theo điều kiện                 |
+
+2.2. Phân hệ Chủ sân (Field Manager)
+
+| Tên chức năng                         | Mô tả                               |
+| Quản lý cơ sở & Sân nhỏ               | Thêm/Sửa/Xóa cụm sân (ví dụ: Cụm sân A), chi tiết từng sân con (Sân 5A, Sân 5B...), loại mặt cỏ, hệ thống chiếu sáng.                                     |
+| Quản lý bảng giá                      | Cấu hình giá linh hoạt: Theo khung giờ (Giờ vàng/Giờ thường), ngày trong tuần/cuối tuần, ngày lễ.                                                         |
+| Quản lý Lịch đặt (Calendar UI)        | Xem trực quan toàn bộ lịch sân theo ngày/tần suất dạng ma trận giờ. Cho phép chủ sân tự Đặt lịch thủ công khi có khách đặt qua điện thoại/tại chỗ.        |
+| Xác nhận & Quản lý đơn                | Duyệt đơn đặt sân, cập nhật trạng thái (Đã cọc, Đã thanh toán, Khách đã nhận sân, Hủy).                                                                   |
+| Báo cáo & Thống kê                    | Xem biểu đồ doanh thu theo ngày/tần suất/tháng, tỷ lệ lấp đầy sân, số lượng đơn hủy. Xuất báo cáo ra file Excel.                                          |
+| Quản lý dịch vụ đi kèm                | Quản lý bán/cho thuê phụ kiện (nước uống, áo blouse, giày, bóng).                                                                                         |
+
+
+2.3. Phân hệ Quản trị viên (Admin)
+
+| Tên chức năng                     | Mô tả                              |
+| Quản lý Người dùng                | Khóa/Mở khóa tài khoản khách hàng và chủ sân vi phạm quy định.                                                                    |
+| Duyệt Chủ sân                     | Kiểm duyệt thông tin pháp lý, giấy phép kinh doanh/mặt bằng của chủ sân mới trước khi cho phép niêm yết sân lên hệ thống.         |
+| Quản lý Chiết khấu & Phí          | Cấu hình % hoa hồng thu từ chủ sân trên mỗi đơn đặt thành công.                                                                   |
+| Quản lý Đánh giá                  | Kiểm duyệt, xóa các bình luận chứa từ ngữ thô tục, rác hoặc cạnh tranh không lành mạnh.                                           |
+
+
+3. YÊU CẦU PHI CHỨC NĂNG (NON-FUNCTIONAL REQUIREMENTS)
+3.1. Hiệu năng (Performance)
+
+- Thời gian phản hồi: Thời gian tải trang chính và kết quả tìm kiếm $< 2$ giây.
+- Tải đồng thời: Hệ thống chịu tải được tối thiểu 1.000 người dùng truy cập cùng lúc mà không bị sập hay giật lag.
+- Đồng bộ Lịch realtime: Khi có 1 người vừa đặt khung giờ X ở Sân Y, khung giờ đó phải lập tức chuyển sang trạng thái "Đã khóa" đối với tất cả người dùng khác để tránh hiện tượng Overbooking (trùng lịch).
+
+3.2. Bảo mật (Security)
+
+- Mã hóa toàn bộ dữ liệu nhạy cảm (mật khẩu người dùng) bằng thuật toán bcrypt/Argon2.
+- Sử dụng giao thức HTTPS/TLS cho toàn bộ trang web.
+- Bảo mật thanh toán: Tích hợp qua SDK/API chính thức của cổng thanh toán, không lưu thông tin thẻ ngân hàng của khách hàng trên server nội bộ.
+
