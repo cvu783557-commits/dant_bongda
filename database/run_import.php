@@ -17,10 +17,13 @@ try {
     $pdo = new PDO($dsn, $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8mb4',
     ]);
 
     $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $pdo->exec("ALTER DATABASE `{$dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     $pdo->exec("USE `{$dbname}`");
+    $pdo->exec("SET NAMES utf8mb4");
 
     $sql = file_get_contents(__DIR__ . '/schema.sql');
     if ($sql === false) {

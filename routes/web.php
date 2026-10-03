@@ -23,8 +23,10 @@ $router->get('/admin/dashboard',             AdminBookingController::class . '@d
 $router->get('/admin/pitches',                    AdminPitchController::class . '@index');
 $router->get('/admin/pitches/create',             AdminPitchController::class . '@create');
 $router->post('/admin/pitches',                   AdminPitchController::class . '@store');
+$router->get('/admin/pitches/(\d+)',             AdminPitchController::class . '@show');
 $router->get('/admin/pitches/(\d+)/edit',         AdminPitchController::class . '@edit');
-$router->post('/admin/pitches/(\d+)',             AdminPitchController::class . '@update');
+$router->post('/admin/pitches/(\d+)',            AdminPitchController::class . '@update');
+$router->post('/admin/pitches/(\d+)/toggle-status', AdminPitchController::class . '@toggleStatus');
 $router->post('/admin/pitches/(\d+)/delete',      AdminPitchController::class . '@destroy');
 
 // Admin -> Quản lý đặt sân

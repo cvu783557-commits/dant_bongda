@@ -31,6 +31,19 @@ class PitchController extends Controller
         ]);
     }
 
+    public function show($id)
+    {
+        $pitch = $this->pitch->find($id);
+        if (!$pitch) {
+            redirect404();
+            return;
+        }
+
+        return view('admin.pitches.show', [
+            'pitch' => $pitch,
+        ]);
+    }
+
     public function create()
     {
         $old   = $_SESSION['old'] ?? [];
@@ -157,6 +170,28 @@ class PitchController extends Controller
 
         unset($_SESSION['old']);
         setFlash('success', 'Cập nhật sân thành công');
+        redirect('admin/pitches');
+    }
+
+    public function toggleStatus($id)
+    {
+        $pitch = $this->pitch->find($id);
+        if (!$pitch) {
+            redirect404();
+            return;
+        }
+
+        $newStatus = $pitch['status'] === 'active' ? 'inactive' : 'active';
+
+        $this->pitch->update($id, [
+            'name'           => $pitch['name'],
+            'type'           => (int)$pitch['type'],
+            'price_per_hour' => (int)$pitch['price_per_hour'],
+            'description'    => $pitch['description'] ?? '',
+            'status'         => $newStatus,
+        ]);
+
+        setFlash('success', $newStatus === 'active' ? 'Kích hoạt sân thành công' : 'Tạm dừng sân thành công');
         redirect('admin/pitches');
     }
 
