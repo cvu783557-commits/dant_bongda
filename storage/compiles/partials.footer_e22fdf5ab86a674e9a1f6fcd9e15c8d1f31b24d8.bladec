@@ -1,3 +1,5 @@
-<footer class="text-center py-3 border-top">
- <small>© <?php echo \htmlentities(date('Y')??'', ENT_QUOTES, 'UTF-8', false); ?> Admin</small>
+<footer class="border-top mt-5 py-3 bg-light">
+ <div class="container text-center text-secondary small">
+ © <?php echo date('Y'); ?> - Hệ thống đặt sân bóng - Powered by BASE AGILE
+ </div>
 </footer>

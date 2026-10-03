@@ -1,14 +1,37 @@
 <?php
 
-use App\Controllers\HomeController;
-use App\Controllers\RoleController;
+use App\Controllers\PitchController;
+use App\Controllers\Admin\BookingController as AdminBookingController;
+use App\Controllers\Admin\PitchController as AdminPitchController;
 use Bramus\Router\Router;
 
 $router = new Router();
 
-// Đây là nơi khai báo các route
+// ====================== FRONTEND ======================
+$router->get('/',  PitchController::class . '@index');
 
-$router->get('/', HomeController::class . '@index');
+$router->get('/pitches/(\d+)',  PitchController::class . '@show');
+
+$router->post('/bookings',           PitchController::class . '@bookingStore');
+$router->get('/bookings/success/(\d+)', PitchController::class . '@bookingSuccess');
+
+// ====================== ADMIN =========================
+$router->get('/admin',                       AdminBookingController::class . '@index');
+$router->get('/admin/dashboard',             AdminBookingController::class . '@dashboard');
+
+// Admin -> Quản lý sân
+$router->get('/admin/pitches',                    AdminPitchController::class . '@index');
+$router->get('/admin/pitches/create',             AdminPitchController::class . '@create');
+$router->post('/admin/pitches',                   AdminPitchController::class . '@store');
+$router->get('/admin/pitches/(\d+)/edit',         AdminPitchController::class . '@edit');
+$router->post('/admin/pitches/(\d+)',             AdminPitchController::class . '@update');
+$router->post('/admin/pitches/(\d+)/delete',      AdminPitchController::class . '@destroy');
+
+// Admin -> Quản lý đặt sân
+$router->get('/admin/bookings',                    AdminBookingController::class . '@index');
+$router->get('/admin/bookings/(\d+)/edit',         AdminBookingController::class . '@edit');
+$router->post('/admin/bookings/(\d+)',             AdminBookingController::class . '@update');
+$router->post('/admin/bookings/(\d+)/delete',      AdminBookingController::class . '@destroy');
 
 // ------------------------
 

@@ -76,3 +76,62 @@ if (!function_exists('setFlash')) {
         $_SESSION['flash'][$key] = $message;
     }
 }
+
+if (!function_exists('getFlash')) {
+    function getFlash($key = null)
+    {
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        if ($key === null) {
+            $all = $_SESSION['flash'] ?? [];
+            unset($_SESSION['flash']);
+            return $all;
+        }
+
+        if (isset($_SESSION['flash'][$key])) {
+            $msg = $_SESSION['flash'][$key];
+            unset($_SESSION['flash'][$key]);
+            return $msg;
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('old')) {
+    function old($key, $default = '')
+    {
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
+        return $_SESSION['old'][$key] ?? $default;
+    }
+}
+
+if (!function_exists('keepOld')) {
+    function keepOld($data)
+    {
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
+        $_SESSION['old'] = $data;
+    }
+}
+
+if (!function_exists('formatMoney')) {
+    function formatMoney($num)
+    {
+        return number_format($num, 0, ',', '.') . ' ₫';
+    }
+}
+
+if (!function_exists('formatDate')) {
+    function formatDate($sqlDate)
+    {
+        if (!$sqlDate) return '';
+        $ts = strtotime($sqlDate);
+        return date('d/m/Y', $ts);
+    }
+}
