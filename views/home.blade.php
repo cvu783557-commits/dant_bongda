@@ -2,10 +2,22 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>⚽ Hệ thống đặt sân bóng online</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        html, body {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-synthesis-weight: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            color: #1f2937;
+        }
+        body, input, textarea, select, button {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        }
         .hero {
             background: linear-gradient(135deg, #0b6623 0%, #228b22 100%);
             color: #fff;

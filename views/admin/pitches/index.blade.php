@@ -58,10 +58,18 @@
                                 <?php endif; ?>
                             </td>
                             <td class="text-end">
-                                <a href="<?php echo route('admin/pitches/' . $p['id'] . '/edit'); ?>" class="btn btn-sm btn-outline-primary">Sửa</a>
-                                <form method="post" action="<?php echo route('admin/pitches/' . $p['id'] . '/delete'); ?>" class="d-inline" onsubmit="return confirm('Bạn có chắc muốn xóa sân này?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
-                                </form>
+                                <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                    <a href="<?php echo route('admin/pitches/' . $p['id']); ?>" class="btn btn-sm btn-outline-info">Chi tiết</a>
+                                    <a href="<?php echo route('admin/pitches/' . $p['id'] . '/edit'); ?>" class="btn btn-sm btn-outline-primary">Sửa</a>
+                                    <form method="post" action="<?php echo route('admin/pitches/' . $p['id'] . '/toggle-status'); ?>" class="d-inline">
+                                        <button type="submit" class="btn btn-sm <?php echo $p['status'] === 'active' ? 'btn-outline-warning' : 'btn-outline-success'; ?>">
+                                            <?php echo $p['status'] === 'active' ? 'Tạm dừng' : 'Kích hoạt'; ?>
+                                        </button>
+                                    </form>
+                                    <form method="post" action="<?php echo route('admin/pitches/' . $p['id'] . '/delete'); ?>" class="d-inline" onsubmit="return confirm('Bạn có chắc muốn xóa sân này?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

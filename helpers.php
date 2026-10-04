@@ -22,10 +22,31 @@ if (!function_exists('is_upload')) {
     }
 }
 
+if (!function_exists('base_url')) {
+    function base_url(): string
+    {
+        $envBase = $_ENV['APP_URL'] ?? null;
+        $httpHost = $_SERVER['HTTP_HOST'] ?? null;
+
+        if ($httpHost) {
+            $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443
+                ? 'https'
+                : 'http';
+            return $scheme . '://' . $httpHost;
+        }
+
+        if ($envBase) {
+            return rtrim($envBase, '/');
+        }
+
+        return 'http://localhost';
+    }
+}
+
 if (!function_exists('redirect')) {
     function redirect($path)
     {
-        header('Location: ' . $_ENV['APP_URL'] . $path);
+        header('Location: ' . rtrim(base_url(), '/') . '/' . ltrim($path, '/'));
         exit;
     }
 }
@@ -45,9 +66,7 @@ if (!function_exists('file_url')) {
             return null;
         }
 
-        $base = $_ENV['APP_URL'] ?: '';
-
-        return rtrim($base, '/') . '/' . ltrim($path, '/');
+        return rtrim(base_url(), '/') . '/' . ltrim($path, '/');
     }
 }
 
@@ -63,7 +82,7 @@ if (!function_exists('debug')) {
 if (!function_exists('route')) {
     function route($path)
     {
-        return $_ENV['APP_URL'] . $path;
+        return rtrim(base_url(), '/') . '/' . ltrim($path, '/');
     }
 }
 
