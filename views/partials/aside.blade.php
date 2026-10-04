@@ -13,5 +13,11 @@
                 🏟️ Quản lý sân
             </a>
         </li>
+        <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/customers') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/customers'); ?>">
+                👥 Quản lý khách hàng
+            </a>
+        </li>
     </ul>
 </div>
