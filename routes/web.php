@@ -2,6 +2,7 @@
 
 use App\Controllers\PitchController;
 use App\Controllers\Admin\BookingController as AdminBookingController;
+use App\Controllers\Admin\CustomerController as AdminCustomerController;
 use App\Controllers\Admin\PitchController as AdminPitchController;
 use Bramus\Router\Router;
 
@@ -34,6 +35,10 @@ $router->get('/admin/bookings',                    AdminBookingController::class
 $router->get('/admin/bookings/(\d+)/edit',         AdminBookingController::class . '@edit');
 $router->post('/admin/bookings/(\d+)',             AdminBookingController::class . '@update');
 $router->post('/admin/bookings/(\d+)/delete',      AdminBookingController::class . '@destroy');
+
+// Admin -> Quản lý khách hàng (read-only từ lịch sử đặt sân)
+$router->get('/admin/customers',                    AdminCustomerController::class . '@index');
+$router->get('/admin/customers/detail',             AdminCustomerController::class . '@show');
 
 // ------------------------
 

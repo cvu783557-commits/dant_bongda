@@ -1,0 +1,83 @@
+@extends('layouts.admin')
+@section('title', 'Chi tiết khách hàng')
+@section('content')
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <a href="<?php echo route('admin/customers'); ?>" class="text-decoration-none">&larr; Danh sách khách hàng</a>
+        <h3 class="fw-bold mt-2 mb-0">Chi tiết khách hàng</h3>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="small text-muted">Họ và tên</div>
+                <div class="fw-semibold"><?php echo htmlspecialchars($customer['customer_name'], ENT_QUOTES, 'UTF-8'); ?></div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">Số điện thoại</div>
+                <div class="fw-semibold"><?php echo htmlspecialchars($customer['customer_phone'], ENT_QUOTES, 'UTF-8'); ?></div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">Email</div>
+                <div class="fw-semibold"><?php echo htmlspecialchars($customer['customer_email'] ?: '—', ENT_QUOTES, 'UTF-8'); ?></div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">Tổng số đơn</div>
+                <div class="fw-semibold"><?php echo (int)$customer['booking_count']; ?></div>
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted">Tổng tiền đơn đã duyệt</div>
+                <div class="fw-semibold text-success"><?php echo formatMoney($customer['confirmed_total']); ?></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h5 class="fw-bold mb-3">Lịch sử đặt sân</h5>
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mã đơn</th>
+                        <th>Sân</th>
+                        <th>Ngày / Giờ</th>
+                        <th>Tiền</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($bookings as $booking): ?>
+                        <tr>
+                            <td class="fw-semibold">#<?php echo str_pad($booking['id'], 6, '0', STR_PAD_LEFT); ?></td>
+                            <td>
+                                <div><?php echo htmlspecialchars($booking['pitch_name'] ?? 'Sân đã xóa', ENT_QUOTES, 'UTF-8'); ?></div>
+                                <?php if ($booking['pitch_type']): ?><small class="text-muted">Sân <?php echo (int)$booking['pitch_type']; ?> người</small><?php endif; ?>
+                            </td>
+                            <td>
+                                <div><?php echo formatDate($booking['booking_date']); ?></div>
+                                <small class="text-muted"><?php echo substr($booking['start_time'] ?? '', 0, 5) . ' - ' . substr($booking['end_time'] ?? '', 0, 5); ?></small>
+                            </td>
+                            <td class="fw-semibold text-success"><?php echo formatMoney($booking['total_price']); ?></td>
+                            <td>
+                                <?php if ($booking['status'] === 'confirmed'): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Đã duyệt</span>
+                                <?php elseif ($booking['status'] === 'pending'): ?>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Chờ duyệt</span>
+                                <?php else: ?>
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Đã hủy</span>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@endsection
