@@ -1,10 +1,45 @@
 <div class="d-flex flex-column align-items-stretch">
+    <?php if (!empty($currentUser)): ?>
+        <div class="mb-3 p-2 border rounded bg-white">
+            <div class="d-flex align-items-center gap-2">
+                <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center" style="width:36px;height:36px;">
+                    <strong><?php echo mb_substr($currentUser['full_name'] ?? 'U', 0, 1); ?></strong>
+                </div>
+                <div style="line-height:1.2;">
+                    <div class="fw-semibold small"><?php echo e($currentUser['full_name'] ?? ''); ?></div>
+                    <span class="badge bg-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> bg-opacity-10 text-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> border border-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> border-opacity-10 small px-2 py-0"><?php echo e($currentUser['role'] ?? 'STAFF'); ?></span>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
     <h5 class="text-secondary text-uppercase fs-6 fw-semibold mb-3 px-2">Menu</h5>
     <ul class="nav nav-pills flex-column mb-auto">
         <li class="nav-item mb-1">
-            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/bookings') !== false) ? 'bg-success text-white' : ''; ?>"
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/dashboard') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/dashboard'); ?>">
+                📊 Tổng quan
+            </a>
+        </li>
+        <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/bookings/calendar') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/bookings/calendar'); ?>">
+                📅 Lịch sân bóng
+            </a>
+        </li>
+        <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (
+                (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/bookings') !== false)
+                && (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/bookings/calendar') === false)
+                && (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/bookings/create') === false)
+            ) ? 'bg-success text-white' : ''; ?>"
                href="<?php echo route('admin/bookings'); ?>">
                 📋 Danh sách đặt sân
+            </a>
+        </li>
+        <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/bookings/create') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/bookings/create'); ?>">
+                ➕ Thêm lịch đặt
             </a>
         </li>
         <li class="nav-item mb-1">
@@ -16,7 +51,7 @@
         <li class="nav-item mb-1">
             <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/customers') !== false) ? 'bg-success text-white' : ''; ?>"
                href="<?php echo route('admin/customers'); ?>">
-                👥 Quản lý khách hàng
+                👥 Khách hàng
             </a>
         </li>
     </ul>

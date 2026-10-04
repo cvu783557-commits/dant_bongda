@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập quản lý — SânBóng.Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            background: linear-gradient(135deg, #198754 0%, #157347 100%);
+            min-height: 100vh;
+            color: #1f2937;
+        }
+        body, input, button {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        }
+        .login-card {
+            border-radius: 16px;
+            border: 0;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        }
+        .brand-mark {
+            width: 64px; height: 64px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #198754, #4dd293);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: #fff;
+            font-weight: 700;
+            margin-bottom: 16px;
+            box-shadow: 0 10px 30px rgba(25,135,84,0.4);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container py-5">
+    <div class="row justify-content-center align-items-center" style="min-height: 90vh;">
+        <div class="col-lg-5 col-md-7">
+            <div class="login-card card p-5">
+                <div class="text-center mb-4">
+                    <div class="brand-mark">⚽</div>
+                    <h3 class="fw-bold mb-1">SânBóng.Pro Admin</h3>
+                    <p class="text-muted mb-4">Đăng nhập để quản lý lịch sân, khách hàng</p>
+                </div>
+
+                <?php if ($success): ?>
+                    <div class="alert alert-success" role="alert"><?php echo $success; ?></div>
+                <?php endif; ?>
+                <?php if ($error): ?>
+                    <div class="alert alert-danger" role="alert"><?php echo $error; ?></div>
+                <?php endif; ?>
+
+                <form method="post" action="<?php echo route('admin/login'); ?>">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tên đăng nhập</label>
+                        <input type="text" name="username" class="form-control form-control-lg" required
+                               placeholder="admin hoac staff"
+                               value="<?php echo htmlspecialchars($old['username'] ?? ''); ?>">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Mật khẩu</label>
+                        <input type="password" name="password" class="form-control form-control-lg" required
+                               placeholder="Nhập mật khẩu">
+                    </div>
+                    <button type="submit" class="btn btn-success btn-lg w-100 fw-bold mb-3">Đăng nhập</button>
+
+                    <div class="card bg-light border-0 small">
+                        <div class="card-body py-2 px-3">
+                            <div class="fw-semibold mb-1">Tài khoản mẫu (sau khi chạy seed_users.php):</div>
+                            <div><span class="text-muted">Admin:</span> admin / admin123</div>
+                            <div><span class="text-muted">Nhân viên:</span> staff / staff123</div>
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-4">
+                        <a href="<?php echo route('/'); ?>" class="text-decoration-none small text-success">← Về trang chủ đặt sân</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
