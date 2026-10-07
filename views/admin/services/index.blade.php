@@ -1,0 +1,143 @@
+@extends('layouts.admin')
+@section('title', 'Danh sách dịch vụ')
+@section('content')
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="fw-bold mb-0" style="font-size: 2rem;">Danh sách dịch vụ</h1>
+    <a href="<?php echo route('admin/services/create'); ?>" class="btn btn-success px-4 py-2" style="font-size: 1.05rem;">+ Thêm dịch vụ</a>
+</div>
+
+<?php if ($success): ?>
+    <div class="alert alert-success" role="alert"><?php echo $success; ?></div>
+<?php endif; ?>
+<?php if ($error): ?>
+    <div class="alert alert-danger" role="alert"><?php echo $error; ?></div>
+<?php endif; ?>
+
+<?php if (count($services) === 0): ?>
+    <div class="alert alert-info">Chưa có dịch vụ nào phù hợp. Click "Thêm dịch vụ" để tạo mặt hàng đầu tiên.</div>
+<?php else: ?>
+<div class="card border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="py-3 ps-4">ID</th>
+                        <th class="py-3">Ảnh</th>
+                        <th class="py-3">Tên dịch vụ</th>
+                        <th class="py-3">Nhóm</th>
+                        <th class="py-3">Đơn giá</th>
+                        <th class="py-3">ĐVT</th>
+                        <th class="py-3">Trạng thái</th>
+                        <th class="py-3 text-end pe-4">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                        $lastCat = null;
+                        foreach ($services as $s):
+                            $catKey   = $s['category'] ?? 'other';
+                            $catName  = \App\Models\Service::getCategoryName($catKey);
+                            $catColor = \App\Models\Service::getCategoryColor($catKey);
+
+                            if ($lastCat !== $catKey):
+                                $lastCat = $catKey;
+                    ?>
+                                <tr>
+                                    <td colspan="8" class="py-2 px-4" style="background-color: #e5e7eb; font-weight: 700; letter-spacing: 0.3px;">
+                                        <?php echo mb_strtoupper($catName, 'UTF-8'); ?>
+                                    </td>
+                                </tr>
+                    <?php
+                            endif;
+                    ?>
+                        <tr>
+                            <td class="py-3 ps-4 fw-medium"><?php echo (int)$s['id']; ?></td>
+                            <td class="py-3">
+                                <?php
+                                    $imgUrl = $s['image']
+                                        ? (str_starts_with($s['image'], 'http') ? $s['image'] : file_url($s['image']))
+                                        : 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=' . urlencode($catName . ' product commercial simple white background') . '&image_size=square';
+                                ?>
+                                <img src="<?php echo $imgUrl; ?>"
+                                     class="rounded border" style="width:68px;height:54px;object-fit:cover;" alt="img">
+                            </td>
+                            <td class="py-3">
+                                <div class="fw-semibold fs-6"><?php echo htmlspecialchars($s['name']); ?></div>
+                                <?php if (!empty($s['description'])): ?>
+                                    <small class="text-muted d-block" style="max-width:340px;">
+                                        <?php echo htmlspecialchars($s['description']); ?>
+                                    </small>
+                                <?php endif; ?>
+                            </td>
+                            <td class="py-3">
+                                <span class="badge rounded-pill px-3 py-2"
+                                      style="background-color: rgba(13,202,240,0.12); color: #0aa2c0; border: 1px solid rgba(13,202,240,0.25); font-weight: 500;">
+                                    <?php echo htmlspecialchars($catName); ?>
+                                </span>
+                            </td>
+                            <td class="py-3 fw-bold fs-6" style="color: #0f766e;"><?php echo formatMoney($s['price']); ?></td>
+                            <td class="py-3 text-muted"><?php echo htmlspecialchars($s['unit']); ?></td>
+                            <td class="py-3">
+                                <?php if ($s['status'] === 'active'): ?>
+                                    <span class="badge rounded-pill px-3 py-2"
+                                          style="background-color: rgba(25,135,84,0.12); color: #157347; border: 1px solid rgba(25,135,84,0.25); font-weight: 500;">
+                                        Hoạt động
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge rounded-pill px-3 py-2"
+                                          style="background-color: rgba(108,117,125,0.12); color: #5c636a; border: 1px solid rgba(108,117,125,0.25); font-weight: 500;">
+                                        Tạm dừng
+                                    </span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="py-3 text-end pe-4">
+                                <div class="d-flex justify-content-end gap-2 flex-wrap">
+                                    <a href="<?php echo route('admin/services/' . $s['id']); ?>"
+                                       class="btn btn-sm border rounded px-3 py-1.5"
+                                       style="color: #0aa2c0; border-color: #0aa2c0; background: white; font-weight: 500;">
+                                        Chi tiết
+                                    </a>
+                                    <a href="<?php echo route('admin/services/' . $s['id'] . '/edit'); ?>"
+                                       class="btn btn-sm btn-primary rounded px-3 py-1.5"
+                                       style="font-weight: 500;">
+                                        Sửa
+                                    </a>
+                                    <?php if ($s['status'] === 'active'): ?>
+                                        <form method="post" action="<?php echo route('admin/services/' . $s['id'] . '/toggle-status'); ?>" class="d-inline">
+                                            <button type="submit"
+                                                    class="btn btn-sm border rounded px-3 py-1.5"
+                                                    style="color: #b78a00; border-color: #e6c34a; background: white; font-weight: 500;">
+                                                Tạm dừng
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <form method="post" action="<?php echo route('admin/services/' . $s['id'] . '/toggle-status'); ?>" class="d-inline">
+                                            <button type="submit"
+                                                    class="btn btn-sm border rounded px-3 py-1.5"
+                                                    style="color: #157347; border-color: #157347; background: white; font-weight: 500;">
+                                                Kích hoạt
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
+                                    <form method="post" action="<?php echo route('admin/services/' . $s['id'] . '/delete'); ?>" class="d-inline"
+                                          onsubmit="return confirm('Bạn có chắc muốn xóa dịch vụ \'<?php echo htmlspecialchars(addslashes($s['name'])); ?>\'?\nDịch vụ đã có hóa đơn sẽ không thể xóa.');">
+                                        <button type="submit"
+                                                class="btn btn-sm border rounded px-3 py-1.5"
+                                                style="color: #dc3545; border-color: #dc3545; background: white; font-weight: 500;">
+                                            Xóa
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+@endsection

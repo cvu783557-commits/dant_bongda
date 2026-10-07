@@ -5,6 +5,7 @@ use App\Controllers\Admin\AuthController;
 use App\Controllers\Admin\BookingController as AdminBookingController;
 use App\Controllers\Admin\CustomerController as AdminCustomerController;
 use App\Controllers\Admin\PitchController as AdminPitchController;
+use App\Controllers\Admin\ServiceController as AdminServiceController;
 use Bramus\Router\Router;
 
 $router = new Router();
@@ -37,6 +38,17 @@ $router->get('/admin/pitches/(\d+)/edit',         AdminPitchController::class . 
 $router->post('/admin/pitches/(\d+)',            AdminPitchController::class . '@update');
 $router->post('/admin/pitches/(\d+)/toggle-status', AdminPitchController::class . '@toggleStatus');
 $router->post('/admin/pitches/(\d+)/delete',      AdminPitchController::class . '@destroy');
+
+// Admin -> Quản lý dịch vụ (đồ uống, thiết bị, phụ trội)
+$router->get('/admin/services',                        AdminServiceController::class . '@index');
+$router->get('/admin/services/create',                 AdminServiceController::class . '@create');
+$router->post('/admin/services',                       AdminServiceController::class . '@store');
+$router->get('/admin/services/(\d+)',                 AdminServiceController::class . '@show');
+$router->get('/admin/services/(\d+)/edit',             AdminServiceController::class . '@edit');
+$router->post('/admin/services/(\d+)',                AdminServiceController::class . '@update');
+$router->post('/admin/services/(\d+)/toggle-status',   AdminServiceController::class . '@toggleStatus');
+$router->post('/admin/services/(\d+)/adjust-stock',    AdminServiceController::class . '@adjustStock');
+$router->post('/admin/services/(\d+)/delete',          AdminServiceController::class . '@destroy');
 
 // Admin -> Quản lý đặt sân (version mới - đầy đủ nghiệp vụ)
 $router->get('/admin/bookings',                       AdminBookingController::class . '@index');
