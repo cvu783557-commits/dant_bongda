@@ -40,9 +40,10 @@ class CustomerController extends Controller
 
         $customer = null;
         if ($id > 0) {
-            $customer = $this->customer->find($id);
+            $customer = $this->customer->findWithSummary($id);
         } elseif ($phone !== '') {
-            $customer = $this->customer->findByPhone($phone);
+            $found = $this->customer->findByPhone($phone);
+            $customer = $found ? $this->customer->findWithSummary((int)$found['id']) : null;
         }
 
         if (!$customer) {

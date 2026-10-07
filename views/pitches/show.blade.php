@@ -139,6 +139,10 @@
                             <span class="fw-semibold">Thành tiền (ước tính):</span>
                             <span class="fw-bold fs-5" id="totalDisplay"><?php echo formatMoney(0); ?></span>
                         </div>
+                        <div class="alert alert-info mb-4">
+                            Đặt cọc 30% tổng tiền qua VNPay để gửi yêu cầu đặt sân. Phần còn lại thanh toán tại sân.
+                            <div class="small mt-1">Tiền cọc tạm tính: <strong id="depositDisplay"><?php echo formatMoney(0); ?></strong></div>
+                        </div>
 
                         <div class="mb-3">
                             <label class="form-label">Họ tên khách hàng <span class="text-danger">*</span></label>
@@ -190,6 +194,7 @@
     const endEl     = document.getElementById('end_time');
     const hoursEl   = document.getElementById('hoursDisplay');
     const totalEl   = document.getElementById('totalDisplay');
+    const depositEl = document.getElementById('depositDisplay');
     const overlapEl = document.getElementById('overlapBox');
     const form      = document.getElementById('bookingForm');
 
@@ -208,12 +213,14 @@
         if(s === null || e === null || e <= s){
             hoursEl.value = '0 giờ';
             totalEl.textContent = fmtMoney(0);
+            depositEl.textContent = fmtMoney(0);
             return null;
         }
         const hours = (e - s) / 3600;
         hoursEl.value = hours.toFixed(2).replace(/\.?0+$/,'') + ' giờ';
         const total = Math.round(hours * PRICE_PER_HOUR);
         totalEl.textContent = fmtMoney(total);
+        depositEl.textContent = fmtMoney(Math.max(1, Math.ceil(total * 0.30)));
         return hours;
     }
 

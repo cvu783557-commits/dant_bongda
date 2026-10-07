@@ -11,8 +11,12 @@ class Customer extends Model
     public function all($search = '')
     {
         $sql = "SELECT c.*,
+                       c.name AS customer_name,
+                       c.phone AS customer_phone,
+                       c.email AS customer_email,
                        (SELECT COUNT(*) FROM bookings b WHERE b.customer_id = c.id) AS booking_count,
                        (SELECT COALESCE(SUM(CASE WHEN b.status <> 'cancelled' THEN b.total_price ELSE 0 END),0) FROM bookings b WHERE b.customer_id = c.id) AS total_spent,
+                       (SELECT COALESCE(SUM(CASE WHEN b.status = 'confirmed' THEN b.total_price ELSE 0 END),0) FROM bookings b WHERE b.customer_id = c.id) AS confirmed_total,
                        (SELECT MAX(b.booking_date) FROM bookings b WHERE b.customer_id = c.id) AS last_booking_date
                 FROM {$this->table} c";
         $params = [];
@@ -30,6 +34,19 @@ class Customer extends Model
     public function find($id)
     {
         $sql = "SELECT * FROM {$this->table} WHERE id = ?";
+        return $this->connection->executeQuery($sql, [$id])->fetchAssociative();
+    }
+
+    public function findWithSummary($id)
+    {
+        $sql = "SELECT c.*,
+                       c.name AS customer_name,
+                       c.phone AS customer_phone,
+                       c.email AS customer_email,
+                       (SELECT COUNT(*) FROM bookings b WHERE b.customer_id = c.id) AS booking_count,
+                       (SELECT COALESCE(SUM(CASE WHEN b.status = 'confirmed' THEN b.total_price ELSE 0 END),0) FROM bookings b WHERE b.customer_id = c.id) AS confirmed_total
+                FROM {$this->table} c
+                WHERE c.id = ?";
         return $this->connection->executeQuery($sql, [$id])->fetchAssociative();
     }
 

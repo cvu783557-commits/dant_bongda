@@ -16,6 +16,8 @@ $router->get('/pitches/(\d+)',  PitchController::class . '@show');
 
 $router->post('/bookings',           PitchController::class . '@bookingStore');
 $router->get('/bookings/success/(\d+)', PitchController::class . '@bookingSuccess');
+$router->get('/bookings/vnpay-return', PitchController::class . '@vnpayReturn');
+$router->get('/bookings/vnpay-ipn', PitchController::class . '@vnpayIpn');
 
 // ====================== ADMIN AUTH =====================
 $router->get('/admin/login',           AuthController::class . '@loginForm');

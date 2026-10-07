@@ -52,7 +52,7 @@
 <section class="hero">
     <div class="container text-center">
         <h1 class="display-5 fw-bold mb-3">Đặt sân bóng nhanh chóng</h1>
-        <p class="lead mb-4 opacity-90">Chọn sân 5, 7 hoặc 11 người — Xem lịch trống trực tuyến — Đặt chỗ chỉ trong 1 phút</p>
+        <p class="lead mb-4 opacity-90">Chọn sân 5 hoặc 7 người — Xem lịch trống trực tuyến — Đặt chỗ chỉ trong 1 phút</p>
         <a href="#pitches" class="btn btn-warning btn-lg px-5 fw-semibold">Đặt sân ngay</a>
     </div>
 </section>

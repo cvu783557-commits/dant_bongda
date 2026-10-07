@@ -29,10 +29,14 @@ if (!function_exists('base_url')) {
         $httpHost = $_SERVER['HTTP_HOST'] ?? null;
 
         if ($httpHost) {
+            $basePath = $envBase ? parse_url($envBase, PHP_URL_PATH) : '';
+            $basePath = is_string($basePath) ? '/' . trim($basePath, '/') : '';
+            $basePath = $basePath === '/' ? '' : $basePath;
+
             $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443
                 ? 'https'
                 : 'http';
-            return $scheme . '://' . $httpHost;
+            return $scheme . '://' . $httpHost . $basePath;
         }
 
         if ($envBase) {

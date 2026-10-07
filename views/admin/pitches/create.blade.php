@@ -24,7 +24,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Loại sân <span class="text-danger">*</span></label>
                         <select name="type" class="form-select" required>
-                            <?php foreach ([5,7,11] as $t): ?>
+                            <?php foreach ([5,7] as $t): ?>
                                 <option value="<?php echo $t; ?>" <?php echo (isset($old['type']) && (int)$old['type'] === $t) ? 'selected' : ''; ?>>Sân <?php echo $t; ?> người</option>
                             <?php endforeach; ?>
                         </select>

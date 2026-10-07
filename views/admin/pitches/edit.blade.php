@@ -24,7 +24,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Loại sân <span class="text-danger">*</span></label>
                         <select name="type" class="form-select" required>
-                            <?php foreach ([5,7,11] as $t): ?>
+                            <?php foreach ([5,7] as $t): ?>
                                 <option value="<?php echo $t; ?>"
                                     <?php
                                         $cur = $old['type'] ?? $pitch['type'];

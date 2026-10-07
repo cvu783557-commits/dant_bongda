@@ -25,9 +25,19 @@ try {
     $pdo->exec("USE `{$dbname}`");
     $pdo->exec("SET NAMES utf8mb4");
 
-    $sql = file_get_contents(__DIR__ . '/schema.sql');
+    $existingTables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
+    if (in_array('bookings', $existingTables, true)) {
+        $columns = $pdo->query("SHOW COLUMNS FROM bookings")->fetchAll(PDO::FETCH_COLUMN);
+        if (in_array('time_slot_id', $columns, true)) {
+            throw new Exception(
+                "Phát hiện database phiên bản cũ. Hãy chạy php database/run_upgrade.php để nâng cấp và giữ dữ liệu đặt sân."
+            );
+        }
+    }
+
+    $sql = file_get_contents(__DIR__ . '/database.sql');
     if ($sql === false) {
-        throw new Exception("Không đọc được schema.sql");
+        throw new Exception("Không đọc được database.sql");
     }
 
     $pdo->exec($sql);
@@ -40,6 +50,7 @@ try {
         echo "OK - Bảng {$t}: {$r['c']} dòng\n";
     }
     echo "\nIMPORT THÀNH CÔNG CSDL `{$dbname}`!\n";
+    echo "Tạo tài khoản quản trị bằng lệnh: php database/seed_users.php\n";
 } catch (Exception $e) {
     echo "LỖI: " . $e->getMessage() . "\n";
     exit(1);

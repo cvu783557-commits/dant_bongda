@@ -21,7 +21,7 @@
 ## Files and Modules
 
 ### Database
-- `database/schema.sql`: Script tạo 3 bảng + seed dữ liệu mẫu (pitches, time_slots, bookings)
+- `database/database.sql`: Schema hiện hành + seed sân/khung giờ mẫu; không xóa dữ liệu hiện có
 
 ### Models (app/Models/)
 - `app/Models/Pitch.php`: Thao tác bảng `pitches` (CRUD sân bóng)
@@ -138,7 +138,7 @@
 ---
 
 ## Validation (sau khi code xong)
-1. Import `database/schema.sql` vào MySQL kiểm tra tạo bảng + seed thành công
+1. Import `database/database.sql` vào MySQL kiểm tra tạo bảng + seed thành công
 2. Chạy app với Laragon (`http://localhost:81/BASE_AGILE/`)
    - Trang chủ hiển thị danh sách sân (dữ liệu seed)
    - Click sân → xem lịch, chọn ngày + slot trống → submit đặt → trang success hiện mã đơn

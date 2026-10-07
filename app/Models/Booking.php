@@ -73,6 +73,7 @@ class Booking extends Model
             'banking' => 'Chuyển khoản ngân hàng',
             'momo'    => 'Ví MoMo',
             'zalo'    => 'ZaloPay',
+            'vnpay'   => 'VNPay',
             'other'   => 'Khác',
         ];
     }
@@ -84,8 +85,8 @@ class Booking extends Model
         $paid    = (float)$paid;
         if ($total <= 0) return self::PAY_UNPAID;
         if ($paid >= $total) return self::PAY_PAID;
+        if ($deposit > 0 && $paid >= $deposit && $paid <= $deposit + 0.0001) return self::PAY_DEPOSIT;
         if ($paid > 0 && $paid < $total) return self::PAY_PARTIAL;
-        if ($deposit > 0) return self::PAY_DEPOSIT;
         return self::PAY_UNPAID;
     }
 
@@ -307,7 +308,7 @@ class Booking extends Model
                 $deposit,
                 $paid,
                 $data['payment_method'] ?? 'cash',
-                $payStatus,
+                $data['payment_status'] ?? $payStatus,
                 $data['status'] ?? self::STATUS_PENDING,
                 null,
                 isset($data['note']) ? trim($data['note']) : null,
@@ -464,6 +465,49 @@ class Booking extends Model
 
         $this->connection->executeStatement($sql, [$paid, $method, $payStatus, (int)$id]);
         return ['success' => true];
+    }
+
+    public function recordVnpayDeposit(int $id): array
+    {
+        $this->connection->beginTransaction();
+        try {
+            $booking = $this->connection->executeQuery(
+                "SELECT id, deposit, paid_amount, total_price, payment_method, status
+                 FROM {$this->table} WHERE id = ? FOR UPDATE",
+                [$id]
+            )->fetchAssociative();
+
+            if (!$booking || $booking['payment_method'] !== 'vnpay' || (float)$booking['deposit'] <= 0) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Không tìm thấy thông tin đặt cọc VNPay hợp lệ.'];
+            }
+            if ($booking['status'] === self::STATUS_CANCELLED) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Lịch đặt đã bị hủy, không thể ghi nhận thanh toán.'];
+            }
+
+            $paid = (float)$booking['paid_amount'];
+            $deposit = (float)$booking['deposit'];
+            if ($paid < $deposit) {
+                $paid = $deposit;
+                $paymentStatus = self::calcPaymentStatus((float)$booking['total_price'], $deposit, $paid);
+                $this->connection->executeStatement(
+                    "UPDATE {$this->table}
+                     SET paid_amount = ?, payment_status = ?, updated_at = NOW()
+                     WHERE id = ?",
+                    [$paid, $paymentStatus, $id]
+                );
+            }
+
+            $this->connection->commit();
+            return ['success' => true];
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('VNPay deposit update failed for booking #' . $id . ': ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Không thể cập nhật trạng thái thanh toán VNPay.'];
+        }
     }
 
     public function changeStatus($id, $newStatus)

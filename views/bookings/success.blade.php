@@ -51,8 +51,14 @@
                 <div class="mb-3">
                     <span class="display-1">✅</span>
                 </div>
-                <h3 class="fw-bold text-success mb-2">Đặt sân thành công</h3>
-                <p class="text-muted mb-4">Chúng tôi sẽ liên hệ với bạn qua số điện thoại để xác nhận trong thời gian sớm nhất.</p>
+                <h3 class="fw-bold text-success mb-2">Thông tin đặt sân</h3>
+                <p class="text-muted mb-4">
+                    <?php if ((float)$booking['paid_amount'] >= (float)$booking['deposit'] && (float)$booking['deposit'] > 0): ?>
+                        Đặt cọc VNPay đã được xác nhận. Chúng tôi sẽ liên hệ để xác nhận lịch sân.
+                    <?php else: ?>
+                        Đơn đang chờ thanh toán tiền cọc VNPay; lịch chỉ được xác nhận sau khi thanh toán thành công.
+                    <?php endif; ?>
+                </p>
 
                 <div class="text-start bg-light rounded p-4 mb-4">
                     <div class="row mb-2">
@@ -94,6 +100,14 @@
                     <div class="row border-top pt-3 mt-3">
                         <div class="col-5 fw-semibold">Tổng tiền:</div>
                         <div class="col-7 fw-bold text-success fs-5"><?php echo formatMoney($booking['total_price']); ?></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-5 fw-semibold">Tiền cọc VNPay:</div>
+                        <div class="col-7 fw-bold"><?php echo formatMoney($booking['deposit']); ?></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-5 fw-semibold">Đã thanh toán:</div>
+                        <div class="col-7"><?php echo formatMoney($booking['paid_amount']); ?></div>
                     </div>
                 </div>
 

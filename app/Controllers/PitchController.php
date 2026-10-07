@@ -6,6 +6,7 @@ use App\Controller;
 use App\Models\Pitch;
 use App\Models\Booking;
 use App\Models\Customer;
+use App\Services\Vnpay;
 use Rakit\Validation\Validator;
 
 class PitchController extends Controller
@@ -107,6 +108,14 @@ class PitchController extends Controller
         $data = $_POST;
         keepOld($data);
 
+        try {
+            $vnpay = new Vnpay();
+        } catch (\RuntimeException $e) {
+            setFlash('error', $e->getMessage());
+            redirect('pitches/' . ((int)($data['pitch_id'] ?? 0)) . '?date=' . urlencode($data['booking_date'] ?? date('Y-m-d')));
+            return;
+        }
+
         $rules = [
             'pitch_id'       => 'required|integer',
             'customer_name'  => 'required|min:2|max:100',
@@ -170,6 +179,12 @@ class PitchController extends Controller
 
         $hours = Booking::calcHoursDiff($startTime, $endTime);
         $total = max(0, round($hours * (float)$pitch['price_per_hour'], 0));
+        $deposit = max(1, (int)ceil($total * 0.30));
+        if ($deposit < 5000) {
+            setFlash('error', 'Tiền đặt cọc qua VNPay phải từ 5.000 ₫ trở lên.');
+            redirect('pitches/' . (int)$pitch['id'] . '?date=' . urlencode($bookingDate));
+            return;
+        }
 
         $result = $this->booking->create([
             'customer_id'    => (int)$customer['id'],
@@ -178,9 +193,10 @@ class PitchController extends Controller
             'start_time'     => $startTime,
             'end_time'       => $endTime,
             'total_price'    => $total,
-            'deposit'        => 0,
+            'deposit'        => $deposit,
             'paid_amount'    => 0,
-            'payment_method' => 'cash',
+            'payment_method' => 'vnpay',
+            'payment_status' => Booking::PAY_UNPAID,
             'status'         => Booking::STATUS_PENDING,
             'note'           => isset($data['notes']) ? trim($data['notes']) : '',
             'created_by'     => null,
@@ -194,8 +210,121 @@ class PitchController extends Controller
             return;
         }
 
-        setFlash('success', 'Đặt sân thành công! Chúng tôi sẽ liên hệ xác nhận trong thời gian sớm nhất.');
-        redirect('bookings/success/' . (int)$result['id']);
+        $bookingId = (int)$result['id'];
+        try {
+            $paymentUrl = $vnpay->createPaymentUrl(
+                $bookingId,
+                $deposit,
+                $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
+                'Dat coc don san #' . $bookingId
+            );
+        } catch (\Throwable $e) {
+            $this->logError('VNPay payment URL error for booking #' . $bookingId . ': ' . $e->getMessage());
+            $this->booking->cancel($bookingId, 'Không khởi tạo được thanh toán VNPay');
+            setFlash('error', 'Không thể khởi tạo giao dịch VNPay. Vui lòng thử lại hoặc liên hệ quản lý.');
+            redirect('pitches/' . (int)$pitch['id'] . '?date=' . urlencode($bookingDate));
+            return;
+        }
+
+        header('Location: ' . $paymentUrl);
+        exit;
+    }
+
+    public function vnpayReturn()
+    {
+        try {
+            $vnpay = new Vnpay();
+        } catch (\RuntimeException $e) {
+            setFlash('error', $e->getMessage());
+            redirect('/');
+            return;
+        }
+
+        if (!$vnpay->verifyCallback($_GET)) {
+            setFlash('error', 'Chữ ký phản hồi VNPay không hợp lệ; chưa ghi nhận thanh toán.');
+            redirect('/');
+            return;
+        }
+
+        $transactionRef = (string)($_GET['vnp_TxnRef'] ?? '');
+        if (!preg_match('/^([1-9][0-9]*)_[0-9]{14}[0-9]{4}$/', $transactionRef, $matches)) {
+            setFlash('error', 'Mã giao dịch VNPay không hợp lệ.');
+            redirect('/');
+            return;
+        }
+
+        $bookingId = (int)$matches[1];
+        $booking = $this->booking->find($bookingId);
+        $expectedAmount = $booking ? (int)$booking['deposit'] * 100 : 0;
+        if (!$booking || (int)($_GET['vnp_Amount'] ?? 0) !== $expectedAmount) {
+            setFlash('error', 'Số tiền phản hồi không khớp với tiền đặt cọc; chưa ghi nhận thanh toán.');
+            redirect('bookings/success/' . $bookingId);
+            return;
+        }
+
+        if (($_GET['vnp_ResponseCode'] ?? '') === '00' && ($_GET['vnp_TransactionStatus'] ?? '') === '00') {
+            $payment = $this->booking->recordVnpayDeposit($bookingId);
+            if (!$payment['success']) {
+                setFlash('error', $payment['error']);
+            } else {
+                setFlash('success', 'Thanh toán tiền đặt cọc VNPay thành công.');
+            }
+        } else {
+            setFlash('error', 'Giao dịch VNPay chưa thành công. Đơn đặt sân đang chờ thanh toán.');
+        }
+
+        redirect('bookings/success/' . $bookingId);
+    }
+
+    public function vnpayIpn()
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            $vnpay = new Vnpay();
+        } catch (\RuntimeException $e) {
+            http_response_code(503);
+            echo json_encode(['RspCode' => '99', 'Message' => 'VNPay chưa được cấu hình']);
+            return;
+        }
+
+        if (!$vnpay->verifyCallback($_GET)) {
+            echo json_encode(['RspCode' => '97', 'Message' => 'Invalid signature']);
+            return;
+        }
+
+        $transactionRef = (string)($_GET['vnp_TxnRef'] ?? '');
+        if (!preg_match('/^([1-9][0-9]*)_[0-9]{14}[0-9]{4}$/', $transactionRef, $matches)) {
+            echo json_encode(['RspCode' => '01', 'Message' => 'Order not found']);
+            return;
+        }
+
+        $bookingId = (int)$matches[1];
+        $booking = $this->booking->find($bookingId);
+        if (!$booking) {
+            echo json_encode(['RspCode' => '01', 'Message' => 'Order not found']);
+            return;
+        }
+        if ((int)($_GET['vnp_Amount'] ?? 0) !== (int)$booking['deposit'] * 100) {
+            echo json_encode(['RspCode' => '04', 'Message' => 'Invalid amount']);
+            return;
+        }
+        if ($booking['payment_status'] === Booking::PAY_DEPOSIT
+            || $booking['payment_status'] === Booking::PAY_PARTIAL
+            || $booking['payment_status'] === Booking::PAY_PAID) {
+            echo json_encode(['RspCode' => '02', 'Message' => 'Order already confirmed']);
+            return;
+        }
+        if (($_GET['vnp_ResponseCode'] ?? '') !== '00' || ($_GET['vnp_TransactionStatus'] ?? '') !== '00') {
+            echo json_encode(['RspCode' => '00', 'Message' => 'Payment not successful']);
+            return;
+        }
+
+        $payment = $this->booking->recordVnpayDeposit($bookingId);
+        if (!$payment['success']) {
+            echo json_encode(['RspCode' => '99', 'Message' => 'Could not update payment']);
+            return;
+        }
+        echo json_encode(['RspCode' => '00', 'Message' => 'Confirm Success']);
     }
 
     public function bookingSuccess($id)

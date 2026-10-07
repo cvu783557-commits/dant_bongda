@@ -62,12 +62,12 @@ try {
             updated_at DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         stepOK("Tạo bảng pitches");
-        // seed mẫu 3 sân
+        // seed sân 5 và 7 người
         $pdo->exec("INSERT IGNORE INTO pitches (id, name, type, price_per_hour, description, status) VALUES
         (1, 'Sân A1 - Sân 5 người cỏ tự nhiên', 5, 300000, 'Sân 5 người cỏ tự nhiên, rộng rãi thoáng mát.', 'active'),
         (2, 'Sân A2 - Sân 7 người cỏ nhân tạo', 7, 500000, 'Sân 7 người cỏ nhân tạo chất lượng, có mái che.', 'active'),
-        (3, 'Sân B1 - Sân 11 người tiêu chuẩn', 11, 950000, 'Sân 11 người kích thước tiêu chuẩn FIFA.', 'active')");
-        stepOK("Seed mẫu 3 sân pitches");
+        (3, 'Sân B1 - Sân 7 người tiêu chuẩn', 7, 950000, 'Sân 7 người kích thước tiêu chuẩn.', 'active')");
+        stepOK("Seed mẫu sân 5 và 7 người");
     } else {
         stepSkip("Bảng pitches đã tồn tại (" . rowCount($pdo,'pitches') . " dòng)");
     }
@@ -123,6 +123,30 @@ try {
         stepOK("Tạo bảng customers");
     } else {
         stepSkip("Bảng customers đã tồn tại (" . rowCount($pdo,'customers') . " dòng)");
+    }
+
+    stepInfo("\n===== BUỚC 3B: Tạo bảng PITCH_LOCKS (khóa khung giờ sân) =====");
+    if (!tableExists($pdo, 'pitch_locks')) {
+        $pdo->exec("CREATE TABLE pitch_locks (
+            id          INT PRIMARY KEY AUTO_INCREMENT,
+            pitch_id    INT NOT NULL,
+            lock_date   DATE NOT NULL,
+            start_time  TIME NOT NULL,
+            end_time    TIME NOT NULL,
+            reason      VARCHAR(255) NULL,
+            created_by  INT NULL,
+            created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at  DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_lock_pitch_date (pitch_id, lock_date),
+            INDEX idx_lock_start_time (start_time),
+            CONSTRAINT fk_pitchlock_pitch FOREIGN KEY (pitch_id) REFERENCES pitches(id) ON DELETE CASCADE,
+            CONSTRAINT fk_pitchlock_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+            CONSTRAINT chk_lock_time CHECK (start_time < end_time),
+            CONSTRAINT chk_lock_range CHECK (start_time >= '06:00:00' AND end_time <= '23:00:00')
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        stepOK("Tạo bảng pitch_locks");
+    } else {
+        stepSkip("Bảng pitch_locks đã tồn tại (" . rowCount($pdo,'pitch_locks') . " dòng)");
     }
 
     stepInfo("\n===== BUỚC 4: Di chuyển khách hàng từ bookings V1 inline sang customers =====");
@@ -197,6 +221,19 @@ try {
         stepSkip("Bảng bookings đã tồn tại (" . rowCount($pdo,'bookings') . " dòng)");
     }
 
+    $paymentMethodColumn = $pdo->query("SHOW COLUMNS FROM bookings LIKE 'payment_method'")->fetch();
+    if (!$paymentMethodColumn) {
+        throw new RuntimeException("Không tìm thấy cột bookings.payment_method");
+    }
+    if (strpos($paymentMethodColumn['Type'], "'vnpay'") === false) {
+        $pdo->exec("ALTER TABLE bookings
+            MODIFY payment_method ENUM('cash','banking','momo','zalo','vnpay','other')
+            NOT NULL DEFAULT 'cash'");
+        stepOK("Bổ sung VNPay vào phương thức thanh toán");
+    } else {
+        stepSkip("Phương thức thanh toán VNPay đã sẵn sàng");
+    }
+
     stepInfo("\n===== BUỚC 7: Migrate dữ liệu từ bookings_old_v1 -> bookings V2 =====");
     if (tableExists($pdo, 'bookings_old_v1') && tableExists($pdo, 'bookings')) {
         $newCount = rowCount($pdo, 'bookings');
@@ -240,10 +277,21 @@ try {
 
     stepInfo("\n===== BUỚC 8: Seed thêm sân mẫu (tùy chọn) =====");
     if (tableExists($pdo, 'pitches')) {
-        $pdo->exec("INSERT IGNORE INTO pitches (name, type, price_per_hour, description, status) VALUES
-        ('Sân B2 - Sân 7 người cỏ nhân tạo', 7, 480000, 'Sân 7 người cỏ nhân tạo, chiếu sáng ban đêm, phòng thay đồ riêng.', 'active'),
-        ('Sân C2 - Sân 11 người mini', 11, 900000, 'Sân 11 người kích thước mini, phù hợp luyện tập đội trẻ.', 'active')");
-        stepOK("Seed thêm 2 sân mẫu (bỏ qua nếu đã tồn tại name trùng)");
+        $pdo->exec("INSERT INTO pitches (name, type, price_per_hour, description, status)
+        SELECT samples.name, samples.type, samples.price_per_hour, samples.description, samples.status
+        FROM (
+            SELECT 'Sân B2 - Sân 7 người cỏ nhân tạo' AS name, 7 AS type, 480000 AS price_per_hour,
+                   'Sân 7 người cỏ nhân tạo, chiếu sáng ban đêm, phòng thay đồ riêng.' AS description, 'active' AS status
+        ) AS samples
+        WHERE NOT EXISTS (SELECT 1 FROM pitches p WHERE p.name = samples.name)");
+        stepOK("Đảm bảo có sân mẫu 7 người (không thêm trùng tên)");
+
+        $pdo->exec("DELETE FROM pitches
+            WHERE type = 11
+              AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.pitch_id = pitches.id)
+              AND NOT EXISTS (SELECT 1 FROM pitch_locks pl WHERE pl.pitch_id = pitches.id)");
+        $pdo->exec("UPDATE pitches SET status = 'inactive' WHERE type = 11 AND status <> 'inactive'");
+        stepOK("Ngừng kinh doanh sân 11 người; giữ sân có lịch sử để bảo toàn dữ liệu");
     }
 
     $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
@@ -255,7 +303,7 @@ try {
     echo "   Để tạo tài khoản ADMIN (admin/admin123) và STAFF (staff/staff123)\n\n";
 
     // In bảng tổng kết
-    $finalTables = ['users', 'customers', 'pitches', 'time_slots', 'bookings'];
+    $finalTables = ['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'bookings'];
     echo "TỔNG KẾT CÁC BẢNG:\n";
     foreach ($finalTables as $t) {
         if (tableExists($pdo, $t)) {

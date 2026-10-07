@@ -28,7 +28,10 @@ class PitchController extends Controller
 
     public function index()
     {
-        $pitches = $this->pitch->all();
+        $pitches = array_values(array_filter(
+            $this->pitch->all(),
+            static fn ($pitch) => in_array((int)$pitch['type'], [5, 7], true)
+        ));
 
         $success = getFlash('success');
         $error   = getFlash('error');
@@ -72,7 +75,7 @@ class PitchController extends Controller
 
         $rules = [
             'name'           => 'required|min:3|max:100',
-            'type'           => 'required|in:5,7,11',
+            'type'           => 'required|in:5,7',
             'price_per_hour' => 'required|numeric|min:0',
             'description'    => 'nullable|max:2000',
             'status'         => 'required|in:active,inactive',
@@ -116,6 +119,11 @@ class PitchController extends Controller
             redirect404();
             return;
         }
+        if (!in_array((int)$pitch['type'], [5, 7], true)) {
+            setFlash('error', 'Sân loại này đã ngừng hoạt động và chỉ được lưu để giữ lịch sử đặt sân.');
+            redirect('admin/pitches');
+            return;
+        }
 
         $old   = $_SESSION['old'] ?? [];
         $error = getFlash('error');
@@ -134,13 +142,18 @@ class PitchController extends Controller
             redirect404();
             return;
         }
+        if (!in_array((int)$pitch['type'], [5, 7], true)) {
+            setFlash('error', 'Không thể sửa sân loại đã ngừng hoạt động.');
+            redirect('admin/pitches');
+            return;
+        }
 
         $data = $_POST;
         keepOld($data);
 
         $rules = [
             'name'           => 'required|min:3|max:100',
-            'type'           => 'required|in:5,7,11',
+            'type'           => 'required|in:5,7',
             'price_per_hour' => 'required|numeric|min:0',
             'description'    => 'nullable|max:2000',
             'status'         => 'required|in:active,inactive',
@@ -190,6 +203,11 @@ class PitchController extends Controller
             redirect404();
             return;
         }
+        if (!in_array((int)$pitch['type'], [5, 7], true)) {
+            setFlash('error', 'Không thể kích hoạt lại sân loại đã ngừng kinh doanh.');
+            redirect('admin/pitches');
+            return;
+        }
 
         $newStatus = $pitch['status'] === 'active' ? 'inactive' : 'active';
 
@@ -210,6 +228,11 @@ class PitchController extends Controller
         $pitch = $this->pitch->find($id);
         if (!$pitch) {
             redirect404();
+            return;
+        }
+        if (!in_array((int)$pitch['type'], [5, 7], true)) {
+            setFlash('error', 'Sân đã có loại ngừng kinh doanh được giữ lại để bảo toàn lịch sử đặt sân.');
+            redirect('admin/pitches');
             return;
         }
 
