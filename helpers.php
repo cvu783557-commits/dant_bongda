@@ -1,6 +1,7 @@
 <?php
 
 use eftec\bladeone\BladeOne;
+use App\Models\Booking;
 
 if (!function_exists('view')) {
     function view($view, $data = [])
@@ -8,7 +9,6 @@ if (!function_exists('view')) {
         $views = __DIR__ . '/views';
         $cache = __DIR__ . '/storage/compiles';
 
-        // MODE_DEBUG allows to pinpoint troubles.
         $blade = new BladeOne($views, $cache, BladeOne::MODE_DEBUG);
 
         echo $blade->run($view, $data);
@@ -55,6 +55,7 @@ if (!function_exists('redirect404')) {
     function redirect404()
     {
         header('HTTP/1.1 404 Not Found');
+        echo '<h1>404 - Not Found</h1><p>Trang bạn tìm không tồn tại.</p><a href="'.rtrim(base_url(),'/').'/admin/bookings">Quay lại quản lý đặt sân</a>';
         exit;
     }
 }
@@ -142,7 +143,7 @@ if (!function_exists('keepOld')) {
 if (!function_exists('formatMoney')) {
     function formatMoney($num)
     {
-        return number_format($num, 0, ',', '.') . ' ₫';
+        return number_format((float)$num, 0, ',', '.') . ' ₫';
     }
 }
 
@@ -151,6 +152,79 @@ if (!function_exists('formatDate')) {
     {
         if (!$sqlDate) return '';
         $ts = strtotime($sqlDate);
+        if (!$ts) return htmlspecialchars($sqlDate);
         return date('d/m/Y', $ts);
+    }
+}
+
+if (!function_exists('formatDateTime')) {
+    function formatDateTime($sqlDateTime)
+    {
+        if (!$sqlDateTime) return '';
+        $ts = strtotime($sqlDateTime);
+        if (!$ts) return htmlspecialchars($sqlDateTime);
+        return date('d/m/Y H:i', $ts);
+    }
+}
+
+if (!function_exists('formatTime')) {
+    function formatTime($sqlTime)
+    {
+        if (!$sqlTime) return '';
+        return substr($sqlTime, 0, 5);
+    }
+}
+
+if (!function_exists('bookingStatusBadge')) {
+    function bookingStatusBadge($status)
+    {
+        $labels = Booking::getBookingStatuses();
+        $color  = Booking::getBookingStatusColor($status);
+        $label  = $labels[$status] ?? $status;
+
+        $map = [
+            'primary'   => 'bg-primary-subtle text-primary border-primary-subtle',
+            'secondary' => 'bg-secondary-subtle text-secondary border-secondary-subtle',
+            'success'   => 'bg-success-subtle text-success border-success-subtle',
+            'danger'    => 'bg-danger-subtle text-danger border-danger-subtle',
+            'warning'   => 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
+            'info'      => 'bg-info-subtle text-info-emphasis border-info-subtle',
+        ];
+        $cls = $map[$color] ?? $map['secondary'];
+        return '<span class="badge border '.$cls.'">'.htmlspecialchars($label).'</span>';
+    }
+}
+
+if (!function_exists('paymentStatusBadge')) {
+    function paymentStatusBadge($status)
+    {
+        $labels = Booking::getPaymentStatuses();
+        $color  = Booking::getPaymentStatusColor($status);
+        $label  = $labels[$status] ?? $status;
+
+        $map = [
+            'primary'   => 'bg-primary-subtle text-primary border-primary-subtle',
+            'secondary' => 'bg-secondary-subtle text-secondary border-secondary-subtle',
+            'success'   => 'bg-success-subtle text-success border-success-subtle',
+            'danger'    => 'bg-danger-subtle text-danger border-danger-subtle',
+            'warning'   => 'bg-warning-subtle text-warning-emphasis border-warning-subtle',
+            'info'      => 'bg-info-subtle text-info-emphasis border-info-subtle',
+        ];
+        $cls = $map[$color] ?? $map['secondary'];
+        return '<span class="badge border '.$cls.'">'.htmlspecialchars($label).'</span>';
+    }
+}
+
+if (!function_exists('e')) {
+    function e($str)
+    {
+        return htmlspecialchars((string)$str, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('bookingCode')) {
+    function bookingCode($id)
+    {
+        return '#' . str_pad((string)$id, 6, '0', STR_PAD_LEFT);
     }
 }

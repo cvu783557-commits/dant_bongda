@@ -4,17 +4,26 @@ namespace App\Controllers\Admin;
 
 use App\Controller;
 use App\Models\Pitch;
+use App\Models\User;
 use Rakit\Validation\Validator;
 
 class PitchController extends Controller
 {
     protected $pitch;
     protected $validator;
+    protected $user;
 
     public function __construct()
     {
         $this->pitch     = new Pitch();
         $this->validator = new Validator();
+        $this->user      = new User();
+
+        if (session_status() === PHP_SESSION_NONE) session_start();
+        if (!$this->user->getActiveUser()) {
+            setFlash('error', 'Vui lòng đăng nhập để truy cập quản lý');
+            redirect('admin/login');
+        }
     }
 
     public function index()
@@ -28,6 +37,7 @@ class PitchController extends Controller
             'pitches' => $pitches,
             'success' => $success,
             'error'   => $error,
+            'user'    => $this->user->getActiveUser(),
         ]);
     }
 
