@@ -1,0 +1,25 @@
+{
+    "name": "php2/php2-base",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        },
+        "files": [
+            "helpers.php"
+        ]
+    },
+    "authors": [
+        {
+            "name": "DinhTV7",
+            "email": "dinhtv7@fpt.edu.vn"
+        }
+    ],
+    "require": {
+        "bramus/router": "^1.6",
+        "vlucas/phpdotenv": "^5.6",
+        "doctrine/dbal": "^3.6",
+        "eftec/bladeone": "^4.19",
+        "rakit/validation": "^1.4"
+    }
+}

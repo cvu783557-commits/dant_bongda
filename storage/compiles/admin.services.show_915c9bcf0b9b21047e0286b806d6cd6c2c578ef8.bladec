@@ -1,0 +1,330 @@
+<?php $_shouldextend[1]=1; ?>
+<?php $this->startSection('title', 'Chi tiết dịch vụ'); ?>
+<?php $this->startSection('content'); ?>
+
+<!-- HEADER TIÊU ĐỀ LỚN - Gradient nhẹ -->
+<div class="mb-4">
+ <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+ <div>
+ <h3 class="fw-bold mb-1 text-dark">
+ <span class="text-success opacity-75 me-1">#<?php echo (int)$service['id']; ?></span>
+ <?php echo htmlspecialchars($service['name']); ?>
+ </h3>
+ <nav style="--bs-breadcrumb-divider: '›';" aria-label="breadcrumb">
+ <ol class="breadcrumb mb-0 small">
+ <li class="breadcrumb-item"><a class="text-success text-decoration-none" href="<?php echo route('admin/services'); ?>">Quản lý dịch vụ</a></li>
+ <li class="breadcrumb-item text-muted" aria-current="page">
+ <?php echo htmlspecialchars($categoryName); ?>
+ </li>
+ </ol>
+ </nav>
+ </div>
+ <div class="d-flex gap-2">
+ <a href="<?php echo route('admin/services/' . $service['id'] . '/edit'); ?>"
+ class="btn btn-success px-3 d-inline-flex align-items-center gap-2 shadow-sm">
+ ✏️ Sửa thông tin
+ </a>
+ <a href="<?php echo route('admin/services'); ?>"
+ class="btn btn-outline-secondary px-3 d-inline-flex align-items-center gap-2">
+ ← Danh sách
+ </a>
+ </div>
+ </div>
+</div>
+
+<div class="row g-4">
+ <!-- ===================================== CỘT TRÁI: Thông tin chính ===================================== -->
+ <div class="col-lg-4">
+ <div class="card border-0 shadow-sm h-100 overflow-hidden">
+ <!-- ẢNH DỊCH VỤ -->
+ <?php
+ $imgSrc = $service['image']
+ ? (str_starts_with($service['image'], 'http') ? $service['image'] : file_url($service['image']))
+ : 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=' . urlencode(($categoryName ?? 'product') . ' commercial product modern clean') . '&image_size=square_hd';
+ ?>
+ <div class="position-relative">
+ <img src="<?php echo $imgSrc; ?>"
+ class="w-100"
+ style="height:260px;object-fit:cover;" alt="service">
+ <!-- badge trạng thái overlay góc phải trên -->
+ <span class="position-absolute top-3 end-3 badge rounded-pill px-3 py-2 shadow-sm
+ <?php echo $service['status'] === 'active' ? 'bg-success text-white' : 'bg-secondary text-white'; ?>">
+ <?php echo $service['status'] === 'active' ? '● Đang bán' : '● Tạm dừng'; ?>
+ </span>
+ </div>
+
+ <div class="p-4">
+ <!-- Badge nhóm + mã -->
+ <div class="d-flex align-items-center gap-2 mb-3">
+ <span class="badge rounded-pill bg-<?php echo $categoryColor; ?> bg-opacity-10 text-<?php echo $categoryColor; ?> border border-<?php echo $categoryColor; ?> border-opacity-25 px-3 py-2 fw-medium">
+ <?php echo htmlspecialchars($categoryName); ?>
+ </span>
+ </div>
+
+ <!-- Giá lớn -->
+ <div class="mb-4">
+ <div class="small text-muted mb-1">Đơn giá bán lẻ</div>
+ <div class="display-6 fw-bold text-success" style="line-height:1;letter-spacing:-0.5px;">
+ <?php echo formatMoney($service['price']); ?>
+ <span class="fs-6 text-muted fw-normal opacity-75 ms-2">/ <?php echo htmlspecialchars($service['unit']); ?></span>
+ </div>
+ </div>
+
+ <!-- 2 thẻ đơn vị + tồn kho (đẹp hơn) -->
+ <div class="row g-3 mb-4">
+ <div class="col-6">
+ <div class="rounded-3 border p-3 bg-white h-100">
+ <div class="small text-muted mb-1">Đơn vị</div>
+ <div class="fw-bold fs-5 text-primary"><?php echo htmlspecialchars($service['unit']); ?></div>
+ </div>
+ </div>
+ <?php
+ $stock = (int)$service['stock'];
+ if ($stock === 0) {
+ $stockBg = 'bg-danger bg-opacity-10'; $stockTx = 'text-danger'; $stockIcon = '⛔';
+ } elseif ($stock < 10) {
+ $stockBg = 'bg-warning bg-opacity-15'; $stockTx = 'text-warning-emphasis'; $stockIcon = '⚠️';
+ } else {
+ $stockBg = 'bg-success bg-opacity-10'; $stockTx = 'text-success'; $stockIcon = '✓';
+ }
+ ?>
+ <div class="col-6">
+ <div class="rounded-3 <?php echo $stockBg; ?> p-3 h-100">
+ <div class="small text-muted mb-1">Tồn kho hiện tại</div>
+ <div class="fw-bold fs-5 <?php echo $stockTx; ?> d-flex align-items-center gap-1">
+ <span><?php echo $stockIcon; ?></span>
+ <span><?php echo $stock; ?> <?php echo htmlspecialchars($service['unit']); ?></span>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- Mô tả (nếu có) -->
+ <?php if (!empty($service['description'])): ?>
+ <div class="border-top pt-4 mb-3">
+ <div class="small text-muted fw-semibold text-uppercase mb-2" style="letter-spacing:0.5px;">Mô tả / Ghi chú nội bộ</div>
+ <div class="text-dark" style="white-space:pre-wrap;line-height:1.7;"><?php echo htmlspecialchars($service['description']); ?></div>
+ </div>
+ <?php endif; ?>
+
+ <!-- Meta footer nhỏ gọn -->
+ <div class="border-top pt-3 small text-muted row g-2">
+ <div class="col-6"><span class="opacity-50">Mã DV:</span> <strong class="text-dark">#<?php echo (int)$service['id']; ?></strong></div>
+ <div class="col-6 text-end">
+ <span class="opacity-50">Tạo:</span>
+ <strong class="text-dark"><?php echo date('d/m/y', strtotime($service['created_at'])); ?></strong>
+ </div>
+ <?php if (!empty($service['updated_at'])): ?>
+ <div class="col-12 border-top pt-2 mt-1">
+ <span class="opacity-50">Cập nhật cuối:</span>
+ <strong class="text-dark"><?php echo date('d/m/Y H:i', strtotime($service['updated_at'])); ?></strong>
+ </div>
+ <?php endif; ?>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- ===================================== CỘT PHẢI: Thao tác + Thống kê + Liên quan ===================================== -->
+ <div class="col-lg-8">
+
+ <!-- 1. ĐIỀU CHỈNH TỒN KHO (đẹp lại) -->
+ <div class="card border-0 shadow-sm mb-4 overflow-hidden">
+ <div class="card-body p-0">
+ <!-- Header xanh nhạt -->
+ <div class="p-4 border-bottom bg-gradient"
+ style="background:linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);">
+ <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+ <div>
+ <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+ 📦 Điều chỉnh tồn kho
+ </h5>
+ <div class="small text-muted mt-1">Nhập / Xuất hàng thủ công (ghi chú lý do để quản lý kho chặt chẽ)</div>
+ </div>
+ <div class="rounded-pill px-4 py-2 border bg-white shadow-sm">
+ <span class="small text-muted me-1">Hiện có:</span>
+ <span class="fw-bold <?php echo $stockTx; ?> fs-6"><?php echo $stock; ?> <?php echo htmlspecialchars($service['unit']); ?></span>
+ </div>
+ </div>
+ </div>
+
+ <form method="post" action="<?php echo route('admin/services/' . $service['id'] . '/adjust-stock'); ?>"
+ class="p-4">
+ <div class="row g-3 align-items-end">
+ <!-- Nhập số dương (shortcut) -->
+ <div class="col-md-3">
+ <label class="form-label small fw-semibold text-success mb-1">＋ Nhập kho nhanh</label>
+ <div class="input-group">
+ <span class="input-group-text bg-success-subtle border-success border-opacity-25 text-success fw-bold">+</span>
+ <input type="number" id="quickPlus" class="form-control form-control-lg border-start-0" min="0"
+ placeholder="VD: 50" onchange="syncDelta(this.value)">
+ <span class="input-group-text bg-transparent text-muted border-start-0"><?php echo htmlspecialchars($service['unit']); ?></span>
+ </div>
+ </div>
+ <!-- Xuất số dương (shortcut) -->
+ <div class="col-md-3">
+ <label class="form-label small fw-semibold text-danger mb-1">－ Xuất kho nhanh</label>
+ <div class="input-group">
+ <span class="input-group-text bg-danger-subtle border-danger border-opacity-25 text-danger fw-bold">−</span>
+ <input type="number" id="quickMinus" class="form-control form-control-lg border-start-0" min="0"
+ placeholder="VD: 10" onchange="syncDelta('-' + this.value)">
+ <span class="input-group-text bg-transparent text-muted border-start-0"><?php echo htmlspecialchars($service['unit']); ?></span>
+ </div>
+ </div>
+ <!-- Delta thật (ẩn đi nhưng vẫn gửi, hoặc cho người dùng edit trực tiếp) -->
+ <div class="col-md-3">
+ <label class="form-label small fw-semibold mb-1">🔢 Giá trị cuối (delta)</label>
+ <div class="input-group">
+ <input type="number" name="delta" id="deltaReal" class="form-control form-control-lg fw-bold"
+ required placeholder="Dương=Nhập, Âm=Xuất">
+ <span class="input-group-text bg-transparent text-muted"><?php echo htmlspecialchars($service['unit']); ?></span>
+ </div>
+ <small class="text-muted d-block mt-1">Sửa trực tiếp nếu cần giá trị chính xác</small>
+ </div>
+ <!-- Ghi chú -->
+ <div class="col-md-3 d-grid gap-1">
+ <button type="submit" class="btn btn-success btn-lg px-4 fw-medium shadow-sm">✓ Xác nhận</button>
+ </div>
+ <div class="col-md-12">
+ <label class="form-label small fw-semibold mb-1">📝 Ghi chú lý do điều chỉnh</label>
+ <input type="text" name="note" class="form-control" maxlength="250"
+ placeholder="VD: Nhập lô 1/10 từ NCC A / Hết hạn / Quà tặng khách VIP / Bể bể mất...">
+ </div>
+ </div>
+ </form>
+ </div>
+ </div>
+
+ <!-- 2. 📊 THỐNG KÊ BÁN HÀNG (THAY CHO PHẦN SƠ ĐỒ LUỒNG CŨ) -->
+ <div class="card border-0 shadow-sm mb-4 overflow-hidden">
+ <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
+ <h5 class="fw-bold mb-0">📊 Thống kê bán hàng</h5>
+ <span class="badge bg-light text-dark border small">Tính trên toàn bộ đơn đặt sân</span>
+ </div>
+ <div class="card-body pt-0 px-4 pb-4">
+ <div class="row g-3">
+ <div class="col-md-4">
+ <div class="rounded-4 border p-4 h-100 bg-white position-relative overflow-hidden">
+ <div class="position-absolute top-0 end-0 w-25 h-100 bg-primary bg-opacity-5"></div>
+ <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:0.5px;">Số đơn</div>
+ <div class="d-flex align-items-baseline gap-2">
+ <div class="fw-bold text-primary" style="font-size:2rem;line-height:1;">
+ <?php echo (int)($stats['total_orders'] ?? 0); ?>
+ </div>
+ <div class="small text-muted">lần xuất hiện</div>
+ </div>
+ </div>
+ </div>
+ <div class="col-md-4">
+ <div class="rounded-4 border p-4 h-100 bg-white position-relative overflow-hidden">
+ <div class="position-absolute top-0 end-0 w-25 h-100 bg-warning bg-opacity-10"></div>
+ <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:0.5px;">Tổng SL đã bán</div>
+ <div class="d-flex align-items-baseline gap-2">
+ <div class="fw-bold text-warning-emphasis" style="font-size:2rem;line-height:1;">
+ <?php echo (int)($stats['total_qty_sold'] ?? 0); ?>
+ </div>
+ <div class="small text-muted"><?php echo htmlspecialchars($service['unit']); ?></div>
+ </div>
+ </div>
+ </div>
+ <div class="col-md-4">
+ <div class="rounded-4 p-4 h-100 bg-gradient text-white shadow-sm position-relative overflow-hidden"
+ style="background:linear-gradient(135deg, #10b981 0%, #059669 100%);">
+ <div class="small opacity-75 fw-semibold mb-2 text-uppercase" style="letter-spacing:0.5px;">Doanh thu</div>
+ <div class="fw-bold" style="font-size:1.65rem;line-height:1.1;">
+ <?php echo formatMoney($stats['total_revenue'] ?? 0); ?>
+ </div>
+ <div class="small opacity-75 mt-2">Từ dịch vụ này</div>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- 3. 🔗 DỊCH VỤ CÙNG PHÂN LOẠI (THAY CHO BOX LƯU Ý XANH CŨ) -->
+ <div class="card border-0 shadow-sm overflow-hidden">
+ <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
+ <h5 class="fw-bold mb-0">🔗 Dịch vụ cùng nhóm "<?php echo htmlspecialchars($categoryName); ?>"</h5>
+ <span class="badge bg-<?php echo $categoryColor; ?> bg-opacity-10 text-<?php echo $categoryColor; ?> border">
+ <?php echo count($related); ?> liên quan
+ </span>
+ </div>
+ <div class="card-body pt-0 px-4 pb-4">
+ <?php if (count($related) === 0): ?>
+ <div class="text-center py-5 text-muted bg-light bg-opacity-50 rounded-4 border border-dashed">
+ <div style="font-size:2rem;opacity:0.3;">✨</div>
+ <div class="mt-2 small">Đây là dịch vụ đầu tiên trong nhóm <strong><?php echo htmlspecialchars($categoryName); ?></strong>.</div>
+ <a href="<?php echo route('admin/services/create'); ?>" class="btn btn-sm btn-success mt-3">+ Thêm dịch vụ cùng nhóm</a>
+ </div>
+ <?php else: ?>
+ <div class="row g-3">
+ <?php foreach ($related as $r): ?>
+ <?php
+ $rImg = $r['image']
+ ? (str_starts_with($r['image'], 'http') ? $r['image'] : file_url($r['image']))
+ : 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=' . urlencode($r['name'] . ' product') . '&image_size=square';
+ $rStock = (int)$r['stock'];
+ $rStockCls = 'success';
+ if ($rStock === 0) $rStockCls = 'danger';
+ elseif ($rStock < 10) $rStockCls = 'warning';
+ ?>
+ <div class="col-sm-6 col-lg-4">
+ <a href="<?php echo route('admin/services/' . $r['id']); ?>"
+ class="text-decoration-none text-dark d-block rounded-3 border p-3 bg-white h-100 hover-lift">
+ <div class="d-flex gap-3 align-items-center">
+ <img src="<?php echo $rImg; ?>"
+ class="rounded-3 border" style="width:64px;height:64px;object-fit:cover;flex-shrink:0;" alt="r">
+ <div class="flex-grow-1 min-w-0">
+ <div class="fw-semibold mb-1 text-truncate" title="<?php echo htmlspecialchars($r['name']); ?>">
+ <?php echo htmlspecialchars($r['name']); ?>
+ </div>
+ <div class="d-flex align-items-center gap-2 flex-wrap small">
+ <span class="fw-bold text-success"><?php echo formatMoney($r['price']); ?></span>
+ <span class="text-muted">/ <?php echo htmlspecialchars($r['unit']); ?></span>
+ <span class="badge bg-<?php echo $rStockCls; ?> bg-opacity-10 text-<?php echo $rStockCls; ?> border ms-auto">
+ Tồn <?php echo $rStock; ?>
+ </span>
+ </div>
+ </div>
+ </div>
+ </a>
+ </div>
+ <?php endforeach; ?>
+ </div>
+ <?php endif; ?>
+ </div>
+ </div>
+
+ </div>
+</div>
+
+<style>
+ .hover-lift { transition: all 0.18s ease; }
+ .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.35); }
+ .border-dashed { border-style: dashed !important; }
+ .top-3 { top: 0.75rem; } .end-3 { right: 0.75rem; }
+</style>
+
+<script>
+ // Đồng bộ 2 ô nhanh (Nhập + / Xuất -) xuống ô delta thật chính
+ function syncDelta(val) {
+ var n = parseFloat(val) || 0;
+ document.getElementById('deltaReal').value = n;
+ // Clear cái kia để người dùng không nhầm lẫn
+ if (n > 0) document.getElementById('quickMinus').value = '';
+ if (n < 0) document.getElementById('quickPlus').value = '';
+ }
+ // Luôn đồng bộ delta thật ngược lại (nếu user sửa tay)
+ document.addEventListener('DOMContentLoaded', function () {
+ var dr = document.getElementById('deltaReal');
+ if (!dr) return;
+ dr.addEventListener('input', function () {
+ var v = parseFloat(dr.value) || 0;
+ document.getElementById('quickPlus').value  = v > 0 ? v : '';
+ document.getElementById('quickMinus').value = v < 0 ? Math.abs(v) : '';
+ });
+ });
+</script>
+<?php $this->stopSection(); ?>
+
+<?php if (isset($_shouldextend[1])) { echo $this->runChild('layouts.admin'); } ?>
