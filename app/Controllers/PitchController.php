@@ -6,6 +6,7 @@ use App\Controller;
 use App\Models\Pitch;
 use App\Models\Booking;
 use App\Models\Customer;
+use App\Models\User;
 use App\Services\Vnpay;
 use Rakit\Validation\Validator;
 
@@ -14,6 +15,7 @@ class PitchController extends Controller
     protected $pitch;
     protected $booking;
     protected $customer;
+    protected $user;
     protected $validator;
 
     public function __construct()
@@ -21,6 +23,7 @@ class PitchController extends Controller
         $this->pitch     = new Pitch();
         $this->booking   = new Booking();
         $this->customer  = new Customer();
+        $this->user      = new User();
         $this->validator = new Validator();
     }
 
@@ -35,6 +38,7 @@ class PitchController extends Controller
             'pitches' => $pitches,
             'success' => $success,
             'error'   => $error,
+            'currentUser' => $this->user->getActiveUser(),
         ]);
     }
 
@@ -100,6 +104,7 @@ class PitchController extends Controller
             'success'       => $success,
             'error'         => $error,
             'old'           => $_SESSION['old'] ?? [],
+            'currentUser'   => $this->user->getActiveUser(),
         ]);
     }
 

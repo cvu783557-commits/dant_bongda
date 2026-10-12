@@ -18,11 +18,15 @@ class Customer extends Model
                        (SELECT COALESCE(SUM(CASE WHEN b.status <> 'cancelled' THEN b.total_price ELSE 0 END),0) FROM bookings b WHERE b.customer_id = c.id) AS total_spent,
                        (SELECT COALESCE(SUM(CASE WHEN b.status = 'confirmed' THEN b.total_price ELSE 0 END),0) FROM bookings b WHERE b.customer_id = c.id) AS confirmed_total,
                        (SELECT MAX(b.booking_date) FROM bookings b WHERE b.customer_id = c.id) AS last_booking_date
-                FROM {$this->table} c";
+                FROM {$this->table} c
+                WHERE EXISTS (
+                    SELECT 1 FROM bookings b
+                    WHERE b.customer_id = c.id
+                )";
         $params = [];
 
         if ($search !== '') {
-            $sql .= " WHERE c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?";
+            $sql .= " AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?)";
             $term = '%' . $search . '%';
             $params = [$term, $term, $term];
         }

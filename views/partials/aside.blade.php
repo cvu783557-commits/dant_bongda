@@ -7,7 +7,7 @@
                 </div>
                 <div style="line-height:1.2;">
                     <div class="fw-semibold small"><?php echo e($currentUser['full_name'] ?? ''); ?></div>
-                    <span class="badge bg-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> bg-opacity-10 text-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> border border-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> border-opacity-10 small px-2 py-0"><?php echo e($currentUser['role'] ?? 'STAFF'); ?></span>
+                    <span class="badge bg-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> bg-opacity-10 text-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> border border-<?php echo (($currentUser['role'] ?? '') === 'ADMIN') ? 'danger' : 'primary'; ?> border-opacity-10 small px-2 py-0"><?php echo e($currentUser['role'] ?? 'USER'); ?></span>
                 </div>
             </div>
         </div>
@@ -60,5 +60,13 @@
                 👥 Khách hàng
             </a>
         </li>
+        <?php if (($currentUser['role'] ?? '') === 'ADMIN'): ?>
+            <li class="nav-item mb-1">
+                <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/users') !== false) ? 'bg-success text-white' : ''; ?>"
+                   href="<?php echo route('admin/users'); ?>">
+                    🔐 Tài khoản & phân quyền
+                </a>
+            </li>
+        <?php endif; ?>
     </ul>
 </div>
