@@ -6,14 +6,15 @@ CREATE DATABASE IF NOT EXISTS db_football_field_booking
     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE db_football_field_booking;
 
+-- Public sign-ups create active USER accounts immediately; ADMIN access remains restricted.
 CREATE TABLE IF NOT EXISTS users (
     id            INT PRIMARY KEY AUTO_INCREMENT,
     username      VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name     VARCHAR(100) NOT NULL,
     phone         VARCHAR(20) NULL,
-    role          ENUM('ADMIN','STAFF') NOT NULL DEFAULT 'STAFF',
-    status        ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    role          ENUM('ADMIN','USER') NOT NULL DEFAULT 'USER',
+    status        ENUM('active','inactive','pending') NOT NULL DEFAULT 'active',
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_role (role),
@@ -110,6 +111,61 @@ CREATE TABLE IF NOT EXISTS bookings (
     CONSTRAINT chk_bookings_v2_paid_nonneg CHECK (paid_amount >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Services module
+CREATE TABLE IF NOT EXISTS services (
+    id            INT PRIMARY KEY AUTO_INCREMENT,
+    name          VARCHAR(150) NOT NULL,
+    category      VARCHAR(50) NOT NULL DEFAULT 'other',
+    price         DECIMAL(12,0) NOT NULL DEFAULT 0,
+    unit          VARCHAR(30) NOT NULL DEFAULT 'cái',
+    stock         INT NOT NULL DEFAULT 0,
+    description   TEXT NULL,
+    image         VARCHAR(255) NULL,
+    status        ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_service_category (category),
+    INDEX idx_service_status (status),
+    INDEX idx_service_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS booking_services (
+    id           INT PRIMARY KEY AUTO_INCREMENT,
+    booking_id   INT NOT NULL,
+    service_id   INT NOT NULL,
+    quantity     INT NOT NULL DEFAULT 1,
+    unit_price   DECIMAL(12,0) NOT NULL DEFAULT 0,
+    subtotal     DECIMAL(12,0) NOT NULL DEFAULT 0,
+    note         VARCHAR(255) NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_bs_booking (booking_id),
+    INDEX idx_bs_service (service_id),
+    CONSTRAINT fk_bs_booking FOREIGN KEY (booking_id)
+        REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bs_service FOREIGN KEY (service_id)
+        REFERENCES services(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_bs_quantity_pos CHECK (quantity > 0),
+    CONSTRAINT chk_bs_price_nonneg CHECK (unit_price >= 0),
+    CONSTRAINT chk_bs_subtotal_nonneg CHECK (subtotal >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Add sample services only when a service with the same name is absent.
+INSERT INTO services (name, category, price, unit, stock, description, status)
+SELECT samples.name, samples.category, samples.price, samples.unit, samples.stock, samples.description, 'active'
+FROM (
+    SELECT 'Nước suối 500ml' AS name, 'drink' AS category, 10000 AS price, 'chai' AS unit, 100 AS stock,
+           'Nước đóng chai 500ml' AS description
+    UNION ALL SELECT 'Nước tăng lực', 'drink', 15000, 'lon', 80, 'Nước tăng lực lon 330ml'
+    UNION ALL SELECT 'Cà phê sữa đá', 'drink', 20000, 'ly', 50, 'Cà phê pha sữa đá'
+    UNION ALL SELECT 'Bánh mì kẹp thịt', 'food', 25000, 'cái', 30, 'Bánh mì kẹp thịt heo'
+    UNION ALL SELECT 'Thuê bóng số 5', 'equipment', 20000, 'quả', 20, 'Bóng đá số 5 cỏ nhân tạo'
+    UNION ALL SELECT 'Thuê bóng số 7', 'equipment', 25000, 'quả', 15, 'Bóng đá số 7 cỏ nhân tạo'
+    UNION ALL SELECT 'Thuê áo đấu', 'equipment', 15000, 'bộ', 40, 'Áo đấu màu tiêu chuẩn'
+    UNION ALL SELECT 'Dịch vụ chụp ảnh', 'service', 150000, 'giờ', 5, 'Chụp ảnh trong trận bóng'
+) AS samples
+WHERE NOT EXISTS (SELECT 1 FROM services s WHERE s.name = samples.name);
+
 -- Add default pitches only when a pitch with the same name is absent.
 INSERT INTO pitches (name, type, price_per_hour, description, status)
 SELECT samples.name, samples.type, samples.price_per_hour, samples.description, 'active'
@@ -157,4 +213,4 @@ WHERE NOT EXISTS (
     WHERE t.start_time = samples.start_time AND t.end_time = samples.end_time
 );
 
--- Create login accounts separately with: php database/seed_users.php
+-- Bootstrap an ADMIN if needed with: php database/seed_users.php (prints a random password once).

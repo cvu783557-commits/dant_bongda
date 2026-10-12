@@ -19,16 +19,27 @@ class UserSeeder extends Model
 {
     public function createUser($username, $password, $fullName, $phone, $role)
     {
+        $existing = $this->connection->executeQuery(
+            "SELECT id FROM users WHERE username = ? LIMIT 1",
+            [$username]
+        )->fetchAssociative();
+        if ($existing) {
+            return false;
+        }
+
         $hash = password_hash($password, PASSWORD_DEFAULT);
 
-        $sql = "INSERT IGNORE INTO users (username, password_hash, full_name, phone, role, status)
+        $sql = "INSERT INTO users (username, password_hash, full_name, phone, role, status)
                 VALUES (?, ?, ?, ?, ?, 'active')";
 
-        $this->connection->executeStatement($sql, [
-            $username, $hash, $fullName, $phone, $role
-        ]);
-
-        return $hash;
+        try {
+            $this->connection->executeStatement($sql, [
+                $username, $hash, $fullName, $phone, $role
+            ]);
+            return true;
+        } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException $e) {
+            return false;
+        }
     }
 
     public function listUsers()
@@ -46,15 +57,16 @@ echo "===============================================\n\n";
 try {
     $seeder = new UserSeeder();
 
-    echo "[1] Tạo user ADMIN...\n";
-    $hashAdmin = $seeder->createUser('admin', 'admin123', 'Quản Trị Viên', '0900000000', 'ADMIN');
-    echo "    -> username: admin     password: admin123\n";
-    echo "    -> hash: " . $hashAdmin . "\n\n";
+    echo "[1] Tạo tài khoản ADMIN nếu chưa tồn tại...\n";
+    $adminPassword = rtrim(strtr(base64_encode(random_bytes(24)), '+/', '-_'), '=');
+    if ($seeder->createUser('admin', $adminPassword, 'Quản Trị Viên', '0900000000', 'ADMIN')) {
+        echo "    -> username: admin\n";
+        echo "    -> mật khẩu khởi tạo (chỉ hiển thị lần này): {$adminPassword}\n\n";
+    } else {
+        echo "    -> Tài khoản admin đã tồn tại; không thay đổi mật khẩu.\n\n";
+    }
 
-    echo "[2] Tạo user NHÂN VIÊN...\n";
-    $hashStaff = $seeder->createUser('staff', 'staff123', 'Nhân Viên Bán Hàng', '0900000001', 'STAFF');
-    echo "    -> username: staff     password: staff123\n";
-    echo "    -> hash: " . $hashStaff . "\n\n";
+    echo "[2] Không tạo USER dùng mật khẩu mặc định; đăng ký USER tại trang đăng ký.\n\n";
 
     echo "[3] Danh sách users hiện có:\n";
     $rows = $seeder->listUsers();
