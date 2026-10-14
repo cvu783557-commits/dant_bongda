@@ -194,7 +194,7 @@
                 <div class="card-body p-4">
                     <h4 class="fw-bold mb-4">Thông tin đặt sân</h4>
 
-                    <form method="get" action="" class="mb-4">
+                    <form method="get" action="" class="mb-4" id="booking-date-form">
                         <label class="form-label fw-semibold">Chọn ngày đặt:</label>
                         <div class="d-flex gap-2">
                             <input type="date"
@@ -202,6 +202,7 @@
                                    value="<?php echo htmlspecialchars($date); ?>"
                                    min="<?php echo date('Y-m-d'); ?>"
                                    class="form-control"
+                                   onchange="this.form.submit()"
                                    required>
                             <button type="submit" class="btn btn-outline-success">Xem lịch</button>
                         </div>

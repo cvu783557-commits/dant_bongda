@@ -32,7 +32,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Sân A2 - Sân 5 người cỏ tự nhiên',
                 'type' => 5,
-                'price_per_hour' => 200000,
+                'price_per_hour' => 250000,
                 'address' => 'Ngõ 02, ngách 60, Cầu Giấy, Hà Nội',
                 'opening_time' => '06:00:00',
                 'closing_time' => '23:00:00',
@@ -62,7 +62,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Sân C1 - Sân 11 người tiêu chuẩn',
                 'type' => 11,
-                'price_per_hour' => 800000,
+                'price_per_hour' => 250000,
                 'address' => 'Ngõ 02, ngách 60, Cầu Giấy, Hà Nội',
                 'opening_time' => '06:00:00',
                 'closing_time' => '23:00:00',

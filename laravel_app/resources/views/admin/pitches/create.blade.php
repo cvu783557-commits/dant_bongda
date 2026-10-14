@@ -33,7 +33,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Giá thuê / giờ (₫) <span class="text-danger">*</span></label>
                         <input type="number" name="price_per_hour" class="form-control" min="0" required
-                               value="<?php echo htmlspecialchars($old['price_per_hour'] ?? '0'); ?>">
+                               value="<?php echo htmlspecialchars($old['price_per_hour'] ?? '250000'); ?>">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Địa chỉ sân</label>
