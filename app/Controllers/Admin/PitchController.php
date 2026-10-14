@@ -3,6 +3,7 @@
 namespace App\Controllers\Admin;
 
 use App\Controller;
+use App\Models\Booking;
 use App\Models\Pitch;
 use Rakit\Validation\Validator;
 
@@ -44,8 +45,23 @@ class PitchController extends Controller
             return;
         }
 
+        $bookings = (new Booking())->all(['pitch_id' => $id]);
+        $now = new \DateTimeImmutable();
+        $upcomingBookings = array_values(array_filter($bookings, function ($booking) use ($now) {
+            if (!in_array($booking['status'], ['pending', 'confirmed'], true)) {
+                return false;
+            }
+
+            return new \DateTimeImmutable($booking['booking_date'] . ' ' . $booking['start_time']) > $now;
+        }));
+        usort($upcomingBookings, function ($first, $second) {
+            return [$first['booking_date'], $first['start_time']] <=> [$second['booking_date'], $second['start_time']];
+        });
+
         return view('admin.pitches.show', [
             'pitch' => $pitch,
+            'bookingCount' => count($bookings),
+            'upcomingBookings' => $upcomingBookings,
         ]);
     }
 

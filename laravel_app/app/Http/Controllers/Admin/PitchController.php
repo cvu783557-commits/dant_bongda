@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Pitch;
+use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
@@ -22,9 +24,48 @@ class PitchController extends Controller
 
     public function show(int $id): View
     {
+        $pitch = Pitch::query()->findOrFail($id);
+        $bookingsQuery = DB::table('bookings')
+            ->join('time_slots as ts', 'ts.id', '=', 'bookings.time_slot_id')
+            ->where('bookings.pitch_id', $pitch->id)
+            ->select([
+                'bookings.id',
+                'bookings.customer_name',
+                'bookings.customer_phone',
+                'bookings.booking_date',
+                'bookings.child_pitch_no',
+                'bookings.duration_hours',
+                'bookings.total_price',
+                'bookings.status',
+                'bookings.created_at',
+                'ts.start_time',
+            ]);
+
+        $upcomingBookings = (clone $bookingsQuery)
+            ->whereIn('bookings.status', ['pending', 'confirmed'])
+            ->whereDate('bookings.booking_date', '>=', now()->toDateString())
+            ->orderBy('bookings.booking_date')
+            ->orderBy('ts.start_time')
+            ->get()
+            ->filter(fn ($booking) => Carbon::parse($booking->booking_date . ' ' . $booking->start_time)->isFuture())
+            ->values()
+            ->map(fn ($booking) => $this->addBookingEndTime($booking))
+            ->all();
+
         return view('admin.pitches.show', [
-            'pitch' => Pitch::query()->findOrFail($id),
+            'pitch' => $pitch,
+            'bookingCount' => DB::table('bookings')->where('pitch_id', $pitch->id)->count(),
+            'upcomingBookings' => $upcomingBookings,
         ]);
+    }
+
+    private function addBookingEndTime(object $booking): array
+    {
+        $booking->end_time = Carbon::parse($booking->start_time)
+            ->addHours((int) $booking->duration_hours)
+            ->format('H:i:s');
+
+        return (array) $booking;
     }
 
     public function create(): View

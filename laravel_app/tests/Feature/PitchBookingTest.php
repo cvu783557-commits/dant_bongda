@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use App\Models\User;
 use Tests\TestCase;
 
 class PitchBookingTest extends TestCase
@@ -61,6 +63,66 @@ class PitchBookingTest extends TestCase
             ->assertSee('20:00');
     }
 
+    public function test_admin_pitch_details_show_operating_information_and_related_bookings(): void
+    {
+        $pitchId = $this->createPitch();
+        $slotId = DB::table('time_slots')->where('start_time', '18:00:00')->value('id');
+        $upcomingDate = now()->addDays(2)->toDateString();
+
+        $upcomingBookingId = DB::table('bookings')->insertGetId([
+            'pitch_id' => $pitchId,
+            'customer_name' => 'Khach Dat San',
+            'customer_phone' => '0901234567',
+            'booking_date' => $upcomingDate,
+            'time_slot_id' => $slotId,
+            'child_pitch_no' => 2,
+            'duration_hours' => 2,
+            'total_price' => 500000,
+            'status' => 'pending',
+            'created_at' => now(),
+        ]);
+
+        DB::table('bookings')->insert([
+            'pitch_id' => $pitchId,
+            'customer_name' => 'Khach Dat Cu',
+            'customer_phone' => '0907654321',
+            'booking_date' => now()->subDay()->toDateString(),
+            'time_slot_id' => $slotId,
+            'child_pitch_no' => 1,
+            'duration_hours' => 1,
+            'total_price' => 250000,
+            'status' => 'cancelled',
+            'created_at' => now()->subDay(),
+        ]);
+
+        $admin = User::query()->create([
+            'username' => 'admin-test',
+            'password_hash' => Hash::make('test-password'),
+            'full_name' => 'Admin Test',
+            'role' => 'ADMIN',
+            'status' => 'active',
+        ]);
+
+        $response = $this->actingAs($admin)->get('/admin/pitches/' . $pitchId);
+
+        $response->assertOk()
+            ->assertSee('Địa chỉ')
+            ->assertSee('Giờ hoạt động')
+            ->assertSee('0901 234 567')
+            ->assertSee('Sân 5 người')
+            ->assertSee('2 sân')
+            ->assertSee('Đang mở nhận đặt')
+            ->assertSee('Giá ngày thường')
+            ->assertSee('Giá cuối tuần')
+            ->assertSee('Tổng số đơn đặt liên quan')
+            ->assertSee('Đơn sắp tới chưa hủy')
+            ->assertDontSee('Lịch đặt gần đây')
+            ->assertSee('Khach Dat San')
+            ->assertDontSee('Khach Dat Cu')
+            ->assertSee('#' . str_pad($upcomingBookingId, 6, '0', STR_PAD_LEFT))
+            ->assertSee('/admin/bookings?pitch_id=' . $pitchId);
+    }
+
     private function createPitch(): int
     {
         return DB::table('pitches')->insertGetId([
@@ -70,6 +132,8 @@ class PitchBookingTest extends TestCase
             'address' => 'Ngõ 02, ngách 60, Cầu Giấy, Hà Nội',
             'opening_time' => '06:00:00',
             'closing_time' => '23:00:00',
+            'hotline' => '0901 234 567',
+            'pitch_size' => 'Sân 5 người',
             'field_count' => 2,
             'is_open' => true,
             'status' => 'active',
