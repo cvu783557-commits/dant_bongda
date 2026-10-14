@@ -15,6 +15,11 @@ class PitchController extends Controller
     {
         $this->pitch     = new Pitch();
         $this->validator = new Validator();
+
+        if (empty($_SESSION['auth_user_id'])) {
+            setFlash('error', 'Vui lòng đăng nhập để truy cập trang quản trị.');
+            redirect('admin/login');
+        }
     }
 
     public function index()
@@ -64,6 +69,13 @@ class PitchController extends Controller
             'name'           => 'required|min:3|max:100',
             'type'           => 'required|in:5,7,11',
             'price_per_hour' => 'required|numeric|min:0',
+            'address'        => 'nullable|max:255',
+            'opening_time'   => 'nullable|date_format:H:i',
+            'closing_time'   => 'nullable|date_format:H:i',
+            'hotline'        => 'nullable|max:30',
+            'pitch_size'     => 'nullable|max:100',
+            'field_count'    => 'nullable|integer|min:1',
+            'is_open'        => 'nullable|in:0,1',
             'description'    => 'nullable|max:2000',
             'status'         => 'required|in:active,inactive',
         ];
@@ -89,6 +101,13 @@ class PitchController extends Controller
             'name'           => trim($data['name']),
             'type'           => (int)$data['type'],
             'price_per_hour' => (int)$data['price_per_hour'],
+            'address'        => trim($data['address'] ?? ''),
+            'opening_time'   => $data['opening_time'] ?? '06:00',
+            'closing_time'   => $data['closing_time'] ?? '23:00',
+            'hotline'        => trim($data['hotline'] ?? ''),
+            'pitch_size'     => trim($data['pitch_size'] ?? ''),
+            'field_count'    => (int)($data['field_count'] ?? 1),
+            'is_open'        => isset($data['is_open']) ? (int)$data['is_open'] : 1,
             'description'    => trim($data['description'] ?? ''),
             'image'          => $imagePath,
             'status'         => $data['status'],
@@ -132,6 +151,13 @@ class PitchController extends Controller
             'name'           => 'required|min:3|max:100',
             'type'           => 'required|in:5,7,11',
             'price_per_hour' => 'required|numeric|min:0',
+            'address'        => 'nullable|max:255',
+            'opening_time'   => 'nullable|date_format:H:i',
+            'closing_time'   => 'nullable|date_format:H:i',
+            'hotline'        => 'nullable|max:30',
+            'pitch_size'     => 'nullable|max:100',
+            'field_count'    => 'nullable|integer|min:1',
+            'is_open'        => 'nullable|in:0,1',
             'description'    => 'nullable|max:2000',
             'status'         => 'required|in:active,inactive',
         ];
@@ -159,6 +185,13 @@ class PitchController extends Controller
             'name'           => trim($data['name']),
             'type'           => (int)$data['type'],
             'price_per_hour' => (int)$data['price_per_hour'],
+            'address'        => trim($data['address'] ?? ''),
+            'opening_time'   => $data['opening_time'] ?? '06:00',
+            'closing_time'   => $data['closing_time'] ?? '23:00',
+            'hotline'        => trim($data['hotline'] ?? ''),
+            'pitch_size'     => trim($data['pitch_size'] ?? ''),
+            'field_count'    => (int)($data['field_count'] ?? 1),
+            'is_open'        => isset($data['is_open']) ? (int)$data['is_open'] : 1,
             'description'    => trim($data['description'] ?? ''),
             'status'         => $data['status'],
         ];

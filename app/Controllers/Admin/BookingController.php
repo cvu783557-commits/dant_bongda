@@ -18,6 +18,11 @@ class BookingController extends Controller
         $this->booking   = new Booking();
         $this->pitch     = new Pitch();
         $this->validator = new Validator();
+
+        if (empty($_SESSION['auth_user_id'])) {
+            setFlash('error', 'Vui lòng đăng nhập để truy cập trang quản trị.');
+            redirect('admin/login');
+        }
     }
 
     public function index()

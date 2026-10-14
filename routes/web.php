@@ -1,6 +1,7 @@
 <?php
 
 use App\Controllers\PitchController;
+use App\Controllers\Admin\AuthController;
 use App\Controllers\Admin\BookingController as AdminBookingController;
 use App\Controllers\Admin\PitchController as AdminPitchController;
 use Bramus\Router\Router;
@@ -16,6 +17,10 @@ $router->post('/bookings',           PitchController::class . '@bookingStore');
 $router->get('/bookings/success/(\d+)', PitchController::class . '@bookingSuccess');
 
 // ====================== ADMIN =========================
+$router->get('/admin/login',                    AuthController::class . '@loginForm');
+$router->post('/admin/login',                   AuthController::class . '@login');
+$router->get('/admin/logout',                   AuthController::class . '@logout');
+
 $router->get('/admin',                       AdminBookingController::class . '@index');
 $router->get('/admin/dashboard',             AdminBookingController::class . '@dashboard');
 

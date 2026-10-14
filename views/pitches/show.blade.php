@@ -56,10 +56,58 @@
             <h2 class="fw-bold mb-2"><?php echo htmlspecialchars($pitch['name']); ?></h2>
             <div class="d-flex gap-2 mb-3">
                 <span class="badge bg-success-subtle text-success border border-success-subtle">Sân <?php echo (int)$pitch['type']; ?> người</span>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                    <?php echo htmlspecialchars($pitch['pitch_size'] ?? ('Sân ' . (int)$pitch['type'] . ' người')); ?>
+                </span>
                 <span class="text-success fw-bold fs-5"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</span>
             </div>
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="fw-bold mb-0">Thông tin tổng quan sân bóng</h4>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="savePitch()">💾 Lưu sân</button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="sharePitch()">🔗 Chia sẻ sân</button>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="small text-muted">Địa chỉ</div>
+                            <div class="fw-semibold"><?php echo htmlspecialchars($pitch['address'] ?? 'Địa chỉ sân chưa cập nhật'); ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Trạng thái</div>
+                            <div class="fw-semibold <?php echo (($pitch['is_open'] ?? 1) == 1 && ($pitch['status'] ?? 'active') === 'active') ? 'text-success' : 'text-warning'; ?>">
+                                <?php echo (($pitch['is_open'] ?? 1) == 1 && ($pitch['status'] ?? 'active') === 'active') ? 'Đang hoạt động' : 'Tạm đóng'; ?>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Giờ mở cửa</div>
+                            <div class="fw-semibold"><?php echo htmlspecialchars(substr($pitch['opening_time'] ?? '06:00:00', 0, 5)); ?> - <?php echo htmlspecialchars(substr($pitch['closing_time'] ?? '23:00:00', 0, 5)); ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Hotline</div>
+                            <div class="fw-semibold"><?php echo htmlspecialchars($pitch['hotline'] ?? '0901 234 567'); ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Quy mô</div>
+                            <div class="fw-semibold"><?php echo htmlspecialchars($pitch['pitch_size'] ?? ('Sân ' . (int)$pitch['type'] . ' người')); ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="small text-muted">Số lượng sân</div>
+                            <div class="fw-semibold"><?php echo (int)($pitch['field_count'] ?? 1); ?> sân</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <?php if (!empty($pitch['description'])): ?>
-                <p class="text-muted"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
+                <div class="mb-4">
+                    <h5 class="fw-bold mb-2">Giới thiệu sân bóng</h5>
+                    <p class="text-muted mb-0"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
+                </div>
             <?php endif; ?>
         </div>
 
@@ -155,6 +203,30 @@
         © <?php echo date('Y'); ?> SânBóng.Pro — Hệ thống đặt sân bóng online
     </div>
 </footer>
+
+<script>
+    function savePitch() {
+        const key = 'saved_pitches';
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        const id = <?php echo (int)$pitch['id']; ?>;
+        if (!saved.includes(id)) {
+            saved.push(id);
+            localStorage.setItem(key, JSON.stringify(saved));
+        }
+        alert('Đã lưu sân thành công.');
+    }
+
+    function sharePitch() {
+        const url = window.location.href;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () {
+                alert('Đã sao chép liên kết sân bóng.');
+            });
+            return;
+        }
+        alert('Liên kết sân bóng: ' + url);
+    }
+</script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 </body>

@@ -39,11 +39,49 @@
                                value="<?php echo htmlspecialchars($old['price_per_hour'] ?? $pitch['price_per_hour']); ?>">
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-semibold">Địa chỉ sân</label>
+                        <input type="text" name="address" class="form-control"
+                               value="<?php echo htmlspecialchars($old['address'] ?? $pitch['address'] ?? ''); ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Giờ mở cửa</label>
+                        <input type="time" name="opening_time" class="form-control"
+                               value="<?php echo htmlspecialchars($old['opening_time'] ?? $pitch['opening_time'] ?? '06:00'); ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Giờ đóng cửa</label>
+                        <input type="time" name="closing_time" class="form-control"
+                               value="<?php echo htmlspecialchars($old['closing_time'] ?? $pitch['closing_time'] ?? '23:00'); ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Hotline</label>
+                        <input type="text" name="hotline" class="form-control"
+                               value="<?php echo htmlspecialchars($old['hotline'] ?? $pitch['hotline'] ?? ''); ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Kích thước / quy mô</label>
+                        <input type="text" name="pitch_size" class="form-control"
+                               value="<?php echo htmlspecialchars($old['pitch_size'] ?? $pitch['pitch_size'] ?? ''); ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Số sân</label>
+                        <input type="number" name="field_count" class="form-control" min="1"
+                               value="<?php echo htmlspecialchars($old['field_count'] ?? $pitch['field_count'] ?? '1'); ?>">
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">Trạng thái</label>
                         <select name="status" class="form-select">
                             <?php $curStatus = $old['status'] ?? $pitch['status']; ?>
                             <option value="active"   <?php echo $curStatus === 'active'   ? 'selected' : ''; ?>>Hoạt động</option>
                             <option value="inactive" <?php echo $curStatus === 'inactive' ? 'selected' : ''; ?>>Tạm dừng</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Mở cửa ngay</label>
+                        <select name="is_open" class="form-select">
+                            <?php $curOpen = $old['is_open'] ?? $pitch['is_open'] ?? 1; ?>
+                            <option value="1" <?php echo (int)$curOpen === 1 ? 'selected' : ''; ?>>Có</option>
+                            <option value="0" <?php echo (int)$curOpen === 0 ? 'selected' : ''; ?>>Không</option>
                         </select>
                     </div>
                 </div>

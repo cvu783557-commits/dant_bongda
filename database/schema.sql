@@ -18,6 +18,13 @@ CREATE TABLE pitches (
     name            VARCHAR(100) NOT NULL,
     type            TINYINT NOT NULL COMMENT '5=Sân 5 người, 7=Sân 7 người, 11=Sân 11 người',
     price_per_hour  DECIMAL(12,0) NOT NULL DEFAULT 0,
+    address         VARCHAR(255) NULL,
+    opening_time    TIME NOT NULL DEFAULT '06:00:00',
+    closing_time    TIME NOT NULL DEFAULT '23:00:00',
+    hotline         VARCHAR(30) NULL,
+    pitch_size      VARCHAR(100) NULL,
+    field_count     INT NOT NULL DEFAULT 1,
+    is_open         TINYINT(1) NOT NULL DEFAULT 1,
     description     TEXT NULL,
     image           VARCHAR(255) NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
@@ -61,11 +68,11 @@ CREATE INDEX idx_booking_pitch   ON bookings(pitch_id);
 -- ============================================================
 
 -- Seed pitches (4 sân mẫu)
-INSERT INTO pitches (name, type, price_per_hour, description, image, status) VALUES
-('Sân A1 - Sân 5 người cỏ nhân tạo', 5,  250000, 'Sân 5 người cỏ nhân tạo mới, lưới bao quanh đầy đủ, hệ thống chiếu sáng LED.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Mini%20football%20field%205%20people%20with%20artificial%20grass%20green%20clean%20bright%20outdoor&image_size=square', 'active'),
-('Sân A2 - Sân 5 người cỏ tự nhiên', 5,  200000, 'Sân 5 người cỏ tự nhiên, môi trường trong lành, phù hợp luyện tập nhẹ.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Outdoor%20small%20football%20pitch%20with%20natural%20grass%20sunny%20day&image_size=square', 'active'),
-('Sân B1 - Sân 7 người cao cấp',    7,  450000, 'Sân 7 người tiêu chuẩn, cỏ nhân tạo dày, bóng đèn, phòng thay đồ riêng.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=7%20people%20football%20field%20premium%20artificial%20grass%20floodlight%20night&image_size=square', 'active'),
-('Sân C1 - Sân 11 người tiêu chuẩn', 11, 800000, 'Sân 11 người kích thước chuẩn FIFA, cỏ tự nhiên, khán đài, hệ thống chiếu sáng chuyên nghiệp.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Full%2011%20player%20football%20stadium%20grass%20pitch%20green%20professional&image_size=square', 'active');
+INSERT INTO pitches (name, type, price_per_hour, address, opening_time, closing_time, hotline, pitch_size, field_count, is_open, description, image, status) VALUES
+('Sân A1 - Sân 5 người cỏ nhân tạo', 5, 250000, '168 Đường Lê Hồng Phong, Q. Ninh Kiều, Cần Thơ', '06:00:00', '23:00:00', '0901 234 567', 'Sân 5 người', 1, 1, 'Sân 5 người cỏ nhân tạo mới, lưới bao quanh đầy đủ, hệ thống chiếu sáng LED.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Mini%20football%20field%205%20people%20with%20artificial%20grass%20green%20clean%20bright%20outdoor&image_size=square', 'active'),
+('Sân A2 - Sân 5 người cỏ tự nhiên', 5, 200000, '28 Đường Hòa Bình, Q. Ninh Kiều, Cần Thơ', '06:00:00', '23:00:00', '0902 345 678', 'Sân 5 người', 1, 1, 'Sân 5 người cỏ tự nhiên, môi trường trong lành, phù hợp luyện tập nhẹ.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Outdoor%20small%20football%20pitch%20with%20natural%20grass%20sunny%20day&image_size=square', 'active'),
+('Sân B1 - Sân 7 người cao cấp', 7, 450000, '90 Đường Nguyễn Văn Cừ, Q. Cái Răng, Cần Thơ', '06:00:00', '23:00:00', '0903 456 789', 'Sân 7 người', 1, 1, 'Sân 7 người tiêu chuẩn, cỏ nhân tạo dày, bóng đèn, phòng thay đồ riêng.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=7%20people%20football%20field%20premium%20artificial%20grass%20floodlight%20night&image_size=square', 'active'),
+('Sân C1 - Sân 11 người tiêu chuẩn', 11, 800000, '455 Đường 3/2, Q. Ninh Kiều, Cần Thơ', '06:00:00', '23:00:00', '0904 567 890', 'Sân 11 người', 1, 1, 'Sân 11 người kích thước chuẩn FIFA, cỏ tự nhiên, khán đài, hệ thống chiếu sáng chuyên nghiệp.', 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Full%2011%20player%20football%20stadium%20grass%20pitch%20green%20professional&image_size=square', 'active');
 
 -- Seed time_slots: 17 khung giờ từ 06:00 -> 23:00 (mỗi khung 1 tiếng)
 INSERT INTO time_slots (start_time, end_time) VALUES

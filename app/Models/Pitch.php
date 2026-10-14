@@ -37,13 +37,20 @@ class Pitch extends Model
     public function create(array $data)
     {
         $sql = "INSERT INTO {$this->table}
-                (name, type, price_per_hour, description, image, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, NOW())";
+                (name, type, price_per_hour, address, opening_time, closing_time, hotline, pitch_size, field_count, is_open, description, image, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
 
         $this->connection->executeStatement($sql, [
             $data['name'],
             $data['type'],
             $data['price_per_hour'],
+            $data['address'] ?? null,
+            $data['opening_time'] ?? '06:00:00',
+            $data['closing_time'] ?? '23:00:00',
+            $data['hotline'] ?? null,
+            $data['pitch_size'] ?? null,
+            $data['field_count'] ?? 1,
+            $data['is_open'] ?? 1,
             $data['description'] ?? null,
             $data['image'] ?? null,
             $data['status'] ?? 'active',
@@ -56,11 +63,18 @@ class Pitch extends Model
     {
         $sql = "UPDATE {$this->table} SET
                     name = ?, type = ?, price_per_hour = ?,
-                    description = ?, status = ?";
+                    address = ?, opening_time = ?, closing_time = ?, hotline = ?, pitch_size = ?, field_count = ?, is_open = ?, description = ?, status = ?";
         $params = [
             $data['name'],
             $data['type'],
             $data['price_per_hour'],
+            $data['address'] ?? null,
+            $data['opening_time'] ?? '06:00:00',
+            $data['closing_time'] ?? '23:00:00',
+            $data['hotline'] ?? null,
+            $data['pitch_size'] ?? null,
+            $data['field_count'] ?? 1,
+            $data['is_open'] ?? 1,
             $data['description'] ?? null,
             $data['status'] ?? 'active',
         ];
