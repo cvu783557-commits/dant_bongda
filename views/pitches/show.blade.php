@@ -103,6 +103,42 @@
                 </div>
             </div>
 
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h4 class="fw-bold mb-2">Bảng giá thuê sân</h4>
+                    <p class="text-muted small mb-3">
+                        Mỗi khung giờ tính 1 giờ. Hiện tại sân áp dụng cùng một mức giá cho ngày thường và cuối tuần.
+                    </p>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped align-middle mb-3">
+                            <thead class="table-success">
+                                <tr>
+                                    <th scope="col">Khung giờ</th>
+                                    <th scope="col">Thứ Hai - Thứ Sáu</th>
+                                    <th scope="col">Thứ Bảy - Chủ nhật</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($slots as $s): ?>
+                                    <tr>
+                                        <td>
+                                            <?php echo htmlspecialchars(substr($s['start_time'], 0, 5)); ?> -
+                                            <?php echo htmlspecialchars(substr($s['end_time'], 0, 5)); ?>
+                                        </td>
+                                        <td class="fw-semibold text-success"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</td>
+                                        <td class="fw-semibold text-success"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="alert alert-light border mb-0 small">
+                        <strong>Chi phí:</strong> Giá đã bao gồm phí thuê sân trong một giờ.
+                        Dịch vụ hoặc phụ phí khác (nếu có) sẽ được thông báo riêng trước khi xác nhận đặt sân.
+                    </div>
+                </div>
+            </div>
+
             <?php if (!empty($pitch['description'])): ?>
                 <div class="mb-4">
                     <h5 class="fw-bold mb-2">Giới thiệu sân bóng</h5>
