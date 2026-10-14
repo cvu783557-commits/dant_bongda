@@ -1,5 +1,8 @@
 <?php
     $fieldCount = max(1, (int)($pitch['field_count'] ?? 1));
+    $hotline = trim((string)($pitch['hotline'] ?? ''));
+    $hotlineDigits = preg_replace('/\D+/', '', $hotline);
+    $hasContactPhone = preg_match('/^0[0-9]{9,10}$/', $hotlineDigits) === 1;
 ?>
 <!DOCTYPE html>
 <html lang="vi">
@@ -92,7 +95,7 @@
                         </div>
                         <div class="col-md-6">
                             <div class="small text-muted">Hotline</div>
-                            <div class="fw-semibold"><?php echo htmlspecialchars($pitch['hotline'] ?? '0901 234 567'); ?></div>
+                            <div class="fw-semibold"><?php echo htmlspecialchars($hotline !== '' ? $hotline : 'Chưa cập nhật'); ?></div>
                         </div>
                         <div class="col-md-6">
                             <div class="small text-muted">Quy mô</div>
@@ -102,6 +105,13 @@
                             <div class="small text-muted">Số lượng sân</div>
                             <div class="fw-semibold"><?php echo (int)($pitch['field_count'] ?? 1); ?> sân</div>
                         </div>
+                        <?php if ($hasContactPhone): ?>
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-2">
+                                    <a class="btn btn-success" href="tel:<?php echo htmlspecialchars($hotlineDigits); ?>">Liên hệ</a>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                         <div class="col-12">
                             <div class="small text-muted mb-2">Danh sách sân con</div>
                             <div class="d-flex flex-wrap gap-2">
@@ -149,6 +159,23 @@
                     <div class="alert alert-light border mb-0 small">
                         <strong>Chi phí:</strong> Giá đã bao gồm phí thuê sân trong một giờ.
                         Dịch vụ hoặc phụ phí khác (nếu có) sẽ được thông báo riêng trước khi xác nhận đặt sân.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h4 class="fw-bold mb-3">Chính sách và lưu ý đặt sân</h4>
+                    <div class="mb-3">
+                        <h6 class="fw-semibold">Chính sách đặt cọc</h6>
+                        <p class="text-muted mb-0">Website không thu tiền đặt cọc trực tuyến. Vui lòng liên hệ sân để xác nhận yêu cầu đặt cọc trước khi thanh toán.</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="fw-semibold">Chính sách hủy sân / hoàn tiền</h6>
+                        <p class="text-muted mb-0">Điều kiện hủy sân và hoàn tiền do sân xác nhận trực tiếp. Hãy hỏi rõ điều kiện trước khi chuyển tiền đặt cọc.</p>
+                    </div>
+                    <div class="alert alert-warning mb-0">
+                        <strong>Lưu ý an toàn:</strong> Yêu cầu đặt sân chỉ được xác nhận sau khi sân liên hệ lại. Chỉ thanh toán theo thông tin đã xác minh trực tiếp với sân.
                     </div>
                 </div>
             </div>

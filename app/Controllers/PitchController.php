@@ -6,6 +6,7 @@ use App\Controller;
 use App\Models\Pitch;
 use App\Models\TimeSlot;
 use App\Models\Booking;
+use App\Models\NewsletterSubscriber;
 use Rakit\Validation\Validator;
 
 class PitchController extends Controller
@@ -64,6 +65,37 @@ class PitchController extends Controller
             'error'         => $error,
             'old'           => $_SESSION['old'] ?? [],
         ]);
+    }
+
+    public function newsletterSubscribe($id)
+    {
+        $pitch = $this->pitch->find($id);
+        if (!$pitch || $pitch['status'] !== 'active') {
+            redirect404();
+            return;
+        }
+
+        $data = $_POST;
+        $rules = [
+            'newsletter_email' => 'required|email|max:100',
+            'newsletter_consent' => 'required|in:1',
+        ];
+        $errors = $this->validate($this->validator, $data, $rules);
+
+        if (!empty($errors)) {
+            setFlash('error', reset($errors));
+            $_SESSION['newsletter_email'] = trim($data['newsletter_email'] ?? '');
+            $date = $data['date'] ?? date('Y-m-d');
+            redirect('pitches/' . $id . '?date=' . rawurlencode($date) . '#newsletter');
+            return;
+        }
+
+        $subscriber = new NewsletterSubscriber();
+        $subscriber->subscribe(mb_strtolower(trim($data['newsletter_email'])));
+        unset($_SESSION['newsletter_email']);
+        setFlash('success', 'Đăng ký nhận thông tin ưu đãi thành công.');
+        $date = $data['date'] ?? date('Y-m-d');
+        redirect('pitches/' . $id . '?date=' . rawurlencode($date) . '#newsletter');
     }
 
     public function bookingStore()

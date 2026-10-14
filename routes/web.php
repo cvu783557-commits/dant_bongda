@@ -12,6 +12,7 @@ $router = new Router();
 $router->get('/',  PitchController::class . '@index');
 
 $router->get('/pitches/(\d+)',  PitchController::class . '@show');
+$router->post('/pitches/(\d+)/newsletter', PitchController::class . '@newsletterSubscribe');
 
 $router->post('/bookings',           PitchController::class . '@bookingStore');
 $router->get('/bookings/success/(\d+)', PitchController::class . '@bookingSuccess');
