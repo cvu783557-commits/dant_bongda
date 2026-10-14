@@ -121,14 +121,16 @@
                                             </button>
                                         </form>
                                     <?php endif; ?>
-                                    <form method="post" action="<?php echo route('admin/services/' . $s['id'] . '/delete'); ?>" class="d-inline"
-                                          onsubmit="return confirm('Bạn có chắc muốn xóa dịch vụ \'<?php echo htmlspecialchars(addslashes($s['name'])); ?>\'?\nDịch vụ đã có hóa đơn sẽ không thể xóa.');">
-                                        <button type="submit"
-                                                class="btn btn-sm border rounded px-3 py-1.5"
-                                                style="color: #dc3545; border-color: #dc3545; background: white; font-weight: 500;">
-                                            Xóa
-                                        </button>
-                                    </form>
+                                    <?php if (!empty($canDelete)): ?>
+                                        <form method="post" action="<?php echo route('admin/services/' . $s['id'] . '/delete'); ?>" class="d-inline"
+                                              onsubmit="return confirm('Bạn có chắc muốn xóa dịch vụ \'<?php echo htmlspecialchars(addslashes($s['name'])); ?>\'?\nDịch vụ đã có hóa đơn sẽ không thể xóa.');">
+                                            <button type="submit"
+                                                    class="btn btn-sm border rounded px-3 py-1.5"
+                                                    style="color: #dc3545; border-color: #dc3545; background: white; font-weight: 500;">
+                                                Xóa
+                                            </button>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>

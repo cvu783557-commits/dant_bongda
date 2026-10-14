@@ -16,9 +16,13 @@ class CustomerController extends Controller
         $this->customer = new Customer();
         $this->user     = new User();
 
-        if (!$this->user->getActiveUser()) {
-            setFlash('error', 'Vui lòng đăng nhập để truy cập quản lý');
-            redirect('admin/login');
+        if (!$this->user->canAccessAdmin()) {
+            if (!$this->user->getActiveUser()) {
+                setFlash('error', 'Vui lòng đăng nhập bằng tài khoản ADMIN để truy cập trang quản lý');
+                redirect('login');
+            }
+            setFlash('error', 'Tài khoản USER không có quyền truy cập trang quản trị.');
+            redirect('/');
         }
     }
 

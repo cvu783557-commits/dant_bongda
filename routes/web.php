@@ -6,6 +6,7 @@ use App\Controllers\Admin\BookingController as AdminBookingController;
 use App\Controllers\Admin\CustomerController as AdminCustomerController;
 use App\Controllers\Admin\PitchController as AdminPitchController;
 use App\Controllers\Admin\ServiceController as AdminServiceController;
+use App\Controllers\Admin\UserController as AdminUserController;
 use Bramus\Router\Router;
 
 $router = new Router();
@@ -23,7 +24,14 @@ $router->get('/bookings/vnpay-ipn', PitchController::class . '@vnpayIpn');
 // ====================== ADMIN AUTH =====================
 $router->get('/admin/login',           AuthController::class . '@loginForm');
 $router->post('/admin/login',          AuthController::class . '@login');
+$router->get('/admin/register',        AuthController::class . '@registerForm');
+$router->post('/admin/register',       AuthController::class . '@register');
+$router->get('/login',                 AuthController::class . '@loginForm');
+$router->post('/login',                AuthController::class . '@login');
+$router->get('/register',              AuthController::class . '@registerForm');
+$router->post('/register',             AuthController::class . '@register');
 $router->get('/admin/logout',          AuthController::class . '@logout');
+$router->post('/logout',               AuthController::class . '@logout');
 
 // ====================== ADMIN =========================
 $router->get('/admin',                       AdminBookingController::class . '@index');
@@ -80,6 +88,10 @@ $router->post('/admin/bookings/(\d+)/delete-old',     AdminBookingController::cl
 // Admin -> Quản lý khách hàng (từ bảng customers)
 $router->get('/admin/customers',                    AdminCustomerController::class . '@index');
 $router->get('/admin/customers/detail',             AdminCustomerController::class . '@show');
+
+// Admin -> Quản lý tài khoản và phân quyền
+$router->get('/admin/users',                        AdminUserController::class . '@index');
+$router->post('/admin/users/(\d+)/access',           AdminUserController::class . '@updateAccess');
 
 // ------------------------
 

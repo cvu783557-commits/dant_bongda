@@ -43,7 +43,7 @@ try {
     $pdo->exec($sql);
 
     // Verify
-    $tables = ['pitches', 'time_slots', 'bookings'];
+    $tables = ['pitches', 'time_slots', 'bookings', 'services', 'booking_services'];
     foreach ($tables as $t) {
         $stmt = $pdo->query("SELECT COUNT(*) AS c FROM `{$t}`");
         $r = $stmt->fetch();

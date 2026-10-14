@@ -66,9 +66,11 @@
                                             <?php echo $p['status'] === 'active' ? 'Tạm dừng' : 'Kích hoạt'; ?>
                                         </button>
                                     </form>
-                                    <form method="post" action="<?php echo route('admin/pitches/' . $p['id'] . '/delete'); ?>" class="d-inline" onsubmit="return confirm('Bạn có chắc muốn xóa sân này?');">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
-                                    </form>
+                                    <?php if (!empty($canDelete)): ?>
+                                        <form method="post" action="<?php echo route('admin/pitches/' . $p['id'] . '/delete'); ?>" class="d-inline" onsubmit="return confirm('Bạn có chắc muốn xóa sân này?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Xóa</button>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>

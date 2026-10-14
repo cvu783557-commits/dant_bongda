@@ -20,9 +20,13 @@ class ServiceController extends Controller
         $this->user      = new User();
 
         if (session_status() === PHP_SESSION_NONE) session_start();
-        if (!$this->user->getActiveUser()) {
-            setFlash('error', 'Vui lòng đăng nhập để truy cập quản lý');
-            redirect('admin/login');
+        if (!$this->user->canAccessAdmin()) {
+            if (!$this->user->getActiveUser()) {
+                setFlash('error', 'Vui lòng đăng nhập bằng tài khoản ADMIN để truy cập trang quản lý');
+                redirect('login');
+            }
+            setFlash('error', 'Tài khoản USER không có quyền truy cập trang quản trị.');
+            redirect('/');
         }
     }
 
@@ -66,6 +70,7 @@ class ServiceController extends Controller
             'success'       => $success,
             'error'         => $error,
             'user'          => $this->user->getActiveUser(),
+            'canDelete'     => $this->user->canDelete(),
         ]);
     }
 
@@ -292,6 +297,12 @@ class ServiceController extends Controller
 
     public function destroy($id)
     {
+        if (!$this->user->canDelete()) {
+            setFlash('error', 'Chỉ ADMIN mới có quyền xóa dịch vụ.');
+            redirect('admin/services');
+            return;
+        }
+
         $service = $this->service->find($id);
         if (!$service) {
             redirect404();
