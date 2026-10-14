@@ -1,3 +1,6 @@
+<?php
+    $fieldCount = max(1, (int)($pitch['field_count'] ?? 1));
+?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -99,6 +102,17 @@
                             <div class="small text-muted">Số lượng sân</div>
                             <div class="fw-semibold"><?php echo (int)($pitch['field_count'] ?? 1); ?> sân</div>
                         </div>
+                        <div class="col-12">
+                            <div class="small text-muted mb-2">Danh sách sân con</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <?php for ($childNo = 1; $childNo <= $fieldCount; $childNo++): ?>
+                                    <span class="badge bg-light text-dark border">
+                                        <?php echo htmlspecialchars($pitch['name']); ?> - PB <?php echo $childNo; ?>
+                                        · <?php echo (int)$pitch['type']; ?> người
+                                    </span>
+                                <?php endfor; ?>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -145,6 +159,7 @@
                     <p class="text-muted mb-0"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
                 </div>
             <?php endif; ?>
+
         </div>
 
         <div class="col-lg-6">
@@ -165,18 +180,46 @@
                         </div>
                     </form>
 
-                    <form method="post" action="<?php echo route('bookings'); ?>" novalidate>
+                    <form method="post" action="<?php echo route('bookings'); ?>" id="bookingForm" novalidate>
                         <input type="hidden" name="pitch_id" value="<?php echo (int)$pitch['id']; ?>">
                         <input type="hidden" name="booking_date" value="<?php echo htmlspecialchars($date); ?>">
 
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6">
+                                <label for="child-pitch" class="form-label fw-semibold">Chọn sân con</label>
+                                <select name="child_pitch_no" id="child-pitch" class="form-select" required>
+                                    <?php for ($childNo = 1; $childNo <= $fieldCount; $childNo++): ?>
+                                        <option value="<?php echo $childNo; ?>"
+                                            <?php echo (int)($old['child_pitch_no'] ?? 1) === $childNo ? 'selected' : ''; ?>>
+                                            Sân <?php echo htmlspecialchars($pitch['name']); ?> - PB <?php echo $childNo; ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-sm-6">
+                                <label for="duration-hours" class="form-label fw-semibold">Thời lượng thuê</label>
+                                <select name="duration_hours" id="duration-hours" class="form-select" required>
+                                    <?php for ($hours = 1; $hours <= count($slots); $hours++): ?>
+                                        <option value="<?php echo $hours; ?>"
+                                            <?php echo (int)($old['duration_hours'] ?? 1) === $hours ? 'selected' : ''; ?>>
+                                            <?php echo $hours; ?> giờ
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                        </div>
+
                         <p class="form-label fw-semibold mb-2">
-                            Chọn khung giờ — Ngày <?php echo formatDate($date); ?>
+                            Chọn giờ bắt đầu — Ngày <?php echo formatDate($date); ?>
                         </p>
+                        <div class="d-flex gap-3 small mb-2">
+                            <span class="text-success">● Còn trống</span>
+                            <span class="text-danger">● Đã đặt / không đủ thời lượng</span>
+                        </div>
 
                         <div class="row g-2 mb-4">
                             <?php foreach ($slots as $s): ?>
                                 <?php
-                                    $taken = in_array($s['id'], $bookedSlotIds);
                                     $start = substr($s['start_time'], 0, 5);
                                     $end   = substr($s['end_time'], 0, 5);
                                 ?>
@@ -185,18 +228,24 @@
                                         <input type="radio"
                                                name="time_slot_id"
                                                value="<?php echo $s['id']; ?>"
-                                               class="btn-check"
-                                               <?php echo $taken ? 'disabled' : ''; ?>
+                                               class="btn-check time-option"
+                                               data-start="<?php echo htmlspecialchars($s['start_time']); ?>"
+                                               data-end="<?php echo htmlspecialchars($s['end_time']); ?>"
                                                <?php echo (isset($old['time_slot_id']) && (int)$old['time_slot_id'] === (int)$s['id']) ? 'checked' : ''; ?>>
-                                        <span class="btn btn-outline-<?php echo $taken ? 'secondary disabled opacity-50' : 'success'; ?> w-100 small">
-                                            <?php echo "{$start}-{$end}"; ?>
-                                            <?php if ($taken) echo ' ❌'; ?>
+                                        <span class="btn btn-outline-success w-100 small time-option-label">
+                                            <?php echo "{$start}-{$end}"; ?> <span class="availability-label">· Còn trống</span>
                                         </span>
                                     </label>
                                 </div>
                             <?php endforeach; ?>
                         </div>
 
+                        <p id="selected-period-summary" class="small text-muted" aria-live="polite">
+                            Chưa chọn khung giờ.
+                        </p>
+                        <button type="button" id="continue-booking" class="btn btn-success w-100 fw-bold mb-4">Đặt sân ngay</button>
+
+                        <div id="customer-fields" class="<?php echo !empty($old['customer_name']) ? '' : 'd-none'; ?>">
                         <div class="mb-3">
                             <label class="form-label">Họ tên khách hàng <span class="text-danger">*</span></label>
                             <input type="text" name="customer_name" class="form-control" required
@@ -223,10 +272,11 @@
 
                         <div class="alert alert-success d-flex justify-content-between align-items-center mb-4">
                             <span class="fw-semibold">Thành tiền:</span>
-                            <span class="fw-bold fs-5"><?php echo formatMoney($pitch['price_per_hour']); ?></span>
+                            <span id="estimated-total" class="fw-bold fs-5"><?php echo formatMoney($pitch['price_per_hour']); ?></span>
                         </div>
 
                         <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">Xác nhận đặt sân</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -262,6 +312,83 @@
         }
         alert('Liên kết sân bóng: ' + url);
     }
+
+    const reservations = <?php echo json_encode($reservations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+    const timeOptions = Array.from(document.querySelectorAll('.time-option'));
+    const childPitchSelect = document.getElementById('child-pitch');
+    const durationSelect = document.getElementById('duration-hours');
+    const customerFields = document.getElementById('customer-fields');
+    const hourlyPrice = <?php echo (int)$pitch['price_per_hour']; ?>;
+    const openingMinutes = <?php echo ((int)substr($pitch['opening_time'] ?? '06:00:00', 0, 2) * 60) + (int)substr($pitch['opening_time'] ?? '06:00:00', 3, 2); ?>;
+    const closingMinutes = <?php echo ((int)substr($pitch['closing_time'] ?? '23:00:00', 0, 2) * 60) + (int)substr($pitch['closing_time'] ?? '23:00:00', 3, 2); ?>;
+    const selectedBookingDate = <?php echo json_encode($date); ?>;
+    const today = <?php echo json_encode(date('Y-m-d')); ?>;
+    const currentMinutes = <?php echo ((int)date('H') * 60) + (int)date('i'); ?>;
+
+    function minutesSinceMidnight(time) {
+        const parts = time.split(':').map(Number);
+        return parts[0] * 60 + parts[1];
+    }
+
+    function formatTime(minutes) {
+        return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
+    }
+
+    function updateAvailability() {
+        const selectedChild = Number(childPitchSelect.value);
+        const duration = Number(durationSelect.value);
+
+        timeOptions.forEach(function (option) {
+            const start = minutesSinceMidnight(option.dataset.start);
+            const end = start + duration * 60;
+            const insideOpeningHours = start >= openingMinutes && end <= closingMinutes;
+            const notPassed = selectedBookingDate !== today || start > currentMinutes;
+            const overlapsReservation = reservations.some(function (reservation) {
+                return Number(reservation.child_pitch_no) === selectedChild
+                    && start < minutesSinceMidnight(reservation.end_time)
+                    && end > minutesSinceMidnight(reservation.start_time);
+            });
+            const available = insideOpeningHours && notPassed && !overlapsReservation;
+            const label = option.nextElementSibling;
+            const statusText = label.querySelector('.availability-label');
+
+            option.disabled = !available;
+            if (!available && option.checked) option.checked = false;
+            label.classList.toggle('btn-outline-success', available);
+            label.classList.toggle('btn-outline-secondary', !available);
+            label.classList.toggle('opacity-50', !available);
+            statusText.textContent = available ? '· Còn trống' : (overlapsReservation ? '· Đã đặt' : (!notPassed ? '· Đã qua' : '· Không đủ thời lượng'));
+        });
+
+        const total = new Intl.NumberFormat('vi-VN').format(hourlyPrice * duration) + ' ₫';
+        document.getElementById('estimated-total').textContent = total;
+
+        const selectedOption = document.querySelector('.time-option:checked');
+        const summary = document.getElementById('selected-period-summary');
+        summary.textContent = selectedOption
+            ? 'Đang chọn PB ' + selectedChild + ': ' + formatTime(minutesSinceMidnight(selectedOption.dataset.start))
+                + ' - ' + formatTime(minutesSinceMidnight(selectedOption.dataset.start) + duration * 60)
+                + ' (' + duration + ' giờ)'
+            : 'Chưa chọn khung giờ.';
+    }
+
+    childPitchSelect.addEventListener('change', updateAvailability);
+    durationSelect.addEventListener('change', updateAvailability);
+    timeOptions.forEach(function (option) {
+        option.addEventListener('change', updateAvailability);
+    });
+    updateAvailability();
+
+    document.getElementById('continue-booking').addEventListener('click', function () {
+        const selectedSlot = document.querySelector('.time-option:checked');
+        if (!selectedSlot || selectedSlot.disabled) {
+            alert('Vui lòng chọn một khung giờ còn trống.');
+            return;
+        }
+
+        customerFields.classList.remove('d-none');
+        customerFields.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>

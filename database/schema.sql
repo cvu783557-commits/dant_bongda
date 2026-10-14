@@ -51,6 +51,8 @@ CREATE TABLE bookings (
     customer_email  VARCHAR(100) NULL,
     booking_date    DATE NOT NULL,
     time_slot_id    INT NOT NULL,
+    child_pitch_no  INT NOT NULL DEFAULT 1,
+    duration_hours  INT NOT NULL DEFAULT 1,
     total_price     DECIMAL(12,0) NOT NULL DEFAULT 0,
     status          ENUM('pending','confirmed','cancelled') NOT NULL DEFAULT 'pending',
     notes           TEXT NULL,
@@ -62,6 +64,7 @@ CREATE TABLE bookings (
 CREATE INDEX idx_booking_date    ON bookings(booking_date);
 CREATE INDEX idx_booking_status  ON bookings(status);
 CREATE INDEX idx_booking_pitch   ON bookings(pitch_id);
+CREATE INDEX idx_booking_court_date ON bookings(pitch_id, child_pitch_no, booking_date, status);
 
 -- ============================================================
 -- SEED DỮ LIỆU MẪU
