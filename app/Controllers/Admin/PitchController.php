@@ -60,7 +60,6 @@ class PitchController extends Controller
 
         return view('admin.pitches.show', [
             'pitch' => $pitch,
-            'bookingCount' => count($bookings),
             'upcomingBookings' => $upcomingBookings,
         ]);
     }

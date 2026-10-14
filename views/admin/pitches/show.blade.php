@@ -14,34 +14,46 @@
     </div>
 </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-sm-6 col-xl-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-muted small">Tổng số đơn đặt liên quan</div>
-                <div class="fs-3 fw-bold"><?php echo (int)$bookingCount; ?></div>
-                <a href="<?php echo route('admin/bookings?pitch_id=' . $pitch['id']); ?>" class="small">Xem danh sách đơn</a>
-            </div>
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="fw-bold mb-0">Đơn đặt sân sắp tới</h5>
+            <small class="text-muted">Chỉ tính đơn chờ xác nhận hoặc đã xác nhận trong tương lai.</small>
         </div>
+        <a href="<?php echo route('admin/bookings?pitch_id=' . $pitch['id']); ?>" class="btn btn-sm btn-outline-success">Tất cả đơn</a>
     </div>
-    <div class="col-sm-6 col-xl-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-muted small">Đơn sắp tới chưa hủy</div>
-                <div class="fs-3 fw-bold text-primary"><?php echo count($upcomingBookings); ?></div>
-                <div class="small text-muted">Đang chờ xác nhận hoặc đã xác nhận</div>
-            </div>
+    <?php if (count($upcomingBookings) === 0): ?>
+        <div class="card-body"><p class="text-muted mb-0">Sân chưa có đơn đặt sắp tới.</p></div>
+    <?php else: ?>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr><th>Mã đơn</th><th>Khách hàng</th><th>Ngày / giờ</th><th>Sân con</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach (array_slice($upcomingBookings, 0, 5) as $booking): ?>
+                        <tr>
+                            <td class="fw-semibold">#<?php echo str_pad($booking['id'], 6, '0', STR_PAD_LEFT); ?></td>
+                            <td><div class="fw-semibold"><?php echo htmlspecialchars($booking['customer_name']); ?></div><small class="text-muted"><?php echo htmlspecialchars($booking['customer_phone']); ?></small></td>
+                            <td><div><?php echo formatDate($booking['booking_date']); ?></div><small class="text-muted"><?php echo substr($booking['start_time'], 0, 5); ?> – <?php echo substr($booking['end_time'], 0, 5); ?> (<?php echo (int)$booking['duration_hours']; ?> giờ)</small></td>
+                            <td>PB <?php echo (int)$booking['child_pitch_no']; ?></td>
+                            <td>
+                                <?php if ($booking['status'] === 'confirmed'): ?>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Đã duyệt</span>
+                                <?php else: ?>
+                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Chờ duyệt</span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-end"><a href="<?php echo route('admin/bookings/' . $booking['id'] . '/edit'); ?>" class="btn btn-sm btn-outline-primary">Xem đơn</a></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
-    </div>
-    <div class="col-sm-6 col-xl-4">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-muted small">Giá thuê mỗi giờ</div>
-                <div class="fs-3 fw-bold text-success"><?php echo formatMoney($pitch['price_per_hour']); ?></div>
-                <div class="small text-muted">Ngày thường và cuối tuần hiện áp dụng cùng giá</div>
-            </div>
-        </div>
-    </div>
+        <?php if (count($upcomingBookings) > 5): ?>
+            <div class="card-footer bg-white text-muted small">Đang hiển thị 5 trong <?php echo count($upcomingBookings); ?> đơn sắp tới.</div>
+        <?php endif; ?>
+    <?php endif; ?>
 </div>
 
 <div class="card border-0 shadow-sm mb-4">
@@ -154,48 +166,6 @@
             </div>
         </div>
     </div>
-</div>
-
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-        <div>
-            <h5 class="fw-bold mb-0">Đơn đặt sân sắp tới</h5>
-            <small class="text-muted">Chỉ tính đơn chờ xác nhận hoặc đã xác nhận trong tương lai.</small>
-        </div>
-        <a href="<?php echo route('admin/bookings?pitch_id=' . $pitch['id']); ?>" class="btn btn-sm btn-outline-success">Tất cả đơn</a>
-    </div>
-    <?php if (count($upcomingBookings) === 0): ?>
-        <div class="card-body"><p class="text-muted mb-0">Sân chưa có đơn đặt sắp tới.</p></div>
-    <?php else: ?>
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr><th>Mã đơn</th><th>Khách hàng</th><th>Ngày / giờ</th><th>Sân con</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr>
-                </thead>
-                <tbody>
-                    <?php foreach (array_slice($upcomingBookings, 0, 5) as $booking): ?>
-                        <tr>
-                            <td class="fw-semibold">#<?php echo str_pad($booking['id'], 6, '0', STR_PAD_LEFT); ?></td>
-                            <td><div class="fw-semibold"><?php echo htmlspecialchars($booking['customer_name']); ?></div><small class="text-muted"><?php echo htmlspecialchars($booking['customer_phone']); ?></small></td>
-                            <td><div><?php echo formatDate($booking['booking_date']); ?></div><small class="text-muted"><?php echo substr($booking['start_time'], 0, 5); ?> – <?php echo substr($booking['end_time'], 0, 5); ?> (<?php echo (int)$booking['duration_hours']; ?> giờ)</small></td>
-                            <td>PB <?php echo (int)$booking['child_pitch_no']; ?></td>
-                            <td>
-                                <?php if ($booking['status'] === 'confirmed'): ?>
-                                    <span class="badge bg-success-subtle text-success border border-success-subtle">Đã duyệt</span>
-                                <?php else: ?>
-                                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Chờ duyệt</span>
-                                <?php endif; ?>
-                            </td>
-                            <td class="text-end"><a href="<?php echo route('admin/bookings/' . $booking['id'] . '/edit'); ?>" class="btn btn-sm btn-outline-primary">Xem đơn</a></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-        <?php if (count($upcomingBookings) > 5): ?>
-            <div class="card-footer bg-white text-muted small">Đang hiển thị 5 trong <?php echo count($upcomingBookings); ?> đơn sắp tới.</div>
-        <?php endif; ?>
-    <?php endif; ?>
 </div>
 
 @endsection

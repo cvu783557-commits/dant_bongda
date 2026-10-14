@@ -80,11 +80,14 @@
  </td>
  <td>
  <div><?php echo htmlspecialchars($b['pitch_name']); ?></div>
- <small class="text-muted">Sân <?php echo (int)$b['pitch_type']; ?> người</small>
+ <small class="text-muted">PB <?php echo (int)$b['child_pitch_no']; ?> · Sân <?php echo (int)$b['pitch_type']; ?> người</small>
  </td>
  <td>
  <div><?php echo formatDate($b['booking_date']); ?></div>
- <small class="text-muted"><?php echo substr($b['start_time'],0,5) . ' - ' . substr($b['end_time'],0,5); ?></small>
+ <small class="text-muted">
+ <?php echo substr($b['start_time'],0,5) . ' - ' . substr($b['end_time'],0,5); ?>
+ (<?php echo (int)$b['duration_hours']; ?> giờ)
+ </small>
  </td>
  <td class="fw-semibold text-success"><?php echo formatMoney($b['total_price']); ?></td>
  <td>

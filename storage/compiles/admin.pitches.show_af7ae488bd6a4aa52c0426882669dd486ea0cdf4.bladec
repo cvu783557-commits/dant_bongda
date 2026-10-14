@@ -3,46 +3,123 @@
 <?php $this->startSection('content'); ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
- <h3 class="fw-bold mb-0">Chi tiết sân bóng</h3>
+ <div>
+ <h3 class="fw-bold mb-1">Chi tiết sân bóng</h3>
+ <div class="text-muted">Mã sân #<?php echo (int)$pitch['id']; ?></div>
+ </div>
  <div class="d-flex gap-2">
+ <a href="<?php echo route('admin/bookings?pitch_id=' . $pitch['id']); ?>" class="btn btn-outline-success">Xem đơn đặt sân</a>
  <a href="<?php echo route('admin/pitches/' . $pitch['id'] . '/edit'); ?>" class="btn btn-outline-primary">Sửa sân</a>
  <a href="<?php echo route('admin/pitches'); ?>" class="btn btn-outline-secondary">← Danh sách sân</a>
  </div>
 </div>
 
-<div class="card border-0 shadow-sm">
+<div class="card border-0 shadow-sm mb-4">
+ <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+ <div>
+ <h5 class="fw-bold mb-0">Đơn đặt sân sắp tới</h5>
+ <small class="text-muted">Chỉ tính đơn chờ xác nhận hoặc đã xác nhận trong tương lai.</small>
+ </div>
+ <a href="<?php echo route('admin/bookings?pitch_id=' . $pitch['id']); ?>" class="btn btn-sm btn-outline-success">Tất cả đơn</a>
+ </div>
+ <?php if (count($upcomingBookings) === 0): ?>
+ <div class="card-body"><p class="text-muted mb-0">Sân chưa có đơn đặt sắp tới.</p></div>
+ <?php else: ?>
+ <div class="table-responsive">
+ <table class="table table-hover align-middle mb-0">
+ <thead class="table-light">
+ <tr><th>Mã đơn</th><th>Khách hàng</th><th>Ngày / giờ</th><th>Sân con</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr>
+ </thead>
+ <tbody>
+ <?php foreach (array_slice($upcomingBookings, 0, 5) as $booking): ?>
+ <tr>
+ <td class="fw-semibold">#<?php echo str_pad($booking['id'], 6, '0', STR_PAD_LEFT); ?></td>
+ <td><div class="fw-semibold"><?php echo htmlspecialchars($booking['customer_name']); ?></div><small class="text-muted"><?php echo htmlspecialchars($booking['customer_phone']); ?></small></td>
+ <td><div><?php echo formatDate($booking['booking_date']); ?></div><small class="text-muted"><?php echo substr($booking['start_time'], 0, 5); ?> – <?php echo substr($booking['end_time'], 0, 5); ?> (<?php echo (int)$booking['duration_hours']; ?> giờ)</small></td>
+ <td>PB <?php echo (int)$booking['child_pitch_no']; ?></td>
+ <td>
+ <?php if ($booking['status'] === 'confirmed'): ?>
+ <span class="badge bg-success-subtle text-success border border-success-subtle">Đã duyệt</span>
+ <?php else: ?>
+ <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Chờ duyệt</span>
+ <?php endif; ?>
+ </td>
+ <td class="text-end"><a href="<?php echo route('admin/bookings/' . $booking['id'] . '/edit'); ?>" class="btn btn-sm btn-outline-primary">Xem đơn</a></td>
+ </tr>
+ <?php endforeach; ?>
+ </tbody>
+ </table>
+ </div>
+ <?php if (count($upcomingBookings) > 5): ?>
+ <div class="card-footer bg-white text-muted small">Đang hiển thị 5 trong <?php echo count($upcomingBookings); ?> đơn sắp tới.</div>
+ <?php endif; ?>
+ <?php endif; ?>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+ <div class="card-header bg-white py-3">
+ <h5 class="fw-bold mb-0">Thông tin sân</h5>
+ </div>
  <div class="card-body p-4">
  <div class="row g-4 align-items-start">
  <div class="col-lg-5">
  <img src="<?php echo $pitch['image'] ? (str_starts_with($pitch['image'], 'http') ? $pitch['image'] : file_url($pitch['image'])) : 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Football%20field%20green%20grass%20aerial&image_size=square'; ?>"
- class="img-fluid rounded border" style="width:100%;max-height:380px;object-fit:cover;" alt="Ảnh sân">
+ class="img-fluid rounded border" style="width:100%;max-height:380px;object-fit:cover;"
+ alt="<?php echo htmlspecialchars($pitch['name']); ?>">
  </div>
 
  <div class="col-lg-7">
- <div class="mb-3">
- <span class="text-muted small text-uppercase">Tên sân</span>
+ <div class="mb-4">
+ <div class="text-muted small text-uppercase">Tên sân</div>
  <h4 class="fw-bold mb-0 mt-1"><?php echo htmlspecialchars($pitch['name']); ?></h4>
  </div>
 
- <div class="row g-3 mb-3">
+ <div class="row g-3 mb-4">
  <div class="col-md-6">
  <div class="border rounded p-3 h-100">
  <div class="text-muted small">Loại sân</div>
- <div class="fw-semibold fs-5 mt-1">Sân <?php echo (int)$pitch['type']; ?> người</div>
+ <div class="fw-semibold mt-1">Sân <?php echo (int)$pitch['type']; ?> người</div>
  </div>
  </div>
  <div class="col-md-6">
  <div class="border rounded p-3 h-100">
- <div class="text-muted small">Giá thuê / giờ</div>
- <div class="fw-semibold fs-5 text-success mt-1"><?php echo formatMoney($pitch['price_per_hour']); ?></div>
+ <div class="text-muted small">Quy mô sân</div>
+ <div class="fw-semibold mt-1"><?php echo htmlspecialchars($pitch['pitch_size'] ?: 'Chưa cập nhật'); ?></div>
  </div>
  </div>
  <div class="col-md-6">
  <div class="border rounded p-3 h-100">
- <div class="text-muted small">Trạng thái</div>
+ <div class="text-muted small">Địa chỉ</div>
+ <div class="fw-semibold mt-1"><?php echo htmlspecialchars($pitch['address'] ?: 'Chưa cập nhật'); ?></div>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <div class="border rounded p-3 h-100">
+ <div class="text-muted small">Hotline</div>
+ <div class="fw-semibold mt-1"><?php echo htmlspecialchars($pitch['hotline'] ?: 'Chưa cập nhật'); ?></div>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <div class="border rounded p-3 h-100">
+ <div class="text-muted small">Giờ hoạt động</div>
+ <div class="fw-semibold mt-1">
+ <?php echo htmlspecialchars(substr($pitch['opening_time'] ?? '06:00:00', 0, 5)); ?>
+ – <?php echo htmlspecialchars(substr($pitch['closing_time'] ?? '23:00:00', 0, 5)); ?>
+ </div>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <div class="border rounded p-3 h-100">
+ <div class="text-muted small">Số sân con</div>
+ <div class="fw-semibold mt-1"><?php echo (int)($pitch['field_count'] ?? 1); ?> sân</div>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <div class="border rounded p-3 h-100">
+ <div class="text-muted small">Trạng thái quản lý</div>
  <div class="mt-1">
  <?php if ($pitch['status'] === 'active'): ?>
- <span class="badge bg-success-subtle text-success border border-success-subtle">Hoạt động</span>
+ <span class="badge bg-success-subtle text-success border border-success-subtle">Đang hoạt động</span>
  <?php else: ?>
  <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Tạm dừng</span>
  <?php endif; ?>
@@ -51,15 +128,40 @@
  </div>
  <div class="col-md-6">
  <div class="border rounded p-3 h-100">
+ <div class="text-muted small">Nhận đặt sân</div>
+ <div class="mt-1">
+ <?php if (($pitch['is_open'] ?? 1) == 1): ?>
+ <span class="badge bg-success-subtle text-success border border-success-subtle">Đang mở nhận đặt</span>
+ <?php else: ?>
+ <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Đang đóng nhận đặt</span>
+ <?php endif; ?>
+ </div>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <div class="border rounded p-3 h-100">
+ <div class="text-muted small">Giá ngày thường</div>
+ <div class="fw-semibold text-success mt-1"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</div>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <div class="border rounded p-3 h-100">
+ <div class="text-muted small">Giá cuối tuần</div>
+ <div class="fw-semibold text-success mt-1"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</div>
+ <div class="small text-muted">Đang dùng chung mức giá với ngày thường</div>
+ </div>
+ </div>
+ <div class="col-md-6">
+ <div class="border rounded p-3 h-100">
  <div class="text-muted small">Ngày tạo</div>
- <div class="fw-semibold mt-1"><?php echo formatDate($pitch['created_at']); ?></div>
+ <div class="fw-semibold mt-1"><?php echo formatDate($pitch['created_at'] ?? null); ?></div>
  </div>
  </div>
  </div>
 
  <div class="border rounded p-3">
  <div class="text-muted small mb-2">Mô tả</div>
- <p class="mb-0 text-secondary"><?php echo nl2br(htmlspecialchars($pitch['description'] ?? 'Chưa có mô tả cho sân này.')); ?></p>
+ <p class="mb-0 text-secondary"><?php echo nl2br(htmlspecialchars($pitch['description'] ?: 'Chưa có mô tả cho sân này.')); ?></p>
  </div>
  </div>
  </div>

@@ -54,7 +54,6 @@ class PitchController extends Controller
 
         return view('admin.pitches.show', [
             'pitch' => $pitch,
-            'bookingCount' => DB::table('bookings')->where('pitch_id', $pitch->id)->count(),
             'upcomingBookings' => $upcomingBookings,
         ]);
     }
