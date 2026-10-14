@@ -19,11 +19,17 @@
 
                 <div class="mb-3">
                     <div class="text-muted small">Sân</div>
-                    <div class="fw-semibold"><?php echo htmlspecialchars($booking['pitch_name']); ?> (Sân <?php echo (int)$booking['pitch_type']; ?> người)</div>
+                    <div class="fw-semibold">
+                        <?php echo htmlspecialchars($booking['pitch_name']); ?> - PB <?php echo (int)$booking['child_pitch_no']; ?>
+                        (Sân <?php echo (int)$booking['pitch_type']; ?> người)
+                    </div>
                 </div>
                 <div class="mb-3">
                     <div class="text-muted small">Ngày / Giờ</div>
-                    <div class="fw-semibold"><?php echo formatDate($booking['booking_date']); ?> — <?php echo substr($booking['start_time'],0,5); ?> đến <?php echo substr($booking['end_time'],0,5); ?></div>
+                    <div class="fw-semibold">
+                        <?php echo formatDate($booking['booking_date']); ?> — <?php echo substr($booking['start_time'],0,5); ?> đến <?php echo substr($booking['end_time'],0,5); ?>
+                        (<?php echo (int)$booking['duration_hours']; ?> giờ)
+                    </div>
                 </div>
                 <div class="mb-3">
                     <div class="text-muted small">Khách hàng</div>

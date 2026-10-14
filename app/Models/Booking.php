@@ -12,7 +12,8 @@ class Booking extends Model
     {
         $sql = "SELECT b.*,
                        p.name AS pitch_name, p.type AS pitch_type,
-                       ts.start_time, ts.end_time
+                       ts.start_time,
+                       DATE_ADD(ts.start_time, INTERVAL b.duration_hours HOUR) AS end_time
                 FROM {$this->table} b
                 LEFT JOIN pitches p ON p.id = b.pitch_id
                 LEFT JOIN time_slots ts ON ts.id = b.time_slot_id
@@ -43,7 +44,8 @@ class Booking extends Model
     {
         $sql = "SELECT b.*,
                        p.name AS pitch_name, p.type AS pitch_type, p.price_per_hour,
-                       ts.start_time, ts.end_time
+                       ts.start_time,
+                       DATE_ADD(ts.start_time, INTERVAL b.duration_hours HOUR) AS end_time
                 FROM {$this->table} b
                 LEFT JOIN pitches p ON p.id = b.pitch_id
                 LEFT JOIN time_slots ts ON ts.id = b.time_slot_id
@@ -53,7 +55,8 @@ class Booking extends Model
 
     public function getByDate($pitchId, $date)
     {
-        $sql = "SELECT b.*, ts.start_time, ts.end_time
+        $sql = "SELECT b.*, ts.start_time,
+                       DATE_ADD(ts.start_time, INTERVAL b.duration_hours HOUR) AS end_time
                 FROM {$this->table} b
                 LEFT JOIN time_slots ts ON ts.id = b.time_slot_id
                 WHERE b.pitch_id = ?
@@ -63,31 +66,41 @@ class Booking extends Model
         return $this->connection->executeQuery($sql, [$pitchId, $date])->fetchAllAssociative();
     }
 
-    public function getBookedSlotIds($pitchId, $date)
+    public function getReservationsForDate($pitchId, $date)
     {
-        $rows = $this->getByDate($pitchId, $date);
-        $ids = [];
-        foreach ($rows as $r) {
-            if (isset($r['time_slot_id'])) $ids[] = $r['time_slot_id'];
-        }
-        return $ids;
+        $sql = "SELECT b.child_pitch_no, ts.start_time,
+                       DATE_ADD(ts.start_time, INTERVAL b.duration_hours HOUR) AS end_time
+                FROM {$this->table} b
+                INNER JOIN time_slots ts ON ts.id = b.time_slot_id
+                WHERE b.pitch_id = ?
+                  AND b.booking_date = ?
+                  AND b.status IN ('pending','confirmed')
+                ORDER BY b.child_pitch_no, ts.start_time";
+        return $this->connection->executeQuery($sql, [$pitchId, $date])->fetchAllAssociative();
     }
 
-    public function isSlotTaken($pitchId, $date, $slotId, $excludeBookingId = null)
+    public function isPeriodTaken($pitchId, $date, $slotId, $durationHours, $childPitchNo)
     {
-        $sql = "SELECT COUNT(*) AS total
-                FROM {$this->table}
-                WHERE pitch_id = ?
-                  AND booking_date = ?
-                  AND time_slot_id = ?
-                  AND status IN ('pending','confirmed')";
-        $params = [$pitchId, $date, $slotId];
-
-        if ($excludeBookingId) {
-            $sql .= " AND id <> ?";
-            $params[] = $excludeBookingId;
+        $slot = $this->connection->executeQuery(
+            "SELECT start_time FROM time_slots WHERE id = ?",
+            [$slotId]
+        )->fetchAssociative();
+        if (!$slot) {
+            return true;
         }
 
+        $start = new \DateTimeImmutable($slot['start_time']);
+        $end = $start->modify('+' . (int)$durationHours . ' hours')->format('H:i:s');
+        $sql = "SELECT COUNT(*) AS total
+                FROM {$this->table} b
+                INNER JOIN time_slots ts ON ts.id = b.time_slot_id
+                WHERE b.pitch_id = ?
+                  AND b.child_pitch_no = ?
+                  AND b.booking_date = ?
+                  AND b.status IN ('pending','confirmed')
+                  AND ts.start_time < ?
+                  AND DATE_ADD(ts.start_time, INTERVAL b.duration_hours HOUR) > ?";
+        $params = [$pitchId, $childPitchNo, $date, $end, $slot['start_time']];
         $row = $this->connection->executeQuery($sql, $params)->fetchAssociative();
         return ($row['total'] ?? 0) > 0;
     }
@@ -96,8 +109,9 @@ class Booking extends Model
     {
         $sql = "INSERT INTO {$this->table}
                 (pitch_id, customer_name, customer_phone, customer_email,
-                 booking_date, time_slot_id, total_price, status, notes, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                 booking_date, time_slot_id, child_pitch_no, duration_hours,
+                 total_price, status, notes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
 
         $this->connection->executeStatement($sql, [
             $data['pitch_id'],
@@ -106,6 +120,8 @@ class Booking extends Model
             $data['customer_email'] ?? null,
             $data['booking_date'],
             $data['time_slot_id'],
+            $data['child_pitch_no'],
+            $data['duration_hours'],
             $data['total_price'],
             $data['status'] ?? 'pending',
             $data['notes'] ?? null,

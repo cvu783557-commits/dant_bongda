@@ -67,7 +67,10 @@
                     </div>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Sân bóng:</div>
-                        <div class="col-7 fw-semibold"><?php echo htmlspecialchars($booking['pitch_name']); ?> (Sân <?php echo (int)$booking['pitch_type']; ?> người)</div>
+                        <div class="col-7 fw-semibold">
+                            <?php echo htmlspecialchars($booking['pitch_name']); ?> - PB <?php echo (int)$booking['child_pitch_no']; ?>
+                            (Sân <?php echo (int)$booking['pitch_type']; ?> người)
+                        </div>
                     </div>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Ngày đặt:</div>
@@ -75,7 +78,10 @@
                     </div>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Khung giờ:</div>
-                        <div class="col-7"><?php echo substr($booking['start_time'],0,5); ?> - <?php echo substr($booking['end_time'],0,5); ?></div>
+                        <div class="col-7">
+                            <?php echo substr($booking['start_time'],0,5); ?> - <?php echo substr($booking['end_time'],0,5); ?>
+                            (<?php echo (int)$booking['duration_hours']; ?> giờ)
+                        </div>
                     </div>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Khách hàng:</div>

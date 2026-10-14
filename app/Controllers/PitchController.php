@@ -49,8 +49,8 @@ class PitchController extends Controller
         $today    = date('Y-m-d');
         if ($date < $today) $date = $today;
 
-        $slots        = $this->timeSlot->all();
-        $bookedSlotIds = $this->booking->getBookedSlotIds($id, $date);
+        $slots = $this->timeSlot->all();
+        $reservations = $this->booking->getReservationsForDate($id, $date);
 
         $success = getFlash('success');
         $error   = getFlash('error');
@@ -59,7 +59,7 @@ class PitchController extends Controller
             'pitch'         => $pitch,
             'slots'         => $slots,
             'date'          => $date,
-            'bookedSlotIds' => $bookedSlotIds,
+            'reservations'  => $reservations,
             'success'       => $success,
             'error'         => $error,
             'old'           => $_SESSION['old'] ?? [],
@@ -79,6 +79,8 @@ class PitchController extends Controller
             'customer_email'=> 'nullable|email',
             'booking_date'  => 'required|date',
             'time_slot_id'  => 'required|integer',
+            'child_pitch_no'=> 'required|integer|min:1',
+            'duration_hours'=> 'required|integer|min:1',
             'notes'         => 'nullable|max:500',
         ];
 
@@ -87,6 +89,10 @@ class PitchController extends Controller
         $pitch = $this->pitch->find($data['pitch_id'] ?? 0);
         if (!$pitch) {
             $errors['pitch_id'] = 'Sân không tồn tại';
+        } elseif ($pitch['status'] !== 'active' || (int)($pitch['is_open'] ?? 1) !== 1) {
+            $errors['pitch_id'] = 'Sân hiện không nhận đặt chỗ';
+        } elseif ((int)($data['child_pitch_no'] ?? 0) > (int)$pitch['field_count']) {
+            $errors['child_pitch_no'] = 'Sân con không hợp lệ';
         }
 
         if (empty($errors) && !empty($data['booking_date'])) {
@@ -101,8 +107,37 @@ class PitchController extends Controller
             if (!$slotExists) {
                 $errors['time_slot_id'] = 'Khung giờ không hợp lệ';
             } else {
-                if ($this->booking->isSlotTaken($data['pitch_id'], $data['booking_date'], $data['time_slot_id'])) {
-                    $errors['time_slot_id'] = 'Khung giờ này đã được đặt, vui lòng chọn giờ khác';
+                $duration = (int)$data['duration_hours'];
+                $startTime = new \DateTimeImmutable($data['booking_date'] . ' ' . $slotExists['start_time']);
+                $endTime = $startTime->modify('+' . $duration . ' hours');
+                $closingTime = new \DateTimeImmutable($data['booking_date'] . ' ' . $pitch['closing_time']);
+                $slots = $this->timeSlot->all();
+                $availableEnds = array_column($slots, 'end_time');
+                $availableStarts = array_column($slots, 'start_time');
+                $expectedEnd = $endTime->format('H:i:s');
+                $hasContinuousSlots = true;
+                for ($hour = 0; $hour < $duration; $hour++) {
+                    if (!in_array($startTime->modify('+' . $hour . ' hours')->format('H:i:s'), $availableStarts, true)) {
+                        $hasContinuousSlots = false;
+                        break;
+                    }
+                }
+
+                if ($startTime->format('H:i:s') < $pitch['opening_time']
+                    || $endTime > $closingTime
+                    || !in_array($expectedEnd, $availableEnds, true)
+                    || !$hasContinuousSlots) {
+                    $errors['duration_hours'] = 'Thời lượng thuê vượt quá giờ hoạt động của sân';
+                } elseif ($data['booking_date'] === date('Y-m-d') && $startTime->format('H:i:s') <= date('H:i:s')) {
+                    $errors['time_slot_id'] = 'Không thể đặt khung giờ đã qua';
+                } elseif ($this->booking->isPeriodTaken(
+                    $data['pitch_id'],
+                    $data['booking_date'],
+                    $data['time_slot_id'],
+                    $duration,
+                    (int)$data['child_pitch_no']
+                )) {
+                    $errors['time_slot_id'] = 'Khung giờ này không còn trống cho thời lượng đã chọn';
                 }
             }
         }
@@ -114,7 +149,8 @@ class PitchController extends Controller
             return;
         }
 
-        $totalPrice = (int)$pitch['price_per_hour'];
+        $duration = (int)$data['duration_hours'];
+        $totalPrice = (int)$pitch['price_per_hour'] * $duration;
 
         $bookingId = $this->booking->create([
             'pitch_id'       => $data['pitch_id'],
@@ -123,6 +159,8 @@ class PitchController extends Controller
             'customer_email' => trim($data['customer_email'] ?? ''),
             'booking_date'   => $data['booking_date'],
             'time_slot_id'   => $data['time_slot_id'],
+            'child_pitch_no'=> (int)$data['child_pitch_no'],
+            'duration_hours'=> $duration,
             'total_price'    => $totalPrice,
             'status'         => 'pending',
             'notes'          => trim($data['notes'] ?? ''),

@@ -67,9 +67,9 @@
                                             <div class="fw-semibold"><?php echo htmlspecialchars($b['customer_name']); ?></div>
                                             <small class="text-muted"><?php echo htmlspecialchars($b['customer_phone']); ?></small>
                                         </td>
-                                        <td><?php echo htmlspecialchars($b['pitch_name']); ?></td>
+                                        <td><?php echo htmlspecialchars($b['pitch_name']); ?> - PB <?php echo (int)$b['child_pitch_no']; ?></td>
                                         <td><?php echo formatDate($b['booking_date']); ?></td>
-                                        <td><?php echo substr($b['start_time'],0,5) . '-' . substr($b['end_time'],0,5); ?></td>
+                                        <td><?php echo substr($b['start_time'],0,5) . '-' . substr($b['end_time'],0,5); ?> (<?php echo (int)$b['duration_hours']; ?> giờ)</td>
                                         <td class="fw-semibold text-success"><?php echo formatMoney($b['total_price']); ?></td>
                                         <td>
                                             <?php if ($b['status'] === 'confirmed'): ?>
