@@ -27,7 +27,7 @@ class Vnpay
         }
     }
 
-    public function createPaymentUrl(int $bookingId, int $amount, string $clientIp, string $orderInfo): string
+    public function createPaymentUrl(int|string $transactionRef, int $amount, string $clientIp, string $orderInfo): string
     {
         $input = [
             'vnp_Version' => '2.1.0',
@@ -35,7 +35,7 @@ class Vnpay
             'vnp_TmnCode' => $this->tmnCode,
             'vnp_Amount' => $amount * 100,
             'vnp_CurrCode' => 'VND',
-            'vnp_TxnRef' => $bookingId . '_' . gmdate('YmdHis') . random_int(1000, 9999),
+            'vnp_TxnRef' => $transactionRef . '_' . gmdate('YmdHis') . random_int(1000, 9999),
             'vnp_OrderInfo' => $orderInfo,
             'vnp_OrderType' => 'other',
             'vnp_Locale' => 'vn',

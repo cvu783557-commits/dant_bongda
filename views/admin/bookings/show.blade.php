@@ -32,6 +32,11 @@ $stt = $booking['status'];
 
 <?php if ($success): ?><div class="alert alert-success" role="alert"><?php echo $success; ?></div><?php endif; ?>
 <?php if ($error): ?><div class="alert alert-danger" role="alert"><?php echo $error; ?></div><?php endif; ?>
+<?php if (!empty($booking['series_id'])): ?>
+    <div class="alert alert-info" role="alert">
+        Lịch đặt theo tháng #<?php echo (int)$booking['series_id']; ?> — khung giờ này được giữ mỗi ngày trong tháng.
+    </div>
+<?php endif; ?>
 
 <!-- HÀNH ĐỘNG NHANH -->
 <div class="card border-0 shadow-sm mb-4">
