@@ -100,7 +100,7 @@
                     <h4 class="fw-bold mb-4">Thông tin đặt sân</h4>
 
                     <form method="get" action="" class="mb-4">
-                        <label class="form-label fw-semibold">Chọn ngày đặt:</label>
+                        <label class="form-label fw-semibold">Xem tình trạng sân theo ngày:</label>
                         <div class="d-flex gap-2">
                             <input type="date"
                                    name="date"
@@ -115,6 +115,28 @@
                     <form method="post" id="bookingForm" action="<?php echo route('bookings'); ?>" novalidate>
                         <input type="hidden" name="pitch_id" value="<?php echo (int)$pitch['id']; ?>">
                         <input type="hidden" name="booking_date" value="<?php echo htmlspecialchars($date); ?>">
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Hình thức đặt sân</label>
+                            <select name="booking_mode" id="booking_mode" class="form-select">
+                                <option value="single" <?php echo ($old['booking_mode'] ?? 'single') === 'single' ? 'selected' : ''; ?>>Đặt một lần</option>
+                                <option value="monthly" <?php echo ($old['booking_mode'] ?? '') === 'monthly' ? 'selected' : ''; ?>>Đặt cố định theo tháng (mỗi ngày)</option>
+                            </select>
+                        </div>
+
+                        <div id="monthlyFields" class="row g-3 mb-3 d-none">
+                            <div class="col-12">
+                                <label class="form-label fw-semibold" for="booking_month">Tháng đặt</label>
+                                <input type="month" id="booking_month" name="booking_month"
+                                       class="form-control" disabled
+                                       min="<?php echo date('Y-m'); ?>"
+                                       value="<?php echo htmlspecialchars($old['booking_month'] ?? $bookingMonth); ?>">
+                            </div>
+                            <div class="col-12 small text-muted">
+                                Khung giờ đã chọn được giữ mỗi ngày từ ngày bắt đầu đến hết tháng. Nếu có ngày bị đặt
+                                hoặc sân bị khóa, yêu cầu sẽ không được tạo để tránh giữ lịch thiếu buổi.
+                            </div>
+                        </div>
 
                         <div class="row g-3 mb-3">
                             <div class="col-6">
@@ -139,8 +161,8 @@
 
                         <div class="row mb-3">
                             <div class="col-6">
-                                <label class="form-label">Số giờ thuê</label>
-                                <input type="text" id="hoursDisplay" readonly value="0 giờ" class="form-control-plaintext fw-semibold">
+                                <label class="form-label" id="quantityLabel">Số giờ thuê</label>
+                                <input type="text" id="quantityDisplay" readonly value="0 giờ" class="form-control-plaintext fw-semibold">
                             </div>
                             <div class="col-6 text-end">
                                 <label class="form-label">Giá / giờ</label>
@@ -205,11 +227,15 @@
 
     const startEl   = document.getElementById('start_time');
     const endEl     = document.getElementById('end_time');
-    const hoursEl   = document.getElementById('hoursDisplay');
     const totalEl   = document.getElementById('totalDisplay');
     const depositEl = document.getElementById('depositDisplay');
     const overlapEl = document.getElementById('overlapBox');
     const form      = document.getElementById('bookingForm');
+    const modeEl    = document.getElementById('booking_mode');
+    const monthEl   = document.getElementById('booking_month');
+    const monthlyFields = document.getElementById('monthlyFields');
+    const quantityLabel = document.getElementById('quantityLabel');
+    const quantityEl = document.getElementById('quantityDisplay');
 
     function fmtMoney(n){
         return n.toLocaleString('vi-VN') + ' ₫';
@@ -220,27 +246,57 @@
         return h*3600 + m*60;
     }
 
+    function monthlyOccurrenceCount(){
+        if(!monthEl.value) return 0;
+        const [year, month] = monthEl.value.split('-').map(Number);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let count = 0;
+        const daysInMonth = new Date(year, month, 0).getDate();
+        for(let day = 1; day <= daysInMonth; day++){
+            const occurrence = new Date(year, month - 1, day);
+            if(occurrence < today) continue;
+            if(occurrence.getTime() === today.getTime()
+                && timeToSec(startEl.value) !== null
+                && timeToSec(startEl.value) <= (new Date().getHours() * 3600 + new Date().getMinutes() * 60)){
+                continue;
+            }
+            count++;
+        }
+        return count;
+    }
+
     function recalc(){
         const s = timeToSec(startEl.value);
         const e = timeToSec(endEl.value);
+        const isMonthly = modeEl.value === 'monthly';
+        const sessions = isMonthly ? monthlyOccurrenceCount() : 1;
         if(s === null || e === null || e <= s){
-            hoursEl.value = '0 giờ';
+            quantityEl.value = isMonthly ? sessions + ' ngày' : '0 giờ';
             totalEl.textContent = fmtMoney(0);
             depositEl.textContent = fmtMoney(0);
-            return null;
+            return {hours: null, sessions: sessions};
         }
         const hours = (e - s) / 3600;
-        hoursEl.value = hours.toFixed(2).replace(/\.?0+$/,'') + ' giờ';
-        const total = Math.round(hours * PRICE_PER_HOUR);
+        quantityEl.value = isMonthly
+            ? sessions + ' ngày'
+            : hours.toFixed(2).replace(/\.?0+$/,'') + ' giờ';
+        const sessionTotal = Math.round(hours * PRICE_PER_HOUR);
+        const total = sessionTotal * sessions;
         totalEl.textContent = fmtMoney(total);
-        depositEl.textContent = fmtMoney(Math.max(1, Math.ceil(total * 0.30)));
-        return hours;
+        const deposit = Math.max(1, Math.ceil(total * 0.30));
+        depositEl.textContent = fmtMoney(deposit);
+        return {hours: hours, sessions: sessions};
     }
 
     async function checkOverlap(){
+        if(modeEl.value === 'monthly'){
+            overlapEl.classList.add('d-none');
+            return true;
+        }
         if(!startEl.value || !endEl.value){ overlapEl.classList.add('d-none'); return true; }
-        const h = recalc();
-        if(h === null){
+        const calculation = recalc();
+        if(calculation.hours === null){
             overlapEl.className = 'alert alert-warning mb-3';
             overlapEl.textContent = 'Vui lòng chọn Giờ bắt đầu < Giờ kết thúc';
             overlapEl.classList.remove('d-none');
@@ -276,6 +332,16 @@
         }
     }
 
+    function updateMode(){
+        const isMonthly = modeEl.value === 'monthly';
+        monthlyFields.classList.toggle('d-none', !isMonthly);
+        monthEl.disabled = !isMonthly;
+        monthEl.required = isMonthly;
+        quantityLabel.textContent = isMonthly ? 'Số ngày đặt trong tháng' : 'Số giờ thuê';
+        recalc();
+        checkOverlap();
+    }
+
     startEl.addEventListener('input', function(){
         if(endEl.value && startEl.value >= endEl.value){
             const s = startEl.value;
@@ -288,7 +354,9 @@
         recalc(); checkOverlap();
     });
     endEl.addEventListener('input', function(){ recalc(); checkOverlap(); });
-    recalc();
+    modeEl.addEventListener('change', updateMode);
+    monthEl.addEventListener('change', recalc);
+    updateMode();
 
     form.addEventListener('submit', async function(e){
         const valid = await checkOverlap();

@@ -270,6 +270,68 @@ function ensureUserAdminRoles($pdo) {
     }
 }
 
+function ensureMonthlyBookingSchema($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS booking_series (
+        id             INT PRIMARY KEY AUTO_INCREMENT,
+        customer_id    INT NOT NULL,
+        pitch_id       INT NOT NULL,
+        booking_month  DATE NOT NULL,
+        start_time     TIME NOT NULL,
+        end_time       TIME NOT NULL,
+        total_price    DECIMAL(12,0) NOT NULL DEFAULT 0,
+        deposit        DECIMAL(12,0) NOT NULL DEFAULT 0,
+        paid_amount    DECIMAL(12,0) NOT NULL DEFAULT 0,
+        payment_method ENUM('vnpay') NOT NULL DEFAULT 'vnpay',
+        payment_status ENUM('unpaid','deposit','partial','paid') NOT NULL DEFAULT 'unpaid',
+        created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at     DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_booking_series_customer (customer_id),
+        INDEX idx_booking_series_pitch_month (pitch_id, booking_month),
+        CONSTRAINT fk_booking_series_customer FOREIGN KEY (customer_id)
+            REFERENCES customers(id) ON DELETE RESTRICT,
+        CONSTRAINT fk_booking_series_pitch FOREIGN KEY (pitch_id)
+            REFERENCES pitches(id) ON DELETE CASCADE,
+        CONSTRAINT chk_booking_series_time CHECK (start_time < end_time),
+        CONSTRAINT chk_booking_series_total CHECK (total_price >= 0),
+        CONSTRAINT chk_booking_series_deposit CHECK (deposit >= 0),
+        CONSTRAINT chk_booking_series_paid CHECK (paid_amount >= 0)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    if (!columnExists($pdo, 'bookings', 'series_id')) {
+        $pdo->exec("ALTER TABLE bookings ADD COLUMN series_id INT NULL AFTER pitch_id");
+        stepOK("Thêm liên kết lịch đặt tháng vào bookings");
+    } else {
+        stepSkip("bookings.series_id đã tồn tại");
+    }
+
+    $indexes = $pdo->query("SHOW INDEX FROM bookings")->fetchAll(PDO::FETCH_ASSOC);
+    $hasSeriesIndex = false;
+    foreach ($indexes as $index) {
+        if ($index['Key_name'] === 'idx_booking_series') {
+            $hasSeriesIndex = true;
+            break;
+        }
+    }
+    if (!$hasSeriesIndex) {
+        $pdo->exec("ALTER TABLE bookings ADD INDEX idx_booking_series (series_id)");
+    }
+
+    $foreignKey = $pdo->prepare(
+        "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+         WHERE CONSTRAINT_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'bookings'
+           AND CONSTRAINT_NAME = 'fk_bookings_series'
+           AND CONSTRAINT_TYPE = 'FOREIGN KEY'"
+    );
+    $foreignKey->execute();
+    if ((int)$foreignKey->fetchColumn() === 0) {
+        $pdo->exec("ALTER TABLE bookings
+            ADD CONSTRAINT fk_bookings_series FOREIGN KEY (series_id)
+            REFERENCES booking_series(id) ON DELETE SET NULL");
+    }
+    stepOK("Đảm bảo schema đặt sân theo tháng đã sẵn sàng");
+}
+
 try {
     $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
     $pdo = new PDO($dsn, $user, $pass, [
@@ -510,7 +572,9 @@ try {
     }
 
     stepInfo("\n===== BUỚC 6B: Sửa ID tự tăng cho các bảng hiện có =====");
-    foreach (['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'bookings', 'bookings_old_v1', 'services', 'booking_services'] as $table) {
+    stepInfo("Chuẩn bị schema đặt sân theo tháng");
+    ensureMonthlyBookingSchema($pdo);
+    foreach (['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'bookings', 'booking_series', 'bookings_old_v1', 'services', 'booking_services'] as $table) {
         ensureAutoIncrementId($pdo, $table);
     }
     ensurePendingUserStatus($pdo);
@@ -586,7 +650,7 @@ try {
     echo "   Tài khoản USER mới đăng ký được kích hoạt ngay; ADMIN vẫn có thể khóa tài khoản.\n\n";
 
     // In bảng tổng kết
-    $finalTables = ['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'bookings'];
+    $finalTables = ['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'booking_series', 'bookings'];
     echo "TỔNG KẾT CÁC BẢNG:\n";
     foreach ($finalTables as $t) {
         if (tableExists($pdo, $t)) {

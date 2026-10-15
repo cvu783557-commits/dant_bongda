@@ -328,6 +328,196 @@ class Booking extends Model
         }
     }
 
+    public function createMonthlySeries(array $seriesData, array $occurrences)
+    {
+        if (!$occurrences) {
+            return ['success' => false, 'error' => 'Tháng đã chọn không còn buổi đặt phù hợp.'];
+        }
+
+        $this->connection->beginTransaction();
+        try {
+            $pitchId = (int)$seriesData['pitch_id'];
+            $this->connection->executeQuery(
+                'SELECT id FROM pitches WHERE id = ? FOR UPDATE',
+                [$pitchId]
+            );
+
+            foreach ($occurrences as $occurrence) {
+                $overlap = $this->checkOverlap(
+                    $pitchId,
+                    $occurrence['booking_date'],
+                    $seriesData['start_time'],
+                    $seriesData['end_time']
+                );
+                if ($overlap) {
+                    $this->connection->rollBack();
+                    return [
+                        'success' => false,
+                        'error' => 'Khung giờ ' . substr($seriesData['start_time'], 0, 5) . '-'
+                            . substr($seriesData['end_time'], 0, 5) . ' ngày '
+                            . date('d/m/Y', strtotime($occurrence['booking_date']))
+                            . ' đã được đặt.',
+                    ];
+                }
+
+                $lockOverlap = $this->checkPitchLockOverlap(
+                    $pitchId,
+                    $occurrence['booking_date'],
+                    $seriesData['start_time'],
+                    $seriesData['end_time']
+                );
+                if ($lockOverlap) {
+                    $this->connection->rollBack();
+                    return [
+                        'success' => false,
+                        'error' => 'Sân bị khóa ngày '
+                            . date('d/m/Y', strtotime($occurrence['booking_date']))
+                            . ' trong khung giờ đã chọn.',
+                    ];
+                }
+            }
+
+            $this->connection->executeStatement(
+                "INSERT INTO booking_series
+                    (customer_id, pitch_id, booking_month, start_time, end_time,
+                     total_price, deposit, paid_amount, payment_method, payment_status, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, NOW())",
+                [
+                    (int)$seriesData['customer_id'],
+                    $pitchId,
+                    $seriesData['booking_month'],
+                    $seriesData['start_time'],
+                    $seriesData['end_time'],
+                    (float)$seriesData['total_price'],
+                    (float)$seriesData['deposit'],
+                    self::PAY_UNPAID,
+                ]
+            );
+            $seriesId = (int)$this->connection->lastInsertId();
+
+            $bookingIds = [];
+            foreach ($occurrences as $occurrence) {
+                $this->connection->executeStatement(
+                    "INSERT INTO {$this->table}
+                        (customer_id, pitch_id, booking_date, start_time, end_time,
+                         total_price, deposit, paid_amount, payment_method, payment_status,
+                         status, cancellation_reason, note, created_by, series_id, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, ?, NULL, ?, NULL, ?, NOW(), NOW())",
+                    [
+                        (int)$seriesData['customer_id'],
+                        $pitchId,
+                        $occurrence['booking_date'],
+                        $seriesData['start_time'],
+                        $seriesData['end_time'],
+                        (float)$occurrence['total_price'],
+                        (float)$occurrence['deposit'],
+                        self::PAY_UNPAID,
+                        self::STATUS_PENDING,
+                        $seriesData['note'] ?? '',
+                        $seriesId,
+                    ]
+                );
+                $bookingIds[] = (int)$this->connection->lastInsertId();
+            }
+
+            $this->connection->commit();
+            return [
+                'success' => true,
+                'series_id' => $seriesId,
+                'booking_ids' => $bookingIds,
+                'first_booking_id' => $bookingIds[0],
+            ];
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('Monthly booking creation failed: ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Không thể tạo lịch đặt tháng. Vui lòng thử lại.'];
+        }
+    }
+
+    public function findSeries($id)
+    {
+        return $this->connection->executeQuery(
+            'SELECT * FROM booking_series WHERE id = ? LIMIT 1',
+            [(int)$id]
+        )->fetchAssociative() ?: null;
+    }
+
+    public function getSeriesFirstBookingId($seriesId)
+    {
+        $id = $this->connection->executeQuery(
+            "SELECT id FROM {$this->table}
+             WHERE series_id = ? AND status <> ?
+             ORDER BY booking_date ASC, id ASC LIMIT 1",
+            [(int)$seriesId, self::STATUS_CANCELLED]
+        )->fetchOne();
+
+        return $id ? (int)$id : null;
+    }
+
+    public function recordSeriesVnpayDeposit(int $seriesId): array
+    {
+        $this->connection->beginTransaction();
+        try {
+            $series = $this->connection->executeQuery(
+                'SELECT * FROM booking_series WHERE id = ? FOR UPDATE',
+                [$seriesId]
+            )->fetchAssociative();
+            if (!$series || $series['payment_method'] !== 'vnpay' || (float)$series['deposit'] <= 0) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Không tìm thấy thông tin đặt cọc VNPay hợp lệ.'];
+            }
+
+            $bookings = $this->connection->executeQuery(
+                "SELECT id, total_price, deposit, status FROM {$this->table}
+                 WHERE series_id = ? ORDER BY booking_date ASC FOR UPDATE",
+                [$seriesId]
+            )->fetchAllAssociative();
+            if (!$bookings || array_filter($bookings, static function ($booking) {
+                return $booking['status'] === self::STATUS_CANCELLED;
+            })) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Lịch đặt tháng không còn đầy đủ để ghi nhận thanh toán.'];
+            }
+
+            if ((float)$series['paid_amount'] < (float)$series['deposit']) {
+                foreach ($bookings as $booking) {
+                    $paymentStatus = self::calcPaymentStatus(
+                        (float)$booking['total_price'],
+                        (float)$booking['deposit'],
+                        (float)$booking['deposit']
+                    );
+                    $this->connection->executeStatement(
+                        "UPDATE {$this->table}
+                         SET paid_amount = deposit, payment_status = ?, updated_at = NOW()
+                         WHERE id = ?",
+                        [$paymentStatus, (int)$booking['id']]
+                    );
+                }
+                $this->connection->executeStatement(
+                    "UPDATE booking_series
+                     SET paid_amount = deposit, payment_status = ?, updated_at = NOW()
+                     WHERE id = ?",
+                    [self::calcPaymentStatus(
+                        (float)$series['total_price'],
+                        (float)$series['deposit'],
+                        (float)$series['deposit']
+                    ), $seriesId]
+                );
+            }
+
+            $this->connection->commit();
+            return ['success' => true];
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('VNPay monthly deposit update failed for series #' . $seriesId . ': ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Không thể cập nhật trạng thái thanh toán VNPay.'];
+        }
+    }
+
     /**
      * Cập nhật đặt sân - Cũng dùng transaction và kiểm tra trùng lại nếu thay đổi sân/ngày/giờ
      */
@@ -464,6 +654,30 @@ class Booking extends Model
                 WHERE id = ?";
 
         $this->connection->executeStatement($sql, [$paid, $method, $payStatus, (int)$id]);
+
+        if (!empty($booking['series_id'])) {
+            $seriesId = (int)$booking['series_id'];
+            $series = $this->findSeries($seriesId);
+            if ($series) {
+                $seriesPaid = (float)$this->connection->executeQuery(
+                    "SELECT COALESCE(SUM(paid_amount), 0)
+                     FROM {$this->table} WHERE series_id = ?",
+                    [$seriesId]
+                )->fetchOne();
+                $seriesPaymentStatus = self::calcPaymentStatus(
+                    (float)$series['total_price'],
+                    (float)$series['deposit'],
+                    $seriesPaid
+                );
+                $this->connection->executeStatement(
+                    "UPDATE booking_series
+                     SET paid_amount = ?, payment_status = ?, updated_at = NOW()
+                     WHERE id = ?",
+                    [$seriesPaid, $seriesPaymentStatus, $seriesId]
+                );
+            }
+        }
+
         return ['success' => true];
     }
 

@@ -1,6 +1,6 @@
 -- Database schema for the football pitch booking application.
 -- Safe to re-run: this script does not drop tables or existing records.
--- For upgrading legacy bookings (time_slot_id), run: php database/run_upgrade.php
+-- For upgrading existing databases and enabling monthly bookings, run: php database/run_upgrade.php
 
 CREATE DATABASE IF NOT EXISTS db_football_field_booking
     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -75,10 +75,37 @@ CREATE TABLE IF NOT EXISTS pitch_locks (
     )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS booking_series (
+    id             INT PRIMARY KEY AUTO_INCREMENT,
+    customer_id    INT NOT NULL,
+    pitch_id       INT NOT NULL,
+    booking_month  DATE NOT NULL,
+    start_time     TIME NOT NULL,
+    end_time       TIME NOT NULL,
+    total_price    DECIMAL(12,0) NOT NULL DEFAULT 0,
+    deposit        DECIMAL(12,0) NOT NULL DEFAULT 0,
+    paid_amount    DECIMAL(12,0) NOT NULL DEFAULT 0,
+    payment_method ENUM('vnpay') NOT NULL DEFAULT 'vnpay',
+    payment_status ENUM('unpaid','deposit','partial','paid') NOT NULL DEFAULT 'unpaid',
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_booking_series_customer (customer_id),
+    INDEX idx_booking_series_pitch_month (pitch_id, booking_month),
+    CONSTRAINT fk_booking_series_customer FOREIGN KEY (customer_id)
+        REFERENCES customers(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_booking_series_pitch FOREIGN KEY (pitch_id)
+        REFERENCES pitches(id) ON DELETE CASCADE,
+    CONSTRAINT chk_booking_series_time CHECK (start_time < end_time),
+    CONSTRAINT chk_booking_series_total CHECK (total_price >= 0),
+    CONSTRAINT chk_booking_series_deposit CHECK (deposit >= 0),
+    CONSTRAINT chk_booking_series_paid CHECK (paid_amount >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS bookings (
     id                  INT PRIMARY KEY AUTO_INCREMENT,
     customer_id         INT NOT NULL,
     pitch_id            INT NOT NULL,
+    series_id           INT NULL,
     booking_date        DATE NOT NULL,
     start_time          TIME NOT NULL,
     end_time            TIME NOT NULL,
@@ -99,12 +126,15 @@ CREATE TABLE IF NOT EXISTS bookings (
     INDEX idx_pitch_date (pitch_id, booking_date),
     INDEX idx_customer_id (customer_id),
     INDEX idx_created_by (created_by),
+    INDEX idx_booking_series (series_id),
     CONSTRAINT fk_bookings_v2_customer FOREIGN KEY (customer_id)
         REFERENCES customers(id) ON DELETE RESTRICT,
     CONSTRAINT fk_bookings_v2_pitch FOREIGN KEY (pitch_id)
         REFERENCES pitches(id) ON DELETE CASCADE,
     CONSTRAINT fk_bookings_v2_user FOREIGN KEY (created_by)
         REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_bookings_series FOREIGN KEY (series_id)
+        REFERENCES booking_series(id) ON DELETE SET NULL,
     CONSTRAINT chk_bookings_v2_time_valid CHECK (start_time < end_time),
     CONSTRAINT chk_bookings_v2_total_price_nonneg CHECK (total_price >= 0),
     CONSTRAINT chk_bookings_v2_deposit_nonneg CHECK (deposit >= 0),
