@@ -75,14 +75,62 @@
 
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
+                    <h6 class="fw-bold mb-3">Thông tin sân và tiện ích</h6>
+                    <div class="small mb-2"><strong>Mã sân:</strong> S<?php echo str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT); ?></div>
+                    <div class="small mb-2"><strong>Địa chỉ:</strong> <?php echo !empty($pitch['address']) ? e($pitch['address']) : 'Chưa cập nhật'; ?></div>
+                    <div class="small mb-2"><strong>Giờ hoạt động:</strong>
+                        <?php echo e(formatTime($pitch['opening_time'] ?? '06:00')); ?> - <?php echo e(formatTime($pitch['closing_time'] ?? '23:00')); ?>
+                    </div>
+                    <div class="border-top mt-3 pt-3">
+                        <h6 class="fw-semibold mb-2">Tiện ích sân</h6>
+                        <div class="small mb-2">
+                            <strong>Chất lượng mặt cỏ:</strong>
+                            <?php echo !empty($pitch['grass_quality']) ? e($pitch['grass_quality']) : '<span class="text-muted">Chưa cập nhật</span>'; ?>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <?php foreach ([
+                                'has_lighting' => 'Hệ thống đèn chiếu sáng',
+                                'has_changing_room' => 'Phòng thay đồ / nhà vệ sinh',
+                                'has_parking' => 'Bãi gửi xe',
+                            ] as $field => $label): ?>
+                                <div class="d-flex justify-content-between align-items-center small">
+                                    <span><?php echo e($label); ?></span>
+                                    <?php if (!empty($pitch[$field])): ?>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Có</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Không</span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <div class="small mt-3">
+                        <strong>Dịch vụ đi kèm:</strong>
+                        <?php echo !empty($pitch['extra_services']) ? nl2br(e($pitch['extra_services'])) : '<span class="text-muted">Chưa cập nhật</span>'; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 bg-light mt-4">
+                <div class="card-body">
                     <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
                     <div class="row g-2">
                         <?php foreach ($hourSlots as $idx => $s): ?>
-                            <?php $taken = isset($takenSlots[$idx]); ?>
+                            <?php
+                                $locked = isset($lockedSlots[$idx]);
+                                $taken = isset($takenSlots[$idx]);
+                                $slotClass = $locked
+                                    ? 'bg-warning-subtle text-warning-emphasis'
+                                    : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis');
+                            ?>
                             <div class="col-4">
-                                <div class="slot-badge text-center <?php echo $taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'; ?>">
+                                <div class="slot-badge text-center <?php echo $slotClass; ?>">
                                     <?php echo htmlspecialchars($s['label']); ?>
-                                    <?php if ($taken) echo ' • Đã đặt'; ?>
+                                    <?php if ($locked): ?>
+                                        • Bảo trì / tạm khóa
+                                    <?php elseif ($taken): ?>
+                                        • Đã đặt
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         <?php endforeach; ?>
@@ -144,20 +192,99 @@
                                 <input type="time" id="start_time" name="start_time"
                                        value="<?php echo htmlspecialchars($old['start_time'] ?? ''); ?>"
                                        min="<?php echo htmlspecialchars($minStart); ?>"
-                                       max="22:59"
+                                       max="<?php echo htmlspecialchars($maxStart); ?>"
                                        class="form-control" required>
                             </div>
                             <div class="col-6">
                                 <label class="form-label fw-semibold">Giờ kết thúc <span class="text-danger">*</span></label>
                                 <input type="time" id="end_time" name="end_time"
                                        value="<?php echo htmlspecialchars($old['end_time'] ?? ''); ?>"
-                                       min="06:01"
+                                       min="<?php echo htmlspecialchars($minEnd); ?>"
                                        max="<?php echo htmlspecialchars($maxEnd); ?>"
                                        class="form-control" required>
                             </div>
                         </div>
 
-                        <div id="overlapBox" class="alert d-none mb-3"></div>
+                        <div id="overlapBox" class="alert d-none mb-3">                        </div>
+
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                                    <h5 class="fw-bold mb-0">Chọn dịch vụ đi kèm</h5>
+                                    <span class="badge bg-light text-secondary border">Tùy chọn</span>
+                                </div>
+                                <p class="small text-muted mb-3" id="serviceBookingHint">
+                                    Có thể chọn nhiều dịch vụ. Đặt theo tháng sẽ tính số lượng đã chọn cho từng buổi.
+                                </p>
+                                <?php if (empty($services)): ?>
+                                    <div class="small text-muted">Hiện chưa có dịch vụ còn hàng để chọn.</div>
+                                <?php else: ?>
+                                    <div class="d-flex flex-column gap-2">
+                                        <?php
+                                            $oldSelectedServices = array_map(
+                                                'strval',
+                                                is_array($old['selected_services'] ?? null) ? $old['selected_services'] : []
+                                            );
+                                            $oldServiceQuantities = is_array($old['service_quantities'] ?? null)
+                                                ? $old['service_quantities']
+                                                : [];
+                                        ?>
+                                        <?php foreach ($services as $service): ?>
+                                            <?php
+                                                $serviceId = (int)$service['id'];
+                                                $serviceSelected = in_array((string)$serviceId, $oldSelectedServices, true);
+                                                $serviceQuantity = max(
+                                                    1,
+                                                    min((int)$service['stock'], (int)($oldServiceQuantities[$serviceId] ?? 1))
+                                                );
+                                            ?>
+                                            <div class="border rounded p-3">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                                                    <div class="form-check flex-grow-1">
+                                                        <input class="form-check-input service-select"
+                                                               type="checkbox"
+                                                               id="service-<?php echo $serviceId; ?>"
+                                                               name="selected_services[]"
+                                                               value="<?php echo $serviceId; ?>"
+                                                               data-price="<?php echo (float)$service['price']; ?>"
+                                                               data-stock="<?php echo (int)$service['stock']; ?>"
+                                                               <?php echo $serviceSelected ? 'checked' : ''; ?>>
+                                                        <label class="form-check-label" for="service-<?php echo $serviceId; ?>">
+                                                            <span class="fw-semibold"><?php echo e($service['name']); ?></span>
+                                                            <span class="text-success fw-semibold ms-1">
+                                                                <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?>
+                                                            </span>
+                                                            <span class="d-block small text-muted">
+                                                                Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                                <?php if (!empty($service['description'])): ?>
+                                                                    · <?php echo e($service['description']); ?>
+                                                                <?php endif; ?>
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                    <div style="width:110px;">
+                                                        <label class="form-label small mb-1" for="service-quantity-<?php echo $serviceId; ?>">Số lượng</label>
+                                                        <input class="form-control form-control-sm service-quantity"
+                                                               type="number"
+                                                               id="service-quantity-<?php echo $serviceId; ?>"
+                                                               name="service_quantities[<?php echo $serviceId; ?>]"
+                                                               min="1"
+                                                               max="<?php echo (int)$service['stock']; ?>"
+                                                               value="<?php echo $serviceQuantity; ?>"
+                                                               <?php echo $serviceSelected ? 'required' : ''; ?>
+                                                               <?php echo $serviceSelected ? '' : 'disabled'; ?>>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="d-flex justify-content-between align-items-center mt-3 small">
+                                    <span class="text-muted">Tiền dịch vụ (mỗi buổi / tổng tháng)</span>
+                                    <strong class="text-success" id="serviceTotalDisplay">0 ₫</strong>
+                                </div>
+                            </div>
+                        </div>
 
                         <div class="row mb-3">
                             <div class="col-6">
@@ -229,6 +356,7 @@
     const endEl     = document.getElementById('end_time');
     const totalEl   = document.getElementById('totalDisplay');
     const depositEl = document.getElementById('depositDisplay');
+    const serviceTotalEl = document.getElementById('serviceTotalDisplay');
     const overlapEl = document.getElementById('overlapBox');
     const form      = document.getElementById('bookingForm');
     const modeEl    = document.getElementById('booking_mode');
@@ -236,6 +364,8 @@
     const monthlyFields = document.getElementById('monthlyFields');
     const quantityLabel = document.getElementById('quantityLabel');
     const quantityEl = document.getElementById('quantityDisplay');
+    const serviceInputs = Array.from(document.querySelectorAll('.service-select'));
+    const serviceQuantityInputs = Array.from(document.querySelectorAll('.service-quantity'));
 
     function fmtMoney(n){
         return n.toLocaleString('vi-VN') + ' ₫';
@@ -266,11 +396,22 @@
         return count;
     }
 
+    function selectedServicesTotal(){
+        return serviceInputs.reduce((total, checkbox) => {
+            if(!checkbox.checked) return total;
+            const quantityInput = document.getElementById('service-quantity-' + checkbox.value);
+            const quantity = Math.max(1, Number(quantityInput.value) || 1);
+            return total + Number(checkbox.dataset.price) * quantity;
+        }, 0);
+    }
+
     function recalc(){
         const s = timeToSec(startEl.value);
         const e = timeToSec(endEl.value);
         const isMonthly = modeEl.value === 'monthly';
         const sessions = isMonthly ? monthlyOccurrenceCount() : 1;
+        const serviceTotal = selectedServicesTotal() * sessions;
+        serviceTotalEl.textContent = fmtMoney(serviceTotal);
         if(s === null || e === null || e <= s){
             quantityEl.value = isMonthly ? sessions + ' ngày' : '0 giờ';
             totalEl.textContent = fmtMoney(0);
@@ -281,7 +422,7 @@
         quantityEl.value = isMonthly
             ? sessions + ' ngày'
             : hours.toFixed(2).replace(/\.?0+$/,'') + ' giờ';
-        const sessionTotal = Math.round(hours * PRICE_PER_HOUR);
+        const sessionTotal = Math.round(hours * PRICE_PER_HOUR) + selectedServicesTotal();
         const total = sessionTotal * sessions;
         totalEl.textContent = fmtMoney(total);
         const deposit = Math.max(1, Math.ceil(total * 0.30));
@@ -341,6 +482,25 @@
         recalc();
         checkOverlap();
     }
+
+    serviceInputs.forEach(checkbox => {
+        checkbox.addEventListener('change', function(){
+            const quantityInput = document.getElementById('service-quantity-' + checkbox.value);
+            quantityInput.disabled = !checkbox.checked;
+            quantityInput.required = checkbox.checked;
+            recalc();
+        });
+    });
+    serviceQuantityInputs.forEach(input => {
+        input.addEventListener('input', recalc);
+        input.addEventListener('change', function(){
+            const max = Number(input.max);
+            const value = Number(input.value);
+            if(value < 1) input.value = '1';
+            if(value > max) input.value = String(max);
+            recalc();
+        });
+    });
 
     startEl.addEventListener('input', function(){
         if(endEl.value && startEl.value >= endEl.value){

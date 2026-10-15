@@ -4,6 +4,7 @@ namespace App\Controllers\Admin;
 
 use App\Controller;
 use App\Models\Booking;
+use App\Models\BookingService;
 use App\Models\Customer;
 use App\Models\Pitch;
 use App\Models\PitchLock;
@@ -14,6 +15,7 @@ use Rakit\Validation\Validator;
 class BookingController extends Controller
 {
     protected $booking;
+    protected $bookingService;
     protected $customer;
     protected $pitch;
     protected $timeSlot;
@@ -24,6 +26,7 @@ class BookingController extends Controller
     public function __construct()
     {
         $this->booking   = new Booking();
+        $this->bookingService = new BookingService();
         $this->customer  = new Customer();
         $this->pitch     = new Pitch();
         $this->timeSlot  = new TimeSlot();
@@ -324,6 +327,7 @@ class BookingController extends Controller
 
         return view('admin.bookings.show', [
             'booking'         => $booking,
+            'bookingServices' => $this->bookingService->allByBooking((int)$booking['id']),
             'customer'        => $customer,
             'history'         => array_filter($history, fn($h) => (int)$h['id'] !== (int)$booking['id']),
             'statuses'        => Booking::getBookingStatuses(),

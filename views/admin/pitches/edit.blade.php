@@ -39,6 +39,23 @@
                                value="<?php echo htmlspecialchars($old['price_per_hour'] ?? $pitch['price_per_hour']); ?>">
                     </div>
                     <div class="mb-3">
+                        <label class="form-label fw-semibold">Địa chỉ sân</label>
+                        <input type="text" name="address" class="form-control" maxlength="255"
+                               value="<?php echo e($old['address'] ?? $pitch['address'] ?? ''); ?>" placeholder="Số nhà, đường, phường/xã, quận/huyện">
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold">Mở cửa</label>
+                            <input type="time" name="opening_time" class="form-control" required
+                                   value="<?php echo e($old['opening_time'] ?? formatTime($pitch['opening_time'] ?? '06:00')); ?>">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold">Đóng cửa</label>
+                            <input type="time" name="closing_time" class="form-control" required
+                                   value="<?php echo e($old['closing_time'] ?? formatTime($pitch['closing_time'] ?? '23:00')); ?>">
+                        </div>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label fw-semibold">Trạng thái</label>
                         <select name="status" class="form-select">
                             <?php $curStatus = $old['status'] ?? $pitch['status']; ?>
@@ -60,6 +77,34 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Mô tả</label>
                         <textarea name="description" rows="6" class="form-control"><?php echo htmlspecialchars($old['description'] ?? $pitch['description'] ?? ''); ?></textarea>
+                    </div>
+                    <hr>
+                    <h6 class="fw-bold mb-3">Tiện ích sân</h6>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Chất lượng mặt cỏ</label>
+                        <input type="text" name="grass_quality" class="form-control" maxlength="100"
+                               value="<?php echo e($old['grass_quality'] ?? $pitch['grass_quality'] ?? ''); ?>" placeholder="Ví dụ: Cỏ nhân tạo, mới thay">
+                    </div>
+                    <div class="row g-3">
+                        <?php foreach ([
+                            'has_lighting' => 'Hệ thống đèn chiếu sáng',
+                            'has_changing_room' => 'Phòng thay đồ / nhà vệ sinh',
+                            'has_parking' => 'Bãi gửi xe',
+                        ] as $field => $label): ?>
+                            <?php $selectedValue = (string)($old[$field] ?? $pitch[$field] ?? '0'); ?>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold" for="<?php echo e($field); ?>"><?php echo e($label); ?></label>
+                                <select id="<?php echo e($field); ?>" name="<?php echo e($field); ?>" class="form-select">
+                                    <option value="1" <?php echo $selectedValue === '1' ? 'selected' : ''; ?>>Có</option>
+                                    <option value="0" <?php echo $selectedValue !== '1' ? 'selected' : ''; ?>>Không</option>
+                                </select>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label fw-semibold">Dịch vụ đi kèm</label>
+                        <textarea name="extra_services" rows="3" maxlength="1000" class="form-control"
+                                  placeholder="Ví dụ: Thuê áo, thuê bóng, nước uống"><?php echo e($old['extra_services'] ?? $pitch['extra_services'] ?? ''); ?></textarea>
                     </div>
                 </div>
             </div>
