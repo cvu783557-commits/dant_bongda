@@ -1,0 +1,253 @@
+<?php $_shouldextend[1]=1; ?>
+<?php $this->startSection('title', 'Chi tiết lịch ' . bookingCode($booking['id'])); ?>
+<?php $this->startSection('content'); ?>
+
+<?php
+$id = (int)$booking['id'];
+$stt = $booking['status'];
+?>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+ <div>
+ <h3 class="fw-bold mb-1">Chi tiết lịch <?php echo bookingCode($id); ?>
+ <span class="fs-6 ms-2"><?php echo bookingStatusBadge($stt); ?> <?php echo paymentStatusBadge($booking['payment_status']); ?></span>
+ </h3>
+ <div class="text-muted small">Tạo lúc <?php echo formatDateTime($booking['created_at']); ?>
+ <?php if (!empty($booking['updated_at'])): ?>
+ • Cập nhật lúc <?php echo formatDateTime($booking['updated_at']); ?>
+ <?php endif; ?>
+ <?php if (!empty($booking['creator_name'])): ?>
+ • Người tạo: <strong><?php echo e($booking['creator_name']); ?></strong>
+ <?php endif; ?>
+ </div>
+ </div>
+ <div class="d-flex gap-2 flex-wrap">
+ <a href="<?php echo route('admin/bookings'); ?>" class="btn btn-outline-secondary">← Danh sách</a>
+ <a href="<?php echo route('admin/bookings/calendar') . '?date=' . $booking['booking_date']; ?>" class="btn btn-outline-success">📅 Xem lịch</a>
+ <?php if (!empty($canEdit) && $stt !== 'cancelled'): ?>
+ <a href="<?php echo route('admin/bookings/' . $id . '/edit'); ?>" class="btn btn-primary">✏️ Sửa lịch</a>
+ <?php endif; ?>
+ </div>
+</div>
+
+<?php if ($success): ?><div class="alert alert-success" role="alert"><?php echo $success; ?></div><?php endif; ?>
+<?php if ($error): ?><div class="alert alert-danger" role="alert"><?php echo $error; ?></div><?php endif; ?>
+
+<!-- HÀNH ĐỘNG NHANH -->
+<div class="card border-0 shadow-sm mb-4">
+ <div class="card-body p-3 d-flex gap-2 flex-wrap">
+ <div class="d-flex gap-2 flex-wrap">
+ <?php if (!empty($canConfirm) && $stt === 'pending'): ?>
+ <form method="post" action="<?php echo route('admin/bookings/' . $id . '/confirm'); ?>" class="d-inline">
+ <button class="btn btn-success" type="submit">✅ Xác nhận lịch</button>
+ </form>
+ <?php endif; ?>
+ <?php if (!empty($canConfirm) && $stt === 'confirmed'): ?>
+ <form method="post" action="<?php echo route('admin/bookings/' . $id . '/start'); ?>" class="d-inline">
+ <button class="btn btn-info text-white" type="submit">▶ Bắt đầu sử dụng</button>
+ </form>
+ <?php endif; ?>
+ <?php if (!empty($canConfirm) && $stt === 'in_progress'): ?>
+ <form method="post" action="<?php echo route('admin/bookings/' . $id . '/complete'); ?>" class="d-inline">
+ <button class="btn btn-success" type="submit">🏁 Hoàn thành</button>
+ </form>
+ <?php endif; ?>
+ <?php if (!empty($canCancel) && $stt !== 'cancelled'): ?>
+ <a href="<?php echo route('admin/bookings/' . $id . '/cancel'); ?>" class="btn btn-outline-danger">❌ Hủy lịch</a>
+ <?php endif; ?>
+ <?php if (!empty($canDelete)): ?>
+ <a href="<?php echo route('admin/bookings/' . $id . '/delete'); ?>" class="btn btn-outline-dark">🗑 Xóa</a>
+ <?php endif; ?>
+ </div>
+ </div>
+</div>
+
+<div class="row g-4">
+ <!-- CỘT TRÁI -->
+ <div class="col-lg-7">
+ <div class="card border-0 shadow-sm mb-4">
+ <div class="card-header bg-transparent"><h5 class="fw-bold mb-0">👥 Thông tin khách hàng</h5></div>
+ <div class="card-body">
+ <div class="row g-3">
+ <div class="col-sm-4 text-muted">Họ và tên</div>
+ <div class="col-sm-8 fw-semibold"><?php echo e($booking['customer_name']); ?></div>
+ <div class="col-sm-4 text-muted">Số điện thoại</div>
+ <div class="col-sm-8 fw-semibold">
+ 📞 <a href="tel:<?php echo e($booking['customer_phone']); ?>"><?php echo e($booking['customer_phone']); ?></a>
+ </div>
+ <?php if (!empty($booking['customer_email'])): ?>
+ <div class="col-sm-4 text-muted">Email</div>
+ <div class="col-sm-8 fw-semibold">✉️ <a href="mailto:<?php echo e($booking['customer_email']); ?>"><?php echo e($booking['customer_email']); ?></a></div>
+ <?php endif; ?>
+ <?php if (!empty($customer)): ?>
+ <div class="col-sm-4 text-muted">Lịch sử đơn hàng</div>
+ <div class="col-sm-8">
+ <span class="badge bg-secondary">Tổng <?php echo (int)((is_countable($history)?count($history):0) + 1); ?> đơn</span>
+ </div>
+ <?php endif; ?>
+ </div>
+ </div>
+ </div>
+
+ <div class="card border-0 shadow-sm mb-4">
+ <div class="card-header bg-transparent"><h5 class="fw-bold mb-0">🏟️ Thông tin sân & đặt lịch</h5></div>
+ <div class="card-body">
+ <div class="row g-3">
+ <div class="col-sm-4 text-muted">Sân</div>
+ <div class="col-sm-8 fw-semibold">
+ <?php echo e($booking['pitch_name']); ?>
+ <span class="badge bg-secondary ms-1">Sân <?php echo (int)$booking['pitch_type']; ?> người</span>
+ </div>
+ <div class="col-sm-4 text-muted">Ngày đặt</div>
+ <div class="col-sm-8 fw-semibold"><?php echo formatDate($booking['booking_date']); ?></div>
+ <div class="col-sm-4 text-muted">Giờ</div>
+ <div class="col-sm-8 fw-semibold">
+ <?php echo formatTime($booking['start_time']) . ' → ' . formatTime($booking['end_time']); ?>
+ <span class="badge bg-info text-dark ms-1"><?php echo $hours; ?> giờ</span>
+ </div>
+ <div class="col-sm-4 text-muted">Ghi chú</div>
+ <div class="col-sm-8">
+ <?php if (!empty($booking['note'])): ?>
+ <div class="p-2 bg-light rounded border"><?php echo nl2br(e($booking['note'])); ?></div>
+ <?php else: ?>
+ <span class="text-muted">(không có)</span>
+ <?php endif; ?>
+ </div>
+ <?php if (!empty($booking['cancellation_reason'])): ?>
+ <div class="col-sm-4 text-muted">Lý do hủy</div>
+ <div class="col-sm-8 text-danger fw-semibold">
+ 🚫 <?php echo nl2br(e($booking['cancellation_reason'])); ?>
+ </div>
+ <?php endif; ?>
+ </div>
+ </div>
+ </div>
+
+ <?php if (!empty($history)): ?>
+ <div class="card border-0 shadow-sm">
+ <div class="card-header bg-transparent"><h5 class="fw-bold mb-0">📜 Lịch sử đặt sân của KH này</h5></div>
+ <div class="card-body p-0">
+ <div class="table-responsive">
+ <table class="table table-hover align-middle mb-0">
+ <thead class="table-light">
+ <tr><th>Mã</th><th>Sân</th><th>Ngày</th><th>Giờ</th><th>Tiền</th><th>TT</th></tr>
+ </thead>
+ <tbody>
+ <?php foreach (array_slice($history, 0, 10) as $h): ?>
+ <tr style="cursor:pointer;" onclick="location.href='<?php echo route('admin/bookings/' . $h['id']); ?>'">
+ <td class="fw-semibold"><?php echo bookingCode($h['id']); ?></td>
+ <td><?php echo e($h['pitch_name'] ?? ''); ?></td>
+ <td><?php echo formatDate($h['booking_date']); ?></td>
+ <td><?php echo formatTime($h['start_time']).'-'.formatTime($h['end_time']); ?></td>
+ <td class="fw-semibold text-success"><?php echo formatMoney($h['total_price']); ?></td>
+ <td><?php echo bookingStatusBadge($h['status']); ?></td>
+ </tr>
+ <?php endforeach; ?>
+ </tbody>
+ </table>
+ </div>
+ </div>
+ </div>
+ <?php endif; ?>
+ </div>
+
+ <!-- CỘT PHẢI -->
+ <div class="col-lg-5">
+ <div class="card border-0 shadow-sm mb-4">
+ <div class="card-header bg-transparent">
+ <h5 class="fw-bold mb-0">💰 Thanh toán</h5>
+ </div>
+ <div class="card-body">
+ <div class="d-flex justify-content-between py-2 border-bottom">
+ <span class="text-muted">Giá sân (<?php echo $hours; ?> giờ × <?php echo formatMoney($booking['price_per_hour'] ?? 0); ?>/giờ)</span>
+ <span class="fw-semibold"><?php echo formatMoney($booking['total_price']); ?></span>
+ </div>
+ <div class="d-flex justify-content-between py-2 border-bottom">
+ <span class="text-muted">Tiền đặt cọc</span>
+ <span class="fw-semibold"><?php echo formatMoney($booking['deposit']); ?></span>
+ </div>
+ <div class="d-flex justify-content-between py-2 border-bottom">
+ <span class="text-muted">Đã thanh toán</span>
+ <span class="fw-semibold text-success"><?php echo formatMoney($booking['paid_amount']); ?></span>
+ </div>
+ <div class="d-flex justify-content-between py-2 border-bottom">
+ <span class="text-muted">Còn lại</span>
+ <span class="fw-bold fs-5 <?php echo $remaining > 0 ? 'text-danger' : 'text-success'; ?>">
+ <?php echo formatMoney($remaining); ?>
+ </span>
+ </div>
+ <div class="d-flex justify-content-between py-2 border-bottom">
+ <span class="text-muted">Phương thức</span>
+ <span class="fw-semibold"><?php echo e($payMethods[$booking['payment_method']] ?? $booking['payment_method']); ?></span>
+ </div>
+ <div class="d-flex justify-content-between py-2">
+ <span class="text-muted">Trạng thái TT</span>
+ <span><?php echo paymentStatusBadge($booking['payment_status']); ?></span>
+ </div>
+ </div>
+ </div>
+
+ <?php if (!empty($canPay) && $stt !== 'cancelled' && $remaining > 0.001): ?>
+ <div class="card border-0 shadow-sm mb-4 border-success border-opacity-25">
+ <div class="card-header bg-success bg-opacity-10 border-bottom border-success border-opacity-25">
+ <h5 class="fw-bold mb-0">💳 Nhập thêm thanh toán</h5>
+ </div>
+ <div class="card-body">
+ <form method="post" action="<?php echo route('admin/bookings/' . $id . '/payment'); ?>">
+ <div class="mb-3">
+ <label class="form-label fw-semibold">Số tiền (VNĐ)</label>
+ <div class="input-group">
+ <input type="number" name="payment_amount" required
+ class="form-control"
+ min="1000" step="1000"
+ max="<?php echo (int)ceil($remaining); ?>"
+ value="<?php echo (int)ceil($remaining); ?>"
+ placeholder="Số tiền khách trả thêm">
+ <span class="input-group-text">VNĐ</span>
+ </div>
+ <div class="form-text">Số tiền tối đa có thể nhập: <strong class="text-danger"><?php echo formatMoney($remaining); ?></strong></div>
+ </div>
+ <div class="mb-3">
+ <label class="form-label fw-semibold">Phương thức</label>
+ <select name="payment_method" class="form-select">
+ <?php foreach ($payMethods as $k => $v): ?>
+ <option value="<?php echo $k; ?>" <?php echo $booking['payment_method'] === $k ? 'selected' : ''; ?>>
+ <?php echo e($v); ?>
+ </option>
+ <?php endforeach; ?>
+ </select>
+ </div>
+ <div class="d-flex gap-2">
+ <button type="submit" class="btn btn-success w-100">💾 Ghi nhận thanh toán</button>
+ </div>
+ </form>
+ </div>
+ </div>
+ <?php endif; ?>
+
+ <div class="card border-0 shadow-sm">
+ <div class="card-header bg-transparent"><h5 class="fw-bold mb-0">📋 Quy trình trạng thái</h5></div>
+ <div class="card-body">
+ <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+ <span class="badge border bg-warning-subtle text-warning-emphasis border-warning-subtle">Chờ xác nhận</span>
+ <span>→</span>
+ <span class="badge border bg-primary-subtle text-primary border-primary-subtle">Đã xác nhận</span>
+ <span>→</span>
+ <span class="badge border bg-info-subtle text-info-emphasis border-info-subtle">Đang sử dụng</span>
+ <span>→</span>
+ <span class="badge border bg-success-subtle text-success border-success-subtle">Hoàn thành</span>
+ </div>
+ <div class="small text-muted mb-2">
+ Hoặc: <span class="badge border bg-warning-subtle text-warning-emphasis border-warning-subtle">Chờ xác nhận</span>
+ / <span class="badge border bg-primary-subtle text-primary border-primary-subtle">Đã xác nhận</span>
+ → <span class="badge border bg-danger-subtle text-danger border-danger-subtle">Đã hủy</span>
+ </div>
+ <div class="small text-muted">Trạng thái hiện tại:</div>
+ <div><?php echo bookingStatusBadge($stt); ?></div>
+ </div>
+ </div>
+ </div>
+</div>
+<?php $this->stopSection(); ?>
+
+<?php if (isset($_shouldextend[1])) { echo $this->runChild('layouts.admin'); } ?>

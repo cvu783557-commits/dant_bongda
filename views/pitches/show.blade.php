@@ -88,6 +88,7 @@
 
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
+<<<<<<< HEAD
                     <h6 class="fw-bold mb-3">Thông tin tổng quan sân</h6>
                     <div class="row g-3 small">
                         <div class="col-md-6">
@@ -171,6 +172,8 @@
 
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
+=======
+>>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
                     <h6 class="fw-bold mb-3">Thông tin sân và tiện ích</h6>
                     <div class="small mb-2"><strong>Mã sân:</strong> S<?php echo str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT); ?></div>
                     <div class="small mb-2"><strong>Địa chỉ:</strong> <?php echo !empty($pitch['address']) ? e($pitch['address']) : 'Chưa cập nhật'; ?></div>
@@ -207,6 +210,38 @@
                 </div>
             </div>
 
+<<<<<<< HEAD
+=======
+            <div class="card border-0 bg-light mt-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
+                    <div class="row g-2">
+                        <?php foreach ($hourSlots as $idx => $s): ?>
+                            <?php
+                                $locked = isset($lockedSlots[$idx]);
+                                $taken = isset($takenSlots[$idx]);
+                                $slotClass = $locked
+                                    ? 'bg-warning-subtle text-warning-emphasis'
+                                    : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis');
+                            ?>
+                            <div class="col-4">
+                                <div class="slot-badge text-center <?php echo $slotClass; ?>">
+                                    <?php echo htmlspecialchars($s['label']); ?>
+                                    <?php if ($locked): ?>
+                                        • Bảo trì / tạm khóa
+                                    <?php elseif ($taken): ?>
+                                        • Đã đặt
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="mt-3 small text-muted">
+                        Lưu ý: Các khung giờ "Đã đặt" không thể chọn. Bạn có thể đặt liên tục nhiều giờ bằng cách chọn Giờ bắt đầu & Giờ kết thúc.
+                    </div>
+                </div>
+            </div>
+>>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
         </div>
 
         <div class="col-lg-6">
@@ -585,6 +620,7 @@
     monthEl.addEventListener('change', recalc);
     updateMode();
 
+<<<<<<< HEAD
     const savePitchBtn = document.querySelector('.save-pitch-btn');
     const sharePitchBtn = document.querySelector('.share-pitch-btn');
 
@@ -640,6 +676,8 @@
         });
     }
 
+=======
+>>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
     form.addEventListener('submit', async function(e){
         const valid = await checkOverlap();
         if(!valid){

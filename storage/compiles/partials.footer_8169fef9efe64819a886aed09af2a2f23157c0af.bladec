@@ -1,3 +1,0 @@
-<footer class="text-center py-3 border-top">
- <small>© <?php echo \htmlentities(date('Y')??'', ENT_QUOTES, 'UTF-8', false); ?> Admin</small>
-</footer>
