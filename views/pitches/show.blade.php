@@ -65,16 +65,115 @@
                  style="height:320px; object-fit:cover;"
                  alt="<?php echo htmlspecialchars($pitch['name']); ?>">
             <h2 class="fw-bold mb-2"><?php echo htmlspecialchars($pitch['name']); ?></h2>
-            <div class="d-flex gap-2 mb-3">
+            <div class="d-flex flex-wrap gap-2 mb-3">
                 <span class="badge bg-success-subtle text-success border border-success-subtle">Sân <?php echo (int)$pitch['type']; ?> người</span>
+                <span class="badge <?php echo ($pitch['status'] ?? 'active') === 'active' ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'; ?>">
+                    <?php echo (($pitch['status'] ?? 'active') === 'active') ? 'Đang hoạt động' : 'Tạm đóng'; ?>
+                </span>
                 <span class="text-success fw-bold fs-5"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</span>
             </div>
+
+            <div class="d-flex flex-wrap gap-2 mb-4">
+                <button type="button" class="btn btn-outline-success save-pitch-btn" data-pitch-id="<?php echo (int)$pitch['id']; ?>">
+                    <span class="icon me-1">♡</span><span class="label">Lưu sân</span>
+                </button>
+                <button type="button" class="btn btn-outline-primary share-pitch-btn">
+                    <span class="me-1">↗</span> Chia sẻ sân
+                </button>
+            </div>
+
             <?php if (!empty($pitch['description'])): ?>
                 <p class="text-muted"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
             <?php endif; ?>
 
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
+<<<<<<< HEAD
+                    <h6 class="fw-bold mb-3">Thông tin tổng quan sân</h6>
+                    <div class="row g-3 small">
+                        <div class="col-md-6">
+                            <div class="text-secondary mb-1">Địa chỉ</div>
+                            <div class="fw-semibold"><?php echo !empty($pitch['address']) ? e($pitch['address']) : 'Chưa cập nhật'; ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-secondary mb-1">Hotline</div>
+                            <div class="fw-semibold"><?php echo !empty($pitch['hotline']) ? e($pitch['hotline']) : 'Chưa cập nhật'; ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-secondary mb-1">Giờ mở cửa</div>
+                            <div class="fw-semibold"><?php echo e(formatTime($pitch['opening_time'] ?? '06:00')); ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-secondary mb-1">Giờ đóng cửa</div>
+                            <div class="fw-semibold"><?php echo e(formatTime($pitch['closing_time'] ?? '23:00')); ?></div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-secondary mb-1">Quy mô</div>
+                            <div class="fw-semibold">Sân <?php echo (int)($pitch['type'] ?? 5); ?> người</div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="text-secondary mb-1">Số lượng sân</div>
+                            <div class="fw-semibold"><?php echo !empty($pitch['field_count']) ? (int)$pitch['field_count'] : 1; ?> sân</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <?php
+                $basePrice = 250000;
+                $priceByHour = [
+                    ['from' => '06:00', 'to' => '08:00', 'weekday' => 250000, 'weekend' => 300000],
+                    ['from' => '08:00', 'to' => '12:00', 'weekday' => 250000, 'weekend' => 300000],
+                    ['from' => '12:00', 'to' => '17:00', 'weekday' => 275000, 'weekend' => 325000],
+                    ['from' => '17:00', 'to' => '20:00', 'weekday' => 300000, 'weekend' => 350000],
+                    ['from' => '20:00', 'to' => '23:00', 'weekday' => 325000, 'weekend' => 375000],
+                ];
+            ?>
+            <div class="card border-0 bg-light mt-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Bảng giá thuê sân</h6>
+                    <div class="small text-muted mb-3">Giá thuê theo giờ: <strong class="text-success"><?php echo formatMoney($basePrice); ?></strong> / 1 giờ</div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle mb-0 bg-white">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Khung giờ</th>
+                                    <th>Thứ 2 - 6</th>
+                                    <th>Thứ 7 - CN</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($priceByHour as $slot): ?>
+                                    <tr>
+                                        <td><?php echo e($slot['from']); ?> - <?php echo e($slot['to']); ?></td>
+                                        <td><?php echo formatMoney($slot['weekday']); ?></td>
+                                        <td><?php echo formatMoney($slot['weekend']); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-3">
+                        <a href="#bookingForm" class="btn btn-success btn-lg w-100 fw-bold">Đặt sân ngay</a>
+                    </div>
+                    <div class="small text-muted mt-3 mb-0">
+                        Chi phí đã bao gồm:<br>
+                        - Sân bóng theo giờ đã chọn<br>
+                        - Vệ sinh khu vực sân<br>
+                        - Quản lý nhân sự và bảo vệ sân<br>
+                        - Bảng chỉ số thời gian / lịch đặt<br>
+                        <span class="d-block mt-2">Không bao gồm:</span>
+                        - Dịch vụ kèm theo như bóng, nước uống, thuê đồ thể thao<br>
+                        - Phí cọc nếu khách yêu cầu đặt trước<br>
+                        - Các tiện ích ngoài quy định theo hợp đồng
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 bg-light mt-4">
+                <div class="card-body">
+=======
+>>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
                     <h6 class="fw-bold mb-3">Thông tin sân và tiện ích</h6>
                     <div class="small mb-2"><strong>Mã sân:</strong> S<?php echo str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT); ?></div>
                     <div class="small mb-2"><strong>Địa chỉ:</strong> <?php echo !empty($pitch['address']) ? e($pitch['address']) : 'Chưa cập nhật'; ?></div>
@@ -111,6 +210,8 @@
                 </div>
             </div>
 
+<<<<<<< HEAD
+=======
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
                     <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
@@ -140,6 +241,7 @@
                     </div>
                 </div>
             </div>
+>>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
         </div>
 
         <div class="col-lg-6">
@@ -518,6 +620,64 @@
     monthEl.addEventListener('change', recalc);
     updateMode();
 
+<<<<<<< HEAD
+    const savePitchBtn = document.querySelector('.save-pitch-btn');
+    const sharePitchBtn = document.querySelector('.share-pitch-btn');
+
+    if (savePitchBtn) {
+        const key = 'saved_pitches';
+        const pitchId = String(savePitchBtn.dataset.pitchId || PITCH_ID);
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        const isSaved = saved.includes(pitchId);
+        const label = savePitchBtn.querySelector('.label') || savePitchBtn;
+        const icon = savePitchBtn.querySelector('.icon') || savePitchBtn;
+        if (isSaved) {
+            savePitchBtn.classList.add('btn-success', 'text-white');
+            savePitchBtn.classList.remove('btn-outline-success');
+            label.textContent = 'Đã lưu';
+            icon.textContent = '♥';
+        }
+        savePitchBtn.addEventListener('click', function(){
+            const list = JSON.parse(localStorage.getItem(key) || '[]');
+            const exists = list.includes(pitchId);
+            const next = exists ? list.filter(id => id !== pitchId) : [...list, pitchId];
+            localStorage.setItem(key, JSON.stringify(next));
+            const nowSaved = next.includes(pitchId);
+            savePitchBtn.classList.toggle('btn-success', nowSaved);
+            savePitchBtn.classList.toggle('text-white', nowSaved);
+            savePitchBtn.classList.toggle('btn-outline-success', !nowSaved);
+            label.textContent = nowSaved ? 'Đã lưu' : 'Lưu sân';
+            icon.textContent = nowSaved ? '♥' : '♡';
+        });
+    }
+
+    if (sharePitchBtn) {
+        sharePitchBtn.addEventListener('click', async function(){
+            const shareUrl = window.location.href;
+            const shareText = 'Xem sân ' + <?php echo json_encode($pitch['name'] ?? 'Sân bóng'); ?> + ' tại ' + shareUrl;
+            try {
+                if (navigator.share) {
+                    await navigator.share({
+                        title: <?php echo json_encode($pitch['name'] ?? 'Sân bóng'); ?>,
+                        text: 'Xem sân bóng này',
+                        url: shareUrl
+                    });
+                    return;
+                }
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(shareUrl);
+                    alert('Đã sao chép liên kết sân bóng vào clipboard.');
+                    return;
+                }
+                window.prompt('Chia sẻ liên kết sân bóng', shareUrl);
+            } catch (error) {
+                console.log('Share cancelled', error);
+            }
+        });
+    }
+
+=======
+>>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
     form.addEventListener('submit', async function(e){
         const valid = await checkOverlap();
         if(!valid){
