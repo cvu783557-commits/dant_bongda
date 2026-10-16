@@ -24,7 +24,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Loại sân <span class="text-danger">*</span></label>
                         <select name="type" class="form-select" required>
-                            <?php foreach ([5,7,11] as $t): ?>
+                            <?php foreach ([5,7] as $t): ?>
                                 <option value="<?php echo $t; ?>" <?php echo (isset($old['type']) && (int)$old['type'] === $t) ? 'selected' : ''; ?>>Sân <?php echo $t; ?> người</option>
                             <?php endforeach; ?>
                         </select>
@@ -32,50 +32,30 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Giá thuê / giờ (₫) <span class="text-danger">*</span></label>
                         <input type="number" name="price_per_hour" class="form-control" min="0" required
-                               value="<?php echo htmlspecialchars($old['price_per_hour'] ?? '250000'); ?>">
+                               value="<?php echo htmlspecialchars($old['price_per_hour'] ?? '0'); ?>">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Địa chỉ sân</label>
-                        <input type="text" name="address" class="form-control"
-                               value="<?php echo htmlspecialchars($old['address'] ?? ''); ?>">
+                        <input type="text" name="address" class="form-control" maxlength="255"
+                               value="<?php echo e($old['address'] ?? ''); ?>" placeholder="Số nhà, đường, phường/xã, quận/huyện">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Giờ mở cửa</label>
-                        <input type="time" name="opening_time" class="form-control"
-                               value="<?php echo htmlspecialchars($old['opening_time'] ?? '06:00'); ?>">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Giờ đóng cửa</label>
-                        <input type="time" name="closing_time" class="form-control"
-                               value="<?php echo htmlspecialchars($old['closing_time'] ?? '23:00'); ?>">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Hotline</label>
-                        <input type="text" name="hotline" class="form-control"
-                               value="<?php echo htmlspecialchars($old['hotline'] ?? ''); ?>">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Kích thước / quy mô</label>
-                        <input type="text" name="pitch_size" class="form-control"
-                               value="<?php echo htmlspecialchars($old['pitch_size'] ?? ''); ?>">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Số sân</label>
-                        <input type="number" name="field_count" class="form-control" min="1"
-                               value="<?php echo htmlspecialchars($old['field_count'] ?? '1'); ?>">
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold">Mở cửa</label>
+                            <input type="time" name="opening_time" class="form-control" required
+                                   value="<?php echo e($old['opening_time'] ?? '06:00'); ?>">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label fw-semibold">Đóng cửa</label>
+                            <input type="time" name="closing_time" class="form-control" required
+                                   value="<?php echo e($old['closing_time'] ?? '23:00'); ?>">
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Trạng thái</label>
                         <select name="status" class="form-select">
                             <option value="active" <?php echo !isset($old['status']) || $old['status'] === 'active' ? 'selected' : ''; ?>>Hoạt động</option>
                             <option value="inactive" <?php echo (isset($old['status']) && $old['status'] === 'inactive') ? 'selected' : ''; ?>>Tạm dừng</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Mở cửa ngay</label>
-                        <select name="is_open" class="form-select">
-                            <option value="1" <?php echo !isset($old['is_open']) || (int)$old['is_open'] === 1 ? 'selected' : ''; ?>>Có</option>
-                            <option value="0" <?php echo isset($old['is_open']) && (int)$old['is_open'] === 0 ? 'selected' : ''; ?>>Không</option>
                         </select>
                     </div>
                 </div>
@@ -88,6 +68,33 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Mô tả</label>
                         <textarea name="description" rows="6" class="form-control"><?php echo htmlspecialchars($old['description'] ?? ''); ?></textarea>
+                    </div>
+                    <hr>
+                    <h6 class="fw-bold mb-3">Tiện ích sân</h6>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Chất lượng mặt cỏ</label>
+                        <input type="text" name="grass_quality" class="form-control" maxlength="100"
+                               value="<?php echo e($old['grass_quality'] ?? ''); ?>" placeholder="Ví dụ: Cỏ nhân tạo, mới thay">
+                    </div>
+                    <div class="row g-3">
+                        <?php foreach ([
+                            'has_lighting' => 'Hệ thống đèn chiếu sáng',
+                            'has_changing_room' => 'Phòng thay đồ / nhà vệ sinh',
+                            'has_parking' => 'Bãi gửi xe',
+                        ] as $field => $label): ?>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold" for="<?php echo e($field); ?>"><?php echo e($label); ?></label>
+                                <select id="<?php echo e($field); ?>" name="<?php echo e($field); ?>" class="form-select">
+                                    <option value="1" <?php echo ($old[$field] ?? '0') === '1' ? 'selected' : ''; ?>>Có</option>
+                                    <option value="0" <?php echo ($old[$field] ?? '0') !== '1' ? 'selected' : ''; ?>>Không</option>
+                                </select>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label fw-semibold">Dịch vụ đi kèm</label>
+                        <textarea name="extra_services" rows="3" maxlength="1000" class="form-control"
+                                  placeholder="Ví dụ: Thuê áo, thuê bóng, nước uống"><?php echo e($old['extra_services'] ?? ''); ?></textarea>
                     </div>
                 </div>
             </div>

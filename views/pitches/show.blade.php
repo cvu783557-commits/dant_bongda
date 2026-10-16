@@ -1,9 +1,3 @@
-<?php
-    $fieldCount = max(1, (int)($pitch['field_count'] ?? 1));
-    $hotline = trim((string)($pitch['hotline'] ?? ''));
-    $hotlineDigits = preg_replace('/\D+/', '', $hotline);
-    $hasContactPhone = preg_match('/^0[0-9]{9,10}$/', $hotlineDigits) === 1;
-?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -15,14 +9,12 @@
     <style>
         html, body {
             font-family: "Segoe UI", Tahoma, Arial, sans-serif;
-            font-synthesis-weight: none;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            text-rendering: optimizeLegibility;
             color: #1f2937;
         }
-        body, input, textarea, select, button {
-            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        .slot-badge {
+            font-size: 0.8rem;
+            padding: 4px 6px;
+            border-radius: 6px;
         }
     </style>
 </head>
@@ -37,7 +29,20 @@
         <div class="collapse navbar-collapse justify-content-end" id="topNav">
             <ul class="navbar-nav">
                 <li class="nav-item"><a class="nav-link" href="<?php echo route('/'); ?>">Trang chủ</a></li>
-                <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/bookings'); ?>">Trang quản lý</a></li>
+                <?php if (!empty($currentUser)): ?>
+                    <li class="nav-item"><span class="nav-link"><?php echo e($currentUser['full_name']); ?> (<?php echo e($currentUser['role']); ?>)</span></li>
+                    <?php if (($currentUser['role'] ?? '') === 'ADMIN'): ?>
+                        <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/bookings'); ?>">Quản trị</a></li>
+                    <?php endif; ?>
+                    <li class="nav-item">
+                        <form method="post" action="<?php echo route('logout'); ?>">
+                            <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
+                            <button class="nav-link border-0 bg-transparent" type="submit">Đăng xuất</button>
+                        </form>
+                    </li>
+                <?php else: ?>
+                    <li class="nav-item"><a class="nav-link" href="<?php echo route('login'); ?>">Đăng nhập</a></li>
+                <?php endif; ?>
             </ul>
         </div>
     </div>
@@ -60,132 +65,147 @@
                  style="height:320px; object-fit:cover;"
                  alt="<?php echo htmlspecialchars($pitch['name']); ?>">
             <h2 class="fw-bold mb-2"><?php echo htmlspecialchars($pitch['name']); ?></h2>
-            <div class="d-flex gap-2 mb-3">
+            <div class="d-flex flex-wrap gap-2 mb-3">
                 <span class="badge bg-success-subtle text-success border border-success-subtle">Sân <?php echo (int)$pitch['type']; ?> người</span>
-                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
-                    <?php echo htmlspecialchars($pitch['pitch_size'] ?? ('Sân ' . (int)$pitch['type'] . ' người')); ?>
+                <span class="badge <?php echo ($pitch['status'] ?? 'active') === 'active' ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'; ?>">
+                    <?php echo (($pitch['status'] ?? 'active') === 'active') ? 'Đang hoạt động' : 'Tạm đóng'; ?>
                 </span>
                 <span class="text-success fw-bold fs-5"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</span>
             </div>
 
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h4 class="fw-bold mb-0">Thông tin tổng quan sân bóng</h4>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="savePitch()">💾 Lưu sân</button>
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="sharePitch()">🔗 Chia sẻ sân</button>
-                        </div>
-                    </div>
+            <div class="d-flex flex-wrap gap-2 mb-4">
+                <button type="button" class="btn btn-outline-success save-pitch-btn" data-pitch-id="<?php echo (int)$pitch['id']; ?>">
+                    <span class="icon me-1">♡</span><span class="label">Lưu sân</span>
+                </button>
+                <button type="button" class="btn btn-outline-primary share-pitch-btn">
+                    <span class="me-1">↗</span> Chia sẻ sân
+                </button>
+            </div>
 
-                    <div class="row g-3">
+            <?php if (!empty($pitch['description'])): ?>
+                <p class="text-muted"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
+            <?php endif; ?>
+
+            <div class="card border-0 bg-light mt-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Thông tin tổng quan sân</h6>
+                    <div class="row g-3 small">
                         <div class="col-md-6">
-                            <div class="small text-muted">Địa chỉ</div>
-                            <div class="fw-semibold"><?php echo htmlspecialchars($pitch['address'] ?? 'Địa chỉ sân chưa cập nhật'); ?></div>
+                            <div class="text-secondary mb-1">Địa chỉ</div>
+                            <div class="fw-semibold"><?php echo !empty($pitch['address']) ? e($pitch['address']) : 'Chưa cập nhật'; ?></div>
                         </div>
                         <div class="col-md-6">
-                            <div class="small text-muted">Trạng thái</div>
-                            <div class="fw-semibold <?php echo (($pitch['is_open'] ?? 1) == 1 && ($pitch['status'] ?? 'active') === 'active') ? 'text-success' : 'text-warning'; ?>">
-                                <?php echo (($pitch['is_open'] ?? 1) == 1 && ($pitch['status'] ?? 'active') === 'active') ? 'Đang hoạt động' : 'Tạm đóng'; ?>
-                            </div>
+                            <div class="text-secondary mb-1">Hotline</div>
+                            <div class="fw-semibold"><?php echo !empty($pitch['hotline']) ? e($pitch['hotline']) : 'Chưa cập nhật'; ?></div>
                         </div>
                         <div class="col-md-6">
-                            <div class="small text-muted">Giờ mở cửa</div>
-                            <div class="fw-semibold"><?php echo htmlspecialchars(substr($pitch['opening_time'] ?? '06:00:00', 0, 5)); ?> - <?php echo htmlspecialchars(substr($pitch['closing_time'] ?? '23:00:00', 0, 5)); ?></div>
+                            <div class="text-secondary mb-1">Giờ mở cửa</div>
+                            <div class="fw-semibold"><?php echo e(formatTime($pitch['opening_time'] ?? '06:00')); ?></div>
                         </div>
                         <div class="col-md-6">
-                            <div class="small text-muted">Hotline</div>
-                            <div class="fw-semibold"><?php echo htmlspecialchars($hotline !== '' ? $hotline : 'Chưa cập nhật'); ?></div>
+                            <div class="text-secondary mb-1">Giờ đóng cửa</div>
+                            <div class="fw-semibold"><?php echo e(formatTime($pitch['closing_time'] ?? '23:00')); ?></div>
                         </div>
                         <div class="col-md-6">
-                            <div class="small text-muted">Quy mô</div>
-                            <div class="fw-semibold"><?php echo htmlspecialchars($pitch['pitch_size'] ?? ('Sân ' . (int)$pitch['type'] . ' người')); ?></div>
+                            <div class="text-secondary mb-1">Quy mô</div>
+                            <div class="fw-semibold">Sân <?php echo (int)($pitch['type'] ?? 5); ?> người</div>
                         </div>
                         <div class="col-md-6">
-                            <div class="small text-muted">Số lượng sân</div>
-                            <div class="fw-semibold"><?php echo (int)($pitch['field_count'] ?? 1); ?> sân</div>
-                        </div>
-                        <?php if ($hasContactPhone): ?>
-                            <div class="col-12">
-                                <div class="d-flex flex-wrap gap-2">
-                                    <a class="btn btn-success" href="tel:<?php echo htmlspecialchars($hotlineDigits); ?>">Liên hệ</a>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-                        <div class="col-12">
-                            <div class="small text-muted mb-2">Danh sách sân con</div>
-                            <div class="d-flex flex-wrap gap-2">
-                                <?php for ($childNo = 1; $childNo <= $fieldCount; $childNo++): ?>
-                                    <span class="badge bg-light text-dark border">
-                                        <?php echo htmlspecialchars($pitch['name']); ?> - PB <?php echo $childNo; ?>
-                                        · <?php echo (int)$pitch['type']; ?> người
-                                    </span>
-                                <?php endfor; ?>
-                            </div>
+                            <div class="text-secondary mb-1">Số lượng sân</div>
+                            <div class="fw-semibold"><?php echo !empty($pitch['field_count']) ? (int)$pitch['field_count'] : 1; ?> sân</div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h4 class="fw-bold mb-2">Bảng giá thuê sân</h4>
-                    <p class="text-muted small mb-3">
-                        Mỗi khung giờ tính 1 giờ. Hiện tại sân áp dụng cùng một mức giá cho ngày thường và cuối tuần.
-                    </p>
+            <?php
+                $basePrice = 250000;
+                $priceByHour = [
+                    ['from' => '06:00', 'to' => '08:00', 'weekday' => 250000, 'weekend' => 300000],
+                    ['from' => '08:00', 'to' => '12:00', 'weekday' => 250000, 'weekend' => 300000],
+                    ['from' => '12:00', 'to' => '17:00', 'weekday' => 275000, 'weekend' => 325000],
+                    ['from' => '17:00', 'to' => '20:00', 'weekday' => 300000, 'weekend' => 350000],
+                    ['from' => '20:00', 'to' => '23:00', 'weekday' => 325000, 'weekend' => 375000],
+                ];
+            ?>
+            <div class="card border-0 bg-light mt-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Bảng giá thuê sân</h6>
+                    <div class="small text-muted mb-3">Giá thuê theo giờ: <strong class="text-success"><?php echo formatMoney($basePrice); ?></strong> / 1 giờ</div>
                     <div class="table-responsive">
-                        <table class="table table-bordered table-striped align-middle mb-3">
-                            <thead class="table-success">
+                        <table class="table table-sm table-bordered align-middle mb-0 bg-white">
+                            <thead class="table-light">
                                 <tr>
-                                    <th scope="col">Khung giờ</th>
-                                    <th scope="col">Thứ Hai - Thứ Sáu</th>
-                                    <th scope="col">Thứ Bảy - Chủ nhật</th>
+                                    <th>Khung giờ</th>
+                                    <th>Thứ 2 - 6</th>
+                                    <th>Thứ 7 - CN</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($slots as $s): ?>
+                                <?php foreach ($priceByHour as $slot): ?>
                                     <tr>
-                                        <td>
-                                            <?php echo htmlspecialchars(substr($s['start_time'], 0, 5)); ?> -
-                                            <?php echo htmlspecialchars(substr($s['end_time'], 0, 5)); ?>
-                                        </td>
-                                        <td class="fw-semibold text-success"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</td>
-                                        <td class="fw-semibold text-success"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</td>
+                                        <td><?php echo e($slot['from']); ?> - <?php echo e($slot['to']); ?></td>
+                                        <td><?php echo formatMoney($slot['weekday']); ?></td>
+                                        <td><?php echo formatMoney($slot['weekend']); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
                     </div>
-                    <div class="alert alert-light border mb-0 small">
-                        <strong>Chi phí:</strong> Giá đã bao gồm phí thuê sân trong một giờ.
-                        Dịch vụ hoặc phụ phí khác (nếu có) sẽ được thông báo riêng trước khi xác nhận đặt sân.
+                    <div class="mt-3">
+                        <a href="#bookingForm" class="btn btn-success btn-lg w-100 fw-bold">Đặt sân ngay</a>
+                    </div>
+                    <div class="small text-muted mt-3 mb-0">
+                        Chi phí đã bao gồm:<br>
+                        - Sân bóng theo giờ đã chọn<br>
+                        - Vệ sinh khu vực sân<br>
+                        - Quản lý nhân sự và bảo vệ sân<br>
+                        - Bảng chỉ số thời gian / lịch đặt<br>
+                        <span class="d-block mt-2">Không bao gồm:</span>
+                        - Dịch vụ kèm theo như bóng, nước uống, thuê đồ thể thao<br>
+                        - Phí cọc nếu khách yêu cầu đặt trước<br>
+                        - Các tiện ích ngoài quy định theo hợp đồng
                     </div>
                 </div>
             </div>
 
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-body p-4">
-                    <h4 class="fw-bold mb-3">Chính sách và lưu ý đặt sân</h4>
-                    <div class="mb-3">
-                        <h6 class="fw-semibold">Chính sách đặt cọc</h6>
-                        <p class="text-muted mb-0">Website không thu tiền đặt cọc trực tuyến. Vui lòng liên hệ sân để xác nhận yêu cầu đặt cọc trước khi thanh toán.</p>
+            <div class="card border-0 bg-light mt-4">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Thông tin sân và tiện ích</h6>
+                    <div class="small mb-2"><strong>Mã sân:</strong> S<?php echo str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT); ?></div>
+                    <div class="small mb-2"><strong>Địa chỉ:</strong> <?php echo !empty($pitch['address']) ? e($pitch['address']) : 'Chưa cập nhật'; ?></div>
+                    <div class="small mb-2"><strong>Giờ hoạt động:</strong>
+                        <?php echo e(formatTime($pitch['opening_time'] ?? '06:00')); ?> - <?php echo e(formatTime($pitch['closing_time'] ?? '23:00')); ?>
                     </div>
-                    <div class="mb-3">
-                        <h6 class="fw-semibold">Chính sách hủy sân / hoàn tiền</h6>
-                        <p class="text-muted mb-0">Điều kiện hủy sân và hoàn tiền do sân xác nhận trực tiếp. Hãy hỏi rõ điều kiện trước khi chuyển tiền đặt cọc.</p>
+                    <div class="border-top mt-3 pt-3">
+                        <h6 class="fw-semibold mb-2">Tiện ích sân</h6>
+                        <div class="small mb-2">
+                            <strong>Chất lượng mặt cỏ:</strong>
+                            <?php echo !empty($pitch['grass_quality']) ? e($pitch['grass_quality']) : '<span class="text-muted">Chưa cập nhật</span>'; ?>
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                            <?php foreach ([
+                                'has_lighting' => 'Hệ thống đèn chiếu sáng',
+                                'has_changing_room' => 'Phòng thay đồ / nhà vệ sinh',
+                                'has_parking' => 'Bãi gửi xe',
+                            ] as $field => $label): ?>
+                                <div class="d-flex justify-content-between align-items-center small">
+                                    <span><?php echo e($label); ?></span>
+                                    <?php if (!empty($pitch[$field])): ?>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">Có</span>
+                                    <?php else: ?>
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Không</span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
-                    <div class="alert alert-warning mb-0">
-                        <strong>Lưu ý an toàn:</strong> Yêu cầu đặt sân chỉ được xác nhận sau khi sân liên hệ lại. Chỉ thanh toán theo thông tin đã xác minh trực tiếp với sân.
+                    <div class="small mt-3">
+                        <strong>Dịch vụ đi kèm:</strong>
+                        <?php echo !empty($pitch['extra_services']) ? nl2br(e($pitch['extra_services'])) : '<span class="text-muted">Chưa cập nhật</span>'; ?>
                     </div>
                 </div>
             </div>
-
-            <?php if (!empty($pitch['description'])): ?>
-                <div class="mb-4">
-                    <h5 class="fw-bold mb-2">Giới thiệu sân bóng</h5>
-                    <p class="text-muted mb-0"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
-                </div>
-            <?php endif; ?>
 
         </div>
 
@@ -194,86 +214,165 @@
                 <div class="card-body p-4">
                     <h4 class="fw-bold mb-4">Thông tin đặt sân</h4>
 
-                    <form method="get" action="" class="mb-4" id="booking-date-form">
-                        <label class="form-label fw-semibold">Chọn ngày đặt:</label>
+                    <form method="get" action="" class="mb-4">
+                        <label class="form-label fw-semibold">Xem tình trạng sân theo ngày:</label>
                         <div class="d-flex gap-2">
                             <input type="date"
                                    name="date"
                                    value="<?php echo htmlspecialchars($date); ?>"
                                    min="<?php echo date('Y-m-d'); ?>"
                                    class="form-control"
-                                   onchange="this.form.submit()"
                                    required>
                             <button type="submit" class="btn btn-outline-success">Xem lịch</button>
                         </div>
                     </form>
 
-                    <form method="post" action="<?php echo route('bookings'); ?>" id="bookingForm" novalidate>
+                    <form method="post" id="bookingForm" action="<?php echo route('bookings'); ?>" novalidate>
                         <input type="hidden" name="pitch_id" value="<?php echo (int)$pitch['id']; ?>">
                         <input type="hidden" name="booking_date" value="<?php echo htmlspecialchars($date); ?>">
 
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Hình thức đặt sân</label>
+                            <select name="booking_mode" id="booking_mode" class="form-select">
+                                <option value="single" <?php echo ($old['booking_mode'] ?? 'single') === 'single' ? 'selected' : ''; ?>>Đặt một lần</option>
+                                <option value="monthly" <?php echo ($old['booking_mode'] ?? '') === 'monthly' ? 'selected' : ''; ?>>Đặt cố định theo tháng (mỗi ngày)</option>
+                            </select>
+                        </div>
+
+                        <div id="monthlyFields" class="row g-3 mb-3 d-none">
+                            <div class="col-12">
+                                <label class="form-label fw-semibold" for="booking_month">Tháng đặt</label>
+                                <input type="month" id="booking_month" name="booking_month"
+                                       class="form-control" disabled
+                                       min="<?php echo date('Y-m'); ?>"
+                                       value="<?php echo htmlspecialchars($old['booking_month'] ?? $bookingMonth); ?>">
+                            </div>
+                            <div class="col-12 small text-muted">
+                                Khung giờ đã chọn được giữ mỗi ngày từ ngày bắt đầu đến hết tháng. Nếu có ngày bị đặt
+                                hoặc sân bị khóa, yêu cầu sẽ không được tạo để tránh giữ lịch thiếu buổi.
+                            </div>
+                        </div>
+
                         <div class="row g-3 mb-3">
-                            <div class="col-sm-6">
-                                <label for="child-pitch" class="form-label fw-semibold">Chọn sân con</label>
-                                <select name="child_pitch_no" id="child-pitch" class="form-select" required>
-                                    <?php for ($childNo = 1; $childNo <= $fieldCount; $childNo++): ?>
-                                        <option value="<?php echo $childNo; ?>"
-                                            <?php echo (int)($old['child_pitch_no'] ?? 1) === $childNo ? 'selected' : ''; ?>>
-                                            Sân <?php echo htmlspecialchars($pitch['name']); ?> - PB <?php echo $childNo; ?>
-                                        </option>
-                                    <?php endfor; ?>
-                                </select>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Giờ bắt đầu <span class="text-danger">*</span></label>
+                                <input type="time" id="start_time" name="start_time"
+                                       value="<?php echo htmlspecialchars($old['start_time'] ?? ''); ?>"
+                                       min="<?php echo htmlspecialchars($minStart); ?>"
+                                       max="<?php echo htmlspecialchars($maxStart); ?>"
+                                       class="form-control" required>
                             </div>
-                            <div class="col-sm-6">
-                                <label for="duration-hours" class="form-label fw-semibold">Thời lượng thuê</label>
-                                <select name="duration_hours" id="duration-hours" class="form-select" required>
-                                    <?php for ($hours = 1; $hours <= count($slots); $hours++): ?>
-                                        <option value="<?php echo $hours; ?>"
-                                            <?php echo (int)($old['duration_hours'] ?? 1) === $hours ? 'selected' : ''; ?>>
-                                            <?php echo $hours; ?> giờ
-                                        </option>
-                                    <?php endfor; ?>
-                                </select>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold">Giờ kết thúc <span class="text-danger">*</span></label>
+                                <input type="time" id="end_time" name="end_time"
+                                       value="<?php echo htmlspecialchars($old['end_time'] ?? ''); ?>"
+                                       min="<?php echo htmlspecialchars($minEnd); ?>"
+                                       max="<?php echo htmlspecialchars($maxEnd); ?>"
+                                       class="form-control" required>
                             </div>
                         </div>
 
-                        <p class="form-label fw-semibold mb-2">
-                            Chọn giờ bắt đầu — Ngày <?php echo formatDate($date); ?>
-                        </p>
-                        <div class="d-flex gap-3 small mb-2">
-                            <span class="text-success">● Còn trống</span>
-                            <span class="text-danger">● Đã đặt / không đủ thời lượng</span>
-                        </div>
+                        <div id="overlapBox" class="alert d-none mb-3">                        </div>
 
-                        <div class="row g-2 mb-4">
-                            <?php foreach ($slots as $s): ?>
-                                <?php
-                                    $start = substr($s['start_time'], 0, 5);
-                                    $end   = substr($s['end_time'], 0, 5);
-                                ?>
-                                <div class="col-4">
-                                    <label class="w-100">
-                                        <input type="radio"
-                                               name="time_slot_id"
-                                               value="<?php echo $s['id']; ?>"
-                                               class="btn-check time-option"
-                                               data-start="<?php echo htmlspecialchars($s['start_time']); ?>"
-                                               data-end="<?php echo htmlspecialchars($s['end_time']); ?>"
-                                               <?php echo (isset($old['time_slot_id']) && (int)$old['time_slot_id'] === (int)$s['id']) ? 'checked' : ''; ?>>
-                                        <span class="btn btn-outline-success w-100 small time-option-label">
-                                            <?php echo "{$start}-{$end}"; ?> <span class="availability-label">· Còn trống</span>
-                                        </span>
-                                    </label>
+                        <div class="card border mb-4">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                                    <h5 class="fw-bold mb-0">Chọn dịch vụ đi kèm</h5>
+                                    <span class="badge bg-light text-secondary border">Tùy chọn</span>
                                 </div>
-                            <?php endforeach; ?>
+                                <p class="small text-muted mb-3" id="serviceBookingHint">
+                                    Có thể chọn nhiều dịch vụ. Đặt theo tháng sẽ tính số lượng đã chọn cho từng buổi.
+                                </p>
+                                <?php if (empty($services)): ?>
+                                    <div class="small text-muted">Hiện chưa có dịch vụ còn hàng để chọn.</div>
+                                <?php else: ?>
+                                    <div class="d-flex flex-column gap-2">
+                                        <?php
+                                            $oldSelectedServices = array_map(
+                                                'strval',
+                                                is_array($old['selected_services'] ?? null) ? $old['selected_services'] : []
+                                            );
+                                            $oldServiceQuantities = is_array($old['service_quantities'] ?? null)
+                                                ? $old['service_quantities']
+                                                : [];
+                                        ?>
+                                        <?php foreach ($services as $service): ?>
+                                            <?php
+                                                $serviceId = (int)$service['id'];
+                                                $serviceSelected = in_array((string)$serviceId, $oldSelectedServices, true);
+                                                $serviceQuantity = max(
+                                                    1,
+                                                    min((int)$service['stock'], (int)($oldServiceQuantities[$serviceId] ?? 1))
+                                                );
+                                            ?>
+                                            <div class="border rounded p-3">
+                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                                                    <div class="form-check flex-grow-1">
+                                                        <input class="form-check-input service-select"
+                                                               type="checkbox"
+                                                               id="service-<?php echo $serviceId; ?>"
+                                                               name="selected_services[]"
+                                                               value="<?php echo $serviceId; ?>"
+                                                               data-price="<?php echo (float)$service['price']; ?>"
+                                                               data-stock="<?php echo (int)$service['stock']; ?>"
+                                                               <?php echo $serviceSelected ? 'checked' : ''; ?>>
+                                                        <label class="form-check-label" for="service-<?php echo $serviceId; ?>">
+                                                            <span class="fw-semibold"><?php echo e($service['name']); ?></span>
+                                                            <span class="text-success fw-semibold ms-1">
+                                                                <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?>
+                                                            </span>
+                                                            <span class="d-block small text-muted">
+                                                                Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                                <?php if (!empty($service['description'])): ?>
+                                                                    · <?php echo e($service['description']); ?>
+                                                                <?php endif; ?>
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                    <div style="width:110px;">
+                                                        <label class="form-label small mb-1" for="service-quantity-<?php echo $serviceId; ?>">Số lượng</label>
+                                                        <input class="form-control form-control-sm service-quantity"
+                                                               type="number"
+                                                               id="service-quantity-<?php echo $serviceId; ?>"
+                                                               name="service_quantities[<?php echo $serviceId; ?>]"
+                                                               min="1"
+                                                               max="<?php echo (int)$service['stock']; ?>"
+                                                               value="<?php echo $serviceQuantity; ?>"
+                                                               <?php echo $serviceSelected ? 'required' : ''; ?>
+                                                               <?php echo $serviceSelected ? '' : 'disabled'; ?>>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="d-flex justify-content-between align-items-center mt-3 small">
+                                    <span class="text-muted">Tiền dịch vụ (mỗi buổi / tổng tháng)</span>
+                                    <strong class="text-success" id="serviceTotalDisplay">0 ₫</strong>
+                                </div>
+                            </div>
                         </div>
 
-                        <p id="selected-period-summary" class="small text-muted" aria-live="polite">
-                            Chưa chọn khung giờ.
-                        </p>
-                        <button type="button" id="continue-booking" class="btn btn-success w-100 fw-bold mb-4">Đặt sân ngay</button>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <label class="form-label" id="quantityLabel">Số giờ thuê</label>
+                                <input type="text" id="quantityDisplay" readonly value="0 giờ" class="form-control-plaintext fw-semibold">
+                            </div>
+                            <div class="col-6 text-end">
+                                <label class="form-label">Giá / giờ</label>
+                                <div class="form-control-plaintext fw-semibold text-success"><?php echo formatMoney($pitch['price_per_hour']); ?></div>
+                            </div>
+                        </div>
 
-                        <div id="customer-fields" class="<?php echo !empty($old['customer_name']) ? '' : 'd-none'; ?>">
+                        <div class="alert alert-success d-flex justify-content-between align-items-center mb-4">
+                            <span class="fw-semibold">Thành tiền (ước tính):</span>
+                            <span class="fw-bold fs-5" id="totalDisplay"><?php echo formatMoney(0); ?></span>
+                        </div>
+                        <div class="alert alert-info mb-4">
+                            Đặt cọc 30% tổng tiền qua VNPay để gửi yêu cầu đặt sân. Phần còn lại thanh toán tại sân.
+                            <div class="small mt-1">Tiền cọc tạm tính: <strong id="depositDisplay"><?php echo formatMoney(0); ?></strong></div>
+                        </div>
+
                         <div class="mb-3">
                             <label class="form-label">Họ tên khách hàng <span class="text-danger">*</span></label>
                             <input type="text" name="customer_name" class="form-control" required
@@ -298,13 +397,7 @@
                             <textarea name="notes" rows="2" class="form-control"><?php echo htmlspecialchars($old['notes'] ?? ''); ?></textarea>
                         </div>
 
-                        <div class="alert alert-success d-flex justify-content-between align-items-center mb-4">
-                            <span class="fw-semibold">Thành tiền:</span>
-                            <span id="estimated-total" class="fw-bold fs-5"><?php echo formatMoney($pitch['price_per_hour']); ?></span>
-                        </div>
-
                         <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">Xác nhận đặt sân</button>
-                        </div>
                     </form>
                 </div>
             </div>
@@ -318,107 +411,244 @@
     </div>
 </footer>
 
-<script>
-    function savePitch() {
-        const key = 'saved_pitches';
-        const saved = JSON.parse(localStorage.getItem(key) || '[]');
-        const id = <?php echo (int)$pitch['id']; ?>;
-        if (!saved.includes(id)) {
-            saved.push(id);
-            localStorage.setItem(key, JSON.stringify(saved));
-        }
-        alert('Đã lưu sân thành công.');
-    }
-
-    function sharePitch() {
-        const url = window.location.href;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).then(function () {
-                alert('Đã sao chép liên kết sân bóng.');
-            });
-            return;
-        }
-        alert('Liên kết sân bóng: ' + url);
-    }
-
-    const reservations = <?php echo json_encode($reservations, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
-    const timeOptions = Array.from(document.querySelectorAll('.time-option'));
-    const childPitchSelect = document.getElementById('child-pitch');
-    const durationSelect = document.getElementById('duration-hours');
-    const customerFields = document.getElementById('customer-fields');
-    const hourlyPrice = <?php echo (int)$pitch['price_per_hour']; ?>;
-    const openingMinutes = <?php echo ((int)substr($pitch['opening_time'] ?? '06:00:00', 0, 2) * 60) + (int)substr($pitch['opening_time'] ?? '06:00:00', 3, 2); ?>;
-    const closingMinutes = <?php echo ((int)substr($pitch['closing_time'] ?? '23:00:00', 0, 2) * 60) + (int)substr($pitch['closing_time'] ?? '23:00:00', 3, 2); ?>;
-    const selectedBookingDate = <?php echo json_encode($date); ?>;
-    const today = <?php echo json_encode(date('Y-m-d')); ?>;
-    const currentMinutes = <?php echo ((int)date('H') * 60) + (int)date('i'); ?>;
-
-    function minutesSinceMidnight(time) {
-        const parts = time.split(':').map(Number);
-        return parts[0] * 60 + parts[1];
-    }
-
-    function formatTime(minutes) {
-        return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
-    }
-
-    function updateAvailability() {
-        const selectedChild = Number(childPitchSelect.value);
-        const duration = Number(durationSelect.value);
-
-        timeOptions.forEach(function (option) {
-            const start = minutesSinceMidnight(option.dataset.start);
-            const end = start + duration * 60;
-            const insideOpeningHours = start >= openingMinutes && end <= closingMinutes;
-            const notPassed = selectedBookingDate !== today || start > currentMinutes;
-            const overlapsReservation = reservations.some(function (reservation) {
-                return Number(reservation.child_pitch_no) === selectedChild
-                    && start < minutesSinceMidnight(reservation.end_time)
-                    && end > minutesSinceMidnight(reservation.start_time);
-            });
-            const available = insideOpeningHours && notPassed && !overlapsReservation;
-            const label = option.nextElementSibling;
-            const statusText = label.querySelector('.availability-label');
-
-            option.disabled = !available;
-            if (!available && option.checked) option.checked = false;
-            label.classList.toggle('btn-outline-success', available);
-            label.classList.toggle('btn-outline-secondary', !available);
-            label.classList.toggle('opacity-50', !available);
-            statusText.textContent = available ? '· Còn trống' : (overlapsReservation ? '· Đã đặt' : (!notPassed ? '· Đã qua' : '· Không đủ thời lượng'));
-        });
-
-        const total = new Intl.NumberFormat('vi-VN').format(hourlyPrice * duration) + ' ₫';
-        document.getElementById('estimated-total').textContent = total;
-
-        const selectedOption = document.querySelector('.time-option:checked');
-        const summary = document.getElementById('selected-period-summary');
-        summary.textContent = selectedOption
-            ? 'Đang chọn PB ' + selectedChild + ': ' + formatTime(minutesSinceMidnight(selectedOption.dataset.start))
-                + ' - ' + formatTime(minutesSinceMidnight(selectedOption.dataset.start) + duration * 60)
-                + ' (' + duration + ' giờ)'
-            : 'Chưa chọn khung giờ.';
-    }
-
-    childPitchSelect.addEventListener('change', updateAvailability);
-    durationSelect.addEventListener('change', updateAvailability);
-    timeOptions.forEach(function (option) {
-        option.addEventListener('change', updateAvailability);
-    });
-    updateAvailability();
-
-    document.getElementById('continue-booking').addEventListener('click', function () {
-        const selectedSlot = document.querySelector('.time-option:checked');
-        if (!selectedSlot || selectedSlot.disabled) {
-            alert('Vui lòng chọn một khung giờ còn trống.');
-            return;
-        }
-
-        customerFields.classList.remove('d-none');
-        customerFields.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-</script>
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function(){
+    const PRICE_PER_HOUR = <?php echo (float)$pitch['price_per_hour']; ?>;
+    const PITCH_ID       = <?php echo (int)$pitch['id']; ?>;
+    const BOOKING_DATE   = "<?php echo htmlspecialchars($date); ?>";
+    const CHECK_URL      = "<?php echo route('admin/bookings/check-overlap'); ?>";
+
+    const startEl   = document.getElementById('start_time');
+    const endEl     = document.getElementById('end_time');
+    const totalEl   = document.getElementById('totalDisplay');
+    const depositEl = document.getElementById('depositDisplay');
+    const serviceTotalEl = document.getElementById('serviceTotalDisplay');
+    const overlapEl = document.getElementById('overlapBox');
+    const form      = document.getElementById('bookingForm');
+    const modeEl    = document.getElementById('booking_mode');
+    const monthEl   = document.getElementById('booking_month');
+    const monthlyFields = document.getElementById('monthlyFields');
+    const quantityLabel = document.getElementById('quantityLabel');
+    const quantityEl = document.getElementById('quantityDisplay');
+    const serviceInputs = Array.from(document.querySelectorAll('.service-select'));
+    const serviceQuantityInputs = Array.from(document.querySelectorAll('.service-quantity'));
+
+    function fmtMoney(n){
+        return n.toLocaleString('vi-VN') + ' ₫';
+    }
+    function timeToSec(t){
+        if(!t) return null;
+        const [h,m] = t.split(':').map(Number);
+        return h*3600 + m*60;
+    }
+
+    function monthlyOccurrenceCount(){
+        if(!monthEl.value) return 0;
+        const [year, month] = monthEl.value.split('-').map(Number);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let count = 0;
+        const daysInMonth = new Date(year, month, 0).getDate();
+        for(let day = 1; day <= daysInMonth; day++){
+            const occurrence = new Date(year, month - 1, day);
+            if(occurrence < today) continue;
+            if(occurrence.getTime() === today.getTime()
+                && timeToSec(startEl.value) !== null
+                && timeToSec(startEl.value) <= (new Date().getHours() * 3600 + new Date().getMinutes() * 60)){
+                continue;
+            }
+            count++;
+        }
+        return count;
+    }
+
+    function selectedServicesTotal(){
+        return serviceInputs.reduce((total, checkbox) => {
+            if(!checkbox.checked) return total;
+            const quantityInput = document.getElementById('service-quantity-' + checkbox.value);
+            const quantity = Math.max(1, Number(quantityInput.value) || 1);
+            return total + Number(checkbox.dataset.price) * quantity;
+        }, 0);
+    }
+
+    function recalc(){
+        const s = timeToSec(startEl.value);
+        const e = timeToSec(endEl.value);
+        const isMonthly = modeEl.value === 'monthly';
+        const sessions = isMonthly ? monthlyOccurrenceCount() : 1;
+        const serviceTotal = selectedServicesTotal() * sessions;
+        serviceTotalEl.textContent = fmtMoney(serviceTotal);
+        if(s === null || e === null || e <= s){
+            quantityEl.value = isMonthly ? sessions + ' ngày' : '0 giờ';
+            totalEl.textContent = fmtMoney(0);
+            depositEl.textContent = fmtMoney(0);
+            return {hours: null, sessions: sessions};
+        }
+        const hours = (e - s) / 3600;
+        quantityEl.value = isMonthly
+            ? sessions + ' ngày'
+            : hours.toFixed(2).replace(/\.?0+$/,'') + ' giờ';
+        const sessionTotal = Math.round(hours * PRICE_PER_HOUR) + selectedServicesTotal();
+        const total = sessionTotal * sessions;
+        totalEl.textContent = fmtMoney(total);
+        const deposit = Math.max(1, Math.ceil(total * 0.30));
+        depositEl.textContent = fmtMoney(deposit);
+        return {hours: hours, sessions: sessions};
+    }
+
+    async function checkOverlap(){
+        if(modeEl.value === 'monthly'){
+            overlapEl.classList.add('d-none');
+            return true;
+        }
+        if(!startEl.value || !endEl.value){ overlapEl.classList.add('d-none'); return true; }
+        const calculation = recalc();
+        if(calculation.hours === null){
+            overlapEl.className = 'alert alert-warning mb-3';
+            overlapEl.textContent = 'Vui lòng chọn Giờ bắt đầu < Giờ kết thúc';
+            overlapEl.classList.remove('d-none');
+            return false;
+        }
+        const params = new URLSearchParams({
+            pitch_id: PITCH_ID,
+            booking_date: BOOKING_DATE,
+            start_time: startEl.value + ':00',
+            end_time: endEl.value + ':00',
+        });
+        try{
+            const r = await fetch(CHECK_URL + '?' + params.toString());
+            const j = await r.json();
+            if(j.ok){
+                overlapEl.className = 'alert alert-success mb-3';
+                overlapEl.textContent = '✓ Khung giờ này trống, bạn có thể đặt sân';
+                overlapEl.classList.remove('d-none');
+                return true;
+            }else{
+                overlapEl.className = 'alert alert-danger mb-3';
+                let txt = j.message || 'Khung giờ này đã được đặt';
+                if(j.booking){
+                    txt += ' (trùng với khách ' + (j.booking.customer_name||'') + ' ' + (j.booking.start_time||'').slice(0,5) + '-' + (j.booking.end_time||'').slice(0,5) + ')';
+                }
+                overlapEl.textContent = '✗ ' + txt;
+                overlapEl.classList.remove('d-none');
+                return false;
+            }
+        }catch(err){
+            overlapEl.classList.add('d-none');
+            return true;
+        }
+    }
+
+    function updateMode(){
+        const isMonthly = modeEl.value === 'monthly';
+        monthlyFields.classList.toggle('d-none', !isMonthly);
+        monthEl.disabled = !isMonthly;
+        monthEl.required = isMonthly;
+        quantityLabel.textContent = isMonthly ? 'Số ngày đặt trong tháng' : 'Số giờ thuê';
+        recalc();
+        checkOverlap();
+    }
+
+    serviceInputs.forEach(checkbox => {
+        checkbox.addEventListener('change', function(){
+            const quantityInput = document.getElementById('service-quantity-' + checkbox.value);
+            quantityInput.disabled = !checkbox.checked;
+            quantityInput.required = checkbox.checked;
+            recalc();
+        });
+    });
+    serviceQuantityInputs.forEach(input => {
+        input.addEventListener('input', recalc);
+        input.addEventListener('change', function(){
+            const max = Number(input.max);
+            const value = Number(input.value);
+            if(value < 1) input.value = '1';
+            if(value > max) input.value = String(max);
+            recalc();
+        });
+    });
+
+    startEl.addEventListener('input', function(){
+        if(endEl.value && startEl.value >= endEl.value){
+            const s = startEl.value;
+            if(s){
+                const [h,m] = s.split(':').map(Number);
+                const nh = Math.min(h+1, 23);
+                endEl.value = String(nh).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+            }
+        }
+        recalc(); checkOverlap();
+    });
+    endEl.addEventListener('input', function(){ recalc(); checkOverlap(); });
+    modeEl.addEventListener('change', updateMode);
+    monthEl.addEventListener('change', recalc);
+    updateMode();
+
+    const savePitchBtn = document.querySelector('.save-pitch-btn');
+    const sharePitchBtn = document.querySelector('.share-pitch-btn');
+
+    if (savePitchBtn) {
+        const key = 'saved_pitches';
+        const pitchId = String(savePitchBtn.dataset.pitchId || PITCH_ID);
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        const isSaved = saved.includes(pitchId);
+        const label = savePitchBtn.querySelector('.label') || savePitchBtn;
+        const icon = savePitchBtn.querySelector('.icon') || savePitchBtn;
+        if (isSaved) {
+            savePitchBtn.classList.add('btn-success', 'text-white');
+            savePitchBtn.classList.remove('btn-outline-success');
+            label.textContent = 'Đã lưu';
+            icon.textContent = '♥';
+        }
+        savePitchBtn.addEventListener('click', function(){
+            const list = JSON.parse(localStorage.getItem(key) || '[]');
+            const exists = list.includes(pitchId);
+            const next = exists ? list.filter(id => id !== pitchId) : [...list, pitchId];
+            localStorage.setItem(key, JSON.stringify(next));
+            const nowSaved = next.includes(pitchId);
+            savePitchBtn.classList.toggle('btn-success', nowSaved);
+            savePitchBtn.classList.toggle('text-white', nowSaved);
+            savePitchBtn.classList.toggle('btn-outline-success', !nowSaved);
+            label.textContent = nowSaved ? 'Đã lưu' : 'Lưu sân';
+            icon.textContent = nowSaved ? '♥' : '♡';
+        });
+    }
+
+    if (sharePitchBtn) {
+        sharePitchBtn.addEventListener('click', async function(){
+            const shareUrl = window.location.href;
+            const shareText = 'Xem sân ' + <?php echo json_encode($pitch['name'] ?? 'Sân bóng'); ?> + ' tại ' + shareUrl;
+            try {
+                if (navigator.share) {
+                    await navigator.share({
+                        title: <?php echo json_encode($pitch['name'] ?? 'Sân bóng'); ?>,
+                        text: 'Xem sân bóng này',
+                        url: shareUrl
+                    });
+                    return;
+                }
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(shareUrl);
+                    alert('Đã sao chép liên kết sân bóng vào clipboard.');
+                    return;
+                }
+                window.prompt('Chia sẻ liên kết sân bóng', shareUrl);
+            } catch (error) {
+                console.log('Share cancelled', error);
+            }
+        });
+    }
+
+    form.addEventListener('submit', async function(e){
+        const valid = await checkOverlap();
+        if(!valid){
+            e.preventDefault();
+            alert('Khung giờ bạn chọn đã bị trùng, vui lòng chọn khung giờ khác.');
+            return;
+        }
+    });
+})();
+</script>
 </body>
 </html>

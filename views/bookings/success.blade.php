@@ -51,8 +51,14 @@
                 <div class="mb-3">
                     <span class="display-1">✅</span>
                 </div>
-                <h3 class="fw-bold text-success mb-2">Đặt sân thành công</h3>
-                <p class="text-muted mb-4">Chúng tôi sẽ liên hệ với bạn qua số điện thoại để xác nhận trong thời gian sớm nhất.</p>
+                <h3 class="fw-bold text-success mb-2">Thông tin đặt sân</h3>
+                <p class="text-muted mb-4">
+                    <?php if ((float)$booking['paid_amount'] >= (float)$booking['deposit'] && (float)$booking['deposit'] > 0): ?>
+                        Đặt cọc VNPay đã được xác nhận. Chúng tôi sẽ liên hệ để xác nhận lịch sân.
+                    <?php else: ?>
+                        Đơn đang chờ thanh toán tiền cọc VNPay; lịch chỉ được xác nhận sau khi thanh toán thành công.
+                    <?php endif; ?>
+                </p>
 
                 <div class="text-start bg-light rounded p-4 mb-4">
                     <div class="row mb-2">
@@ -67,21 +73,29 @@
                     </div>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Sân bóng:</div>
-                        <div class="col-7 fw-semibold">
-                            <?php echo htmlspecialchars($booking['pitch_name']); ?> - PB <?php echo (int)$booking['child_pitch_no']; ?>
-                            (Sân <?php echo (int)$booking['pitch_type']; ?> người)
+                        <div class="col-7 fw-semibold"><?php echo htmlspecialchars($booking['pitch_name']); ?> (Sân <?php echo (int)$booking['pitch_type']; ?> người)</div>
+                    </div>
+                    <?php if ($series): ?>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Tháng đặt:</div>
+                        <div class="col-7"><?php echo date('m/Y', strtotime($series['booking_month'])); ?></div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Lịch đặt:</div>
+                        <div class="col-7">
+                            Mỗi ngày từ <?php echo formatDate($booking['booking_date']); ?> đến hết tháng —
+                            <?php echo substr($series['start_time'], 0, 5); ?> - <?php echo substr($series['end_time'], 0, 5); ?>
                         </div>
                     </div>
+                    <?php else: ?>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Ngày đặt:</div>
                         <div class="col-7"><?php echo formatDate($booking['booking_date']); ?></div>
                     </div>
+                    <?php endif; ?>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Khung giờ:</div>
-                        <div class="col-7">
-                            <?php echo substr($booking['start_time'],0,5); ?> - <?php echo substr($booking['end_time'],0,5); ?>
-                            (<?php echo (int)$booking['duration_hours']; ?> giờ)
-                        </div>
+                        <div class="col-7"><?php echo substr($booking['start_time'],0,5); ?> - <?php echo substr($booking['end_time'],0,5); ?></div>
                     </div>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Khách hàng:</div>
@@ -97,9 +111,31 @@
                         <div class="col-7"><?php echo htmlspecialchars($booking['customer_email']); ?></div>
                     </div>
                     <?php endif; ?>
+                    <?php if (!empty($bookingServices)): ?>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Dịch vụ:</div>
+                        <div class="col-7">
+                            <?php foreach ($bookingServices as $service): ?>
+                                <div>
+                                    <?php echo e($service['service_name']); ?>
+                                    × <?php echo (int)$service['quantity']; ?>
+                                    — <?php echo formatMoney($service['subtotal']); ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <div class="row border-top pt-3 mt-3">
                         <div class="col-5 fw-semibold">Tổng tiền:</div>
-                        <div class="col-7 fw-bold text-success fs-5"><?php echo formatMoney($booking['total_price']); ?></div>
+                        <div class="col-7 fw-bold text-success fs-5"><?php echo formatMoney($series['total_price'] ?? $booking['total_price']); ?></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-5 fw-semibold">Tiền cọc VNPay:</div>
+                        <div class="col-7 fw-bold"><?php echo formatMoney($series['deposit'] ?? $booking['deposit']); ?></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-5 fw-semibold">Đã thanh toán:</div>
+                        <div class="col-7"><?php echo formatMoney($series['paid_amount'] ?? $booking['paid_amount']); ?></div>
                     </div>
                 </div>
 
