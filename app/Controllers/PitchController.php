@@ -103,6 +103,43 @@ class PitchController extends Controller
         ]);
     }
 
+    /**
+     * Trang xem dịch vụ dành cho người dùng.
+     * Dữ liệu lấy trực tiếp từ bảng `services` (cùng nguồn với trang quản trị admin)
+     * nên mọi thay đổi về tên, giá, đơn vị, tồn kho, ảnh, trạng thái đều được đồng bộ.
+     */
+    public function services()
+    {
+        $activeServices = $this->service->getActive();
+
+        // Nhóm dịch vụ theo danh mục, giữ đúng thứ tự và nhãn của Service::CATEGORIES
+        $grouped = [];
+        foreach (Service::CATEGORIES as $key => $label) {
+            $grouped[$key] = [
+                'name'     => $label,
+                'color'    => Service::getCategoryColor($key),
+                'services' => [],
+            ];
+        }
+        foreach ($activeServices as $service) {
+            $category = $service['category'] ?? 'other';
+            if (!isset($grouped[$category])) {
+                $category = 'other';
+            }
+            $grouped[$category]['services'][] = $service;
+        }
+        // Chỉ giữ lại những danh mục thực sự có dịch vụ
+        $grouped = array_filter($grouped, static fn ($group) => !empty($group['services']));
+
+        return view('services.index', [
+            'groupedServices' => $grouped,
+            'totalServices'   => count($activeServices),
+            'success'         => getFlash('success'),
+            'error'           => getFlash('error'),
+            'currentUser'     => $this->user->getActiveUser(),
+        ]);
+    }
+
     public function bookingStore()
     {
         $data = $_POST;
