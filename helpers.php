@@ -101,6 +101,34 @@ if (!function_exists('setFlash')) {
     }
 }
 
+if (!function_exists('csrfToken')) {
+    function csrfToken(): string
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        if (empty($_SESSION['_csrf_token'])) {
+            $_SESSION['_csrf_token'] = bin2hex(random_bytes(32));
+        }
+
+        return $_SESSION['_csrf_token'];
+    }
+}
+
+if (!function_exists('isValidCsrfToken')) {
+    function isValidCsrfToken($token): bool
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        return is_string($token)
+            && isset($_SESSION['_csrf_token'])
+            && hash_equals($_SESSION['_csrf_token'], $token);
+    }
+}
+
 if (!function_exists('getFlash')) {
     function getFlash($key = null)
     {

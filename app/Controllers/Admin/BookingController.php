@@ -4,6 +4,7 @@ namespace App\Controllers\Admin;
 
 use App\Controller;
 use App\Models\Booking;
+use App\Models\BookingService;
 use App\Models\Customer;
 use App\Models\Pitch;
 use App\Models\PitchLock;
@@ -14,6 +15,7 @@ use Rakit\Validation\Validator;
 class BookingController extends Controller
 {
     protected $booking;
+    protected $bookingService;
     protected $customer;
     protected $pitch;
     protected $timeSlot;
@@ -24,6 +26,7 @@ class BookingController extends Controller
     public function __construct()
     {
         $this->booking   = new Booking();
+        $this->bookingService = new BookingService();
         $this->customer  = new Customer();
         $this->pitch     = new Pitch();
         $this->timeSlot  = new TimeSlot();
@@ -36,9 +39,13 @@ class BookingController extends Controller
         $uri  = $_SERVER['REQUEST_URI'] ?? '';
         $isPublicCheck = str_contains($uri, '/check-overlap');
 
-        if (!$isPublicCheck && !$this->user->getActiveUser()) {
-            setFlash('error', 'Vui lòng đăng nhập để truy cập trang quản lý');
-            redirect('admin/login');
+        if (!$isPublicCheck && !$this->user->canAccessAdmin()) {
+            if (!$this->user->getActiveUser()) {
+                setFlash('error', 'Vui lòng đăng nhập bằng tài khoản ADMIN để truy cập trang quản lý');
+                redirect('login');
+            }
+            setFlash('error', 'Tài khoản USER không có quyền truy cập trang quản trị.');
+            redirect('/');
         }
     }
 
@@ -107,7 +114,7 @@ class BookingController extends Controller
      * ============================================================ */
     public function index()
     {
-        if (!$this->user->isStaff()) {
+        if (!$this->user->canAccessAdmin()) {
             setFlash('error', 'Bạn không có quyền xem danh sách đặt sân');
             redirect('admin/dashboard');
             return;
@@ -156,7 +163,7 @@ class BookingController extends Controller
      * ============================================================ */
     public function calendar()
     {
-        if (!$this->user->isStaff()) {
+        if (!$this->user->canAccessAdmin()) {
             setFlash('error', 'Bạn không có quyền xem lịch sân');
             redirect('admin/dashboard');
             return;
@@ -320,6 +327,7 @@ class BookingController extends Controller
 
         return view('admin.bookings.show', [
             'booking'         => $booking,
+            'bookingServices' => $this->bookingService->allByBooking((int)$booking['id']),
             'customer'        => $customer,
             'history'         => array_filter($history, fn($h) => (int)$h['id'] !== (int)$booking['id']),
             'statuses'        => Booking::getBookingStatuses(),
@@ -733,7 +741,7 @@ class BookingController extends Controller
 
     /* ============================================================
      *  KHÓA / MỞ KHÓA KHUNG GIỜ (LOCK / UNLOCK TIME SLOT)
-     *  - STAFF trở lên được phép
+     *  - ADMIN được phép
      *  - Form khóa: pitch_id, date, start_time, end_time, reason
      *  - Mở khóa: Xóa record trong pitch_locks
      * ============================================================ */

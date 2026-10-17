@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>@yield('title', 'Admin')</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-synthesis-weight: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            color: #1f2937;
+            background: #f8f9fa;
+        }
+        body, input, textarea, select, button {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+
+@include('partials.header')
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12 col-md-3 col-lg-2 bg-light min-vh-100 p-3">
+            @include('partials.aside')
+        </div>
+
+        <div class="col-12 col-md-9 col-lg-10 p-3">
+            @yield('content')
+        </div>
+    </div>
+</div>
+
+@include('partials.footer')
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

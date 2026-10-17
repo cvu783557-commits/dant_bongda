@@ -20,9 +20,13 @@ class PitchController extends Controller
         $this->user      = new User();
 
         if (session_status() === PHP_SESSION_NONE) session_start();
-        if (!$this->user->getActiveUser()) {
-            setFlash('error', 'Vui lòng đăng nhập để truy cập quản lý');
-            redirect('admin/login');
+        if (!$this->user->canAccessAdmin()) {
+            if (!$this->user->getActiveUser()) {
+                setFlash('error', 'Vui lòng đăng nhập bằng tài khoản ADMIN để truy cập trang quản lý');
+                redirect('login');
+            }
+            setFlash('error', 'Tài khoản USER không có quyền truy cập trang quản trị.');
+            redirect('/');
         }
     }
 
@@ -41,6 +45,7 @@ class PitchController extends Controller
             'success' => $success,
             'error'   => $error,
             'user'    => $this->user->getActiveUser(),
+            'canDelete' => $this->user->canDelete(),
         ]);
     }
 
@@ -68,6 +73,30 @@ class PitchController extends Controller
         ]);
     }
 
+    private function validatePitchHours(array $data)
+    {
+        $openingTime = $data['opening_time'] ?? '';
+        $closingTime = $data['closing_time'] ?? '';
+        $errors = [];
+
+        if (!is_string($openingTime) || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D', $openingTime)) {
+            $errors['opening_time'] = 'Giờ mở cửa không hợp lệ';
+        }
+        if (!is_string($closingTime) || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D', $closingTime)) {
+            $errors['closing_time'] = 'Giờ đóng cửa không hợp lệ';
+        }
+
+        if (!$errors) {
+            if ($openingTime >= $closingTime) {
+                $errors['opening_time'] = 'Giờ mở cửa phải trước giờ đóng cửa';
+            } elseif ($openingTime < '06:00' || $closingTime > '23:00') {
+                $errors['opening_time'] = 'Khung giờ hoạt động phải nằm trong khoảng 06:00 - 23:00';
+            }
+        }
+
+        return $errors;
+    }
+
     public function store()
     {
         $data = $_POST;
@@ -78,10 +107,21 @@ class PitchController extends Controller
             'type'           => 'required|in:5,7',
             'price_per_hour' => 'required|numeric|min:0',
             'description'    => 'nullable|max:2000',
+            'address'        => 'nullable|max:255',
+            'opening_time'   => 'required',
+            'closing_time'   => 'required',
+            'grass_quality'  => 'nullable|max:100',
+            'has_lighting'   => 'required|in:0,1',
+            'has_changing_room' => 'required|in:0,1',
+            'has_parking'    => 'required|in:0,1',
+            'extra_services' => 'nullable|max:1000',
             'status'         => 'required|in:active,inactive',
         ];
 
         $errors = $this->validate($this->validator, $data, $rules);
+        if (!$errors) {
+            $errors = $this->validatePitchHours($data);
+        }
 
         $imagePath = null;
         if (is_upload('image')) {
@@ -104,6 +144,14 @@ class PitchController extends Controller
             'price_per_hour' => (int)$data['price_per_hour'],
             'description'    => trim($data['description'] ?? ''),
             'image'          => $imagePath,
+            'address'        => trim($data['address'] ?? ''),
+            'opening_time'   => $data['opening_time'] . ':00',
+            'closing_time'   => $data['closing_time'] . ':00',
+            'grass_quality'  => trim($data['grass_quality'] ?? ''),
+            'has_lighting'   => (int)$data['has_lighting'],
+            'has_changing_room' => (int)$data['has_changing_room'],
+            'has_parking'    => (int)$data['has_parking'],
+            'extra_services' => trim($data['extra_services'] ?? ''),
             'status'         => $data['status'],
         ]);
 
@@ -156,10 +204,21 @@ class PitchController extends Controller
             'type'           => 'required|in:5,7',
             'price_per_hour' => 'required|numeric|min:0',
             'description'    => 'nullable|max:2000',
+            'address'        => 'nullable|max:255',
+            'opening_time'   => 'required',
+            'closing_time'   => 'required',
+            'grass_quality'  => 'nullable|max:100',
+            'has_lighting'   => 'required|in:0,1',
+            'has_changing_room' => 'required|in:0,1',
+            'has_parking'    => 'required|in:0,1',
+            'extra_services' => 'nullable|max:1000',
             'status'         => 'required|in:active,inactive',
         ];
 
         $errors = $this->validate($this->validator, $data, $rules);
+        if (!$errors) {
+            $errors = $this->validatePitchHours($data);
+        }
 
         $imagePath = null;
         $changeImage = false;
@@ -183,6 +242,14 @@ class PitchController extends Controller
             'type'           => (int)$data['type'],
             'price_per_hour' => (int)$data['price_per_hour'],
             'description'    => trim($data['description'] ?? ''),
+            'address'        => trim($data['address'] ?? ''),
+            'opening_time'   => $data['opening_time'] . ':00',
+            'closing_time'   => $data['closing_time'] . ':00',
+            'grass_quality'  => trim($data['grass_quality'] ?? ''),
+            'has_lighting'   => (int)$data['has_lighting'],
+            'has_changing_room' => (int)$data['has_changing_room'],
+            'has_parking'    => (int)$data['has_parking'],
+            'extra_services' => trim($data['extra_services'] ?? ''),
             'status'         => $data['status'],
         ];
         if ($changeImage) {
@@ -225,6 +292,12 @@ class PitchController extends Controller
 
     public function destroy($id)
     {
+        if (!$this->user->canDelete()) {
+            setFlash('error', 'Chỉ ADMIN mới có quyền xóa sân.');
+            redirect('admin/pitches');
+            return;
+        }
+
         $pitch = $this->pitch->find($id);
         if (!$pitch) {
             redirect404();

@@ -57,6 +57,15 @@ class Service extends Model
         return $this->all('active');
     }
 
+    public function getAvailableForBooking()
+    {
+        $sql = "SELECT * FROM {$this->table}
+                WHERE status = 'active' AND stock > 0
+                ORDER BY category ASC, name ASC";
+
+        return $this->connection->executeQuery($sql)->fetchAllAssociative();
+    }
+
     public function find($id)
     {
         $sql = "SELECT * FROM {$this->table} WHERE id = ?";

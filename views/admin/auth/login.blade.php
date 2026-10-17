@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng nhập quản lý — SânBóng.Pro</title>
+    <title>Đăng nhập — SânBóng.Pro</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         html, body {
@@ -45,8 +45,8 @@
             <div class="login-card card p-5">
                 <div class="text-center mb-4">
                     <div class="brand-mark">⚽</div>
-                    <h3 class="fw-bold mb-1">SânBóng.Pro Admin</h3>
-                    <p class="text-muted mb-4">Đăng nhập để quản lý lịch sân, khách hàng</p>
+                    <h3 class="fw-bold mb-1">SânBóng.Pro</h3>
+                    <p class="text-muted mb-4">Đăng nhập bằng tài khoản USER hoặc ADMIN</p>
                 </div>
 
                 <?php if ($success): ?>
@@ -56,11 +56,12 @@
                     <div class="alert alert-danger" role="alert"><?php echo $error; ?></div>
                 <?php endif; ?>
 
-                <form method="post" action="<?php echo route('admin/login'); ?>">
+                <form method="post" action="<?php echo route('login'); ?>">
+                    <input type="hidden" name="_csrf_token" value="<?php echo e($csrfToken); ?>">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Tên đăng nhập</label>
                         <input type="text" name="username" class="form-control form-control-lg" required
-                               placeholder="admin hoac staff"
+                               placeholder="Tên đăng nhập"
                                value="<?php echo htmlspecialchars($old['username'] ?? ''); ?>">
                     </div>
                     <div class="mb-4">
@@ -70,15 +71,10 @@
                     </div>
                     <button type="submit" class="btn btn-success btn-lg w-100 fw-bold mb-3">Đăng nhập</button>
 
-                    <div class="card bg-light border-0 small">
-                        <div class="card-body py-2 px-3">
-                            <div class="fw-semibold mb-1">Tài khoản mẫu (sau khi chạy seed_users.php):</div>
-                            <div><span class="text-muted">Admin:</span> admin / admin123</div>
-                            <div><span class="text-muted">Nhân viên:</span> staff / staff123</div>
-                        </div>
-                    </div>
-
                     <div class="text-center mt-4">
+                        <a href="<?php echo route('register'); ?>" class="text-decoration-none small text-success">Chưa có tài khoản? Đăng ký USER</a>
+                    </div>
+                    <div class="text-center mt-2">
                         <a href="<?php echo route('/'); ?>" class="text-decoration-none small text-success">← Về trang chủ đặt sân</a>
                     </div>
                 </form>

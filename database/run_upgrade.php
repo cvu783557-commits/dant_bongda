@@ -34,6 +34,303 @@ function rowCount($pdo, $table) {
 function stepOK($msg) { echo "[OK] {$msg}\n"; }
 function stepSkip($msg) { echo "[SKIP] {$msg}\n"; }
 function stepInfo($msg) { echo "[..] {$msg}\n"; }
+function ensureAutoIncrementId($pdo, $table) {
+    if (!preg_match('/^[a-z_]+$/i', $table) || !tableExists($pdo, $table)) {
+        return;
+    }
+
+    $idColumn = $pdo->query("SHOW COLUMNS FROM `{$table}` LIKE 'id'")->fetch();
+    if (!$idColumn) {
+        throw new RuntimeException("Không tìm thấy cột {$table}.id");
+    }
+
+    $idType = strtolower($idColumn['Type']);
+    if (!preg_match('/^(?:tinyint|smallint|mediumint|int|bigint)(?:\(\d+\))?(?: unsigned)?$/', $idType)) {
+        throw new RuntimeException(
+            "{$table}.id có kiểu không hỗ trợ tự tăng ({$idColumn['Type']}); cần kiểm tra cấu trúc thủ công."
+        );
+    }
+
+    $duplicates = $pdo->query(
+        "SELECT id, COUNT(*) AS total FROM `{$table}` GROUP BY id HAVING COUNT(*) > 1"
+    )->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($duplicates && $table === 'users' && count($duplicates) === 1 && (int)$duplicates[0]['id'] === 0) {
+        $zeroAdmins = (int)$pdo->query(
+            "SELECT COUNT(*) FROM users WHERE id = 0 AND username = 'admin'"
+        )->fetchColumn();
+        $zeroStaff = (int)$pdo->query(
+            "SELECT COUNT(*) FROM users WHERE id = 0 AND username = 'staff'"
+        )->fetchColumn();
+        $zeroUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE id = 0")->fetchColumn();
+        $idZeroReferences = 0;
+
+        foreach (['bookings', 'pitch_locks'] as $referenceTable) {
+            if (tableExists($pdo, $referenceTable)) {
+                $referenceColumn = $pdo->query(
+                    "SHOW COLUMNS FROM `{$referenceTable}` LIKE 'created_by'"
+                )->fetch();
+                if ($referenceColumn) {
+                    $idZeroReferences += (int)$pdo->query(
+                        "SELECT COUNT(*) FROM `{$referenceTable}` WHERE created_by = 0"
+                    )->fetchColumn();
+                }
+            }
+        }
+
+        if ($zeroAdmins !== 1 || $zeroStaff !== 1 || $zeroUsers !== 2 || $idZeroReferences > 0) {
+            throw new RuntimeException(
+                "users.id bị trùng và không thể xác định an toàn bản ghi cần sửa; dữ liệu được giữ nguyên."
+            );
+        }
+
+        $nextId = (int)$pdo->query("SELECT COALESCE(MAX(id), 0) + 1 FROM users")->fetchColumn();
+        $updated = $pdo->prepare("UPDATE users SET id = ? WHERE id = 0 AND username = 'staff'");
+        $updated->execute([$nextId]);
+        if ($updated->rowCount() !== 1) {
+            throw new RuntimeException("Không thể sửa ID trùng của tài khoản STAFF; dữ liệu được giữ nguyên.");
+        }
+        stepOK("Cấp ID riêng cho bản ghi STAFF bị trùng ID; không xóa tài khoản");
+        $duplicates = $pdo->query(
+            "SELECT id, COUNT(*) AS total FROM users GROUP BY id HAVING COUNT(*) > 1"
+        )->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    if ($duplicates) {
+        throw new RuntimeException(
+            "{$table}.id còn giá trị trùng; không thể bật AUTO_INCREMENT an toàn, dữ liệu được giữ nguyên."
+        );
+    }
+
+    $zeroIds = (int)$pdo->query("SELECT COUNT(*) FROM `{$table}` WHERE id = 0")->fetchColumn();
+    if ($zeroIds > 0) {
+        if ($table !== 'users' || $zeroIds !== 1) {
+            throw new RuntimeException(
+                "{$table}.id có giá trị 0; cần kiểm tra tham chiếu trước khi bật AUTO_INCREMENT."
+            );
+        }
+
+        $idZeroReferences = 0;
+        foreach (['bookings', 'pitch_locks'] as $referenceTable) {
+            if (tableExists($pdo, $referenceTable)) {
+                $referenceColumn = $pdo->query(
+                    "SHOW COLUMNS FROM `{$referenceTable}` LIKE 'created_by'"
+                )->fetch();
+                if ($referenceColumn) {
+                    $idZeroReferences += (int)$pdo->query(
+                        "SELECT COUNT(*) FROM `{$referenceTable}` WHERE created_by = 0"
+                    )->fetchColumn();
+                }
+            }
+        }
+        if ($idZeroReferences > 0) {
+            throw new RuntimeException(
+                "users.id=0 đang được tham chiếu; không thể chuẩn hóa an toàn, dữ liệu được giữ nguyên."
+            );
+        }
+
+        $nextId = (int)$pdo->query("SELECT COALESCE(MAX(id), 0) + 1 FROM users")->fetchColumn();
+        $updated = $pdo->prepare("UPDATE users SET id = ? WHERE id = 0");
+        $updated->execute([$nextId]);
+        if ($updated->rowCount() !== 1) {
+            throw new RuntimeException("Không thể chuẩn hóa users.id=0; dữ liệu được giữ nguyên.");
+        }
+        stepOK("Chuẩn hóa users.id=0 thành ID duy nhất; không xóa tài khoản");
+    }
+
+    $nullIds = (int)$pdo->query("SELECT COUNT(*) FROM `{$table}` WHERE id IS NULL")->fetchColumn();
+    if ($nullIds > 0) {
+        throw new RuntimeException(
+            "{$table}.id có giá trị rỗng; không thể bật AUTO_INCREMENT an toàn, dữ liệu được giữ nguyên."
+        );
+    }
+
+    $hasPrimaryKey = $idColumn['Key'] === 'PRI';
+    if ($idColumn['Key'] !== '' && !$hasPrimaryKey) {
+        throw new RuntimeException(
+            "{$table}.id có index không tương thích ({$idColumn['Key']}); cần kiểm tra cấu trúc thủ công."
+        );
+    }
+
+    if (stripos($idColumn['Extra'], 'auto_increment') !== false && $hasPrimaryKey) {
+        stepSkip("{$table}.id đã là khóa tự tăng");
+        return;
+    }
+
+    $alter = "ALTER TABLE `{$table}` MODIFY id {$idType} NOT NULL AUTO_INCREMENT";
+    if (!$hasPrimaryKey) {
+        $alter .= ", ADD PRIMARY KEY (id)";
+    }
+    $pdo->exec($alter);
+    stepOK("Sửa {$table}.id thành khóa tự tăng, giữ nguyên các bản ghi");
+}
+function ensureUniqueUsernames($pdo) {
+    if (!tableExists($pdo, 'users') || !columnExists($pdo, 'users', 'username')) {
+        throw new RuntimeException("Không thể thêm đăng ký vì bảng users thiếu cột username.");
+    }
+
+    $duplicates = $pdo->query(
+        "SELECT username FROM users GROUP BY username HAVING COUNT(*) > 1"
+    )->fetchAll(PDO::FETCH_COLUMN);
+
+    foreach ($duplicates as $username) {
+        $query = $pdo->prepare("SELECT id, username FROM users WHERE username = ? ORDER BY id ASC");
+        $query->execute([$username]);
+        $accounts = $query->fetchAll(PDO::FETCH_ASSOC);
+        array_shift($accounts);
+
+        foreach ($accounts as $account) {
+            $base = preg_replace('/[^A-Za-z0-9_.-]/', '_', $account['username']);
+            $suffix = '_legacy_' . (int)$account['id'];
+            $candidate = substr($base, 0, 50 - strlen($suffix)) . $suffix;
+            $counter = 1;
+
+            while (true) {
+                $check = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ? AND id <> ?");
+                $check->execute([$candidate, (int)$account['id']]);
+                if ((int)$check->fetchColumn() === 0) {
+                    break;
+                }
+                $counter++;
+                $suffix = '_legacy_' . (int)$account['id'] . '_' . $counter;
+                $candidate = substr($base, 0, 50 - strlen($suffix)) . $suffix;
+            }
+
+            $update = $pdo->prepare("UPDATE users SET username = ? WHERE id = ?");
+            $update->execute([$candidate, (int)$account['id']]);
+            stepOK("Đổi tên đăng nhập trùng thành {$candidate}; giữ nguyên tài khoản và mật khẩu");
+        }
+    }
+
+    $indexes = $pdo->query("SHOW INDEX FROM users")->fetchAll(PDO::FETCH_ASSOC);
+    $indexesByName = [];
+    foreach ($indexes as $index) {
+        $indexesByName[$index['Key_name']][] = $index;
+    }
+    foreach ($indexesByName as $indexRows) {
+        if (count($indexRows) === 1
+            && $indexRows[0]['Column_name'] === 'username'
+            && (int)$indexRows[0]['Non_unique'] === 0) {
+            stepSkip("Tên đăng nhập đã có ràng buộc duy nhất");
+            return;
+        }
+    }
+
+    $pdo->exec("ALTER TABLE users ADD UNIQUE KEY uq_users_username (username)");
+    stepOK("Thêm ràng buộc duy nhất cho tên đăng nhập");
+}
+function ensurePendingUserStatus($pdo) {
+    $statusColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'status'")->fetch(PDO::FETCH_ASSOC);
+    if (!$statusColumn) {
+        throw new RuntimeException("Không thể duyệt tài khoản vì bảng users thiếu cột status.");
+    }
+    if (strpos($statusColumn['Type'], "'pending'") === false) {
+        $pdo->exec(
+            "ALTER TABLE users MODIFY status ENUM('active','inactive','pending') NOT NULL DEFAULT 'active'"
+        );
+        stepOK("Giữ tương thích trạng thái tài khoản pending cũ");
+    } else {
+        stepSkip("Trạng thái users cũ đã được giữ tương thích");
+    }
+
+    $activated = $pdo->exec(
+        "UPDATE users SET status = 'active' WHERE role = 'USER' AND status = 'pending'"
+    );
+    if ($activated > 0) {
+        stepOK("Kích hoạt {$activated} tài khoản USER cũ đang chờ duyệt");
+    }
+}
+function ensureUserAdminRoles($pdo) {
+    $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+    if (!$roleColumn) {
+        throw new RuntimeException("Không thể phân quyền vì bảng users thiếu cột role.");
+    }
+    if (strpos($roleColumn['Type'], "'ADMIN'") === false) {
+        throw new RuntimeException("users.role thiếu quyền ADMIN; cần kiểm tra cấu trúc thủ công.");
+    }
+    if (strpos($roleColumn['Type'], "'STAFF'") === false
+        && strpos($roleColumn['Type'], "'USER'") !== false) {
+        stepSkip("Vai trò ADMIN/USER đã sẵn sàng");
+        return;
+    }
+
+    $pdo->exec(
+        "ALTER TABLE users MODIFY role ENUM('ADMIN','STAFF','USER') NOT NULL DEFAULT 'USER'"
+    );
+    $converted = $pdo->exec("UPDATE users SET role = 'USER' WHERE role = 'STAFF'");
+    $pdo->exec(
+        "ALTER TABLE users MODIFY role ENUM('ADMIN','USER') NOT NULL DEFAULT 'USER'"
+    );
+    $activated = $pdo->exec(
+        "UPDATE users SET status = 'active' WHERE role = 'USER' AND status = 'pending'"
+    );
+    stepOK("Chuẩn hóa quyền còn ADMIN/USER; chuyển {$converted} tài khoản STAFF cũ sang USER");
+    if ($activated > 0) {
+        stepOK("Kích hoạt {$activated} tài khoản USER cũ đang chờ duyệt");
+    }
+}
+
+function ensureMonthlyBookingSchema($pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS booking_series (
+        id             INT PRIMARY KEY AUTO_INCREMENT,
+        customer_id    INT NOT NULL,
+        pitch_id       INT NOT NULL,
+        booking_month  DATE NOT NULL,
+        start_time     TIME NOT NULL,
+        end_time       TIME NOT NULL,
+        total_price    DECIMAL(12,0) NOT NULL DEFAULT 0,
+        deposit        DECIMAL(12,0) NOT NULL DEFAULT 0,
+        paid_amount    DECIMAL(12,0) NOT NULL DEFAULT 0,
+        payment_method ENUM('vnpay') NOT NULL DEFAULT 'vnpay',
+        payment_status ENUM('unpaid','deposit','partial','paid') NOT NULL DEFAULT 'unpaid',
+        created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at     DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_booking_series_customer (customer_id),
+        INDEX idx_booking_series_pitch_month (pitch_id, booking_month),
+        CONSTRAINT fk_booking_series_customer FOREIGN KEY (customer_id)
+            REFERENCES customers(id) ON DELETE RESTRICT,
+        CONSTRAINT fk_booking_series_pitch FOREIGN KEY (pitch_id)
+            REFERENCES pitches(id) ON DELETE CASCADE,
+        CONSTRAINT chk_booking_series_time CHECK (start_time < end_time),
+        CONSTRAINT chk_booking_series_total CHECK (total_price >= 0),
+        CONSTRAINT chk_booking_series_deposit CHECK (deposit >= 0),
+        CONSTRAINT chk_booking_series_paid CHECK (paid_amount >= 0)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    if (!columnExists($pdo, 'bookings', 'series_id')) {
+        $pdo->exec("ALTER TABLE bookings ADD COLUMN series_id INT NULL AFTER pitch_id");
+        stepOK("Thêm liên kết lịch đặt tháng vào bookings");
+    } else {
+        stepSkip("bookings.series_id đã tồn tại");
+    }
+
+    $indexes = $pdo->query("SHOW INDEX FROM bookings")->fetchAll(PDO::FETCH_ASSOC);
+    $hasSeriesIndex = false;
+    foreach ($indexes as $index) {
+        if ($index['Key_name'] === 'idx_booking_series') {
+            $hasSeriesIndex = true;
+            break;
+        }
+    }
+    if (!$hasSeriesIndex) {
+        $pdo->exec("ALTER TABLE bookings ADD INDEX idx_booking_series (series_id)");
+    }
+
+    $foreignKey = $pdo->prepare(
+        "SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+         WHERE CONSTRAINT_SCHEMA = DATABASE()
+           AND TABLE_NAME = 'bookings'
+           AND CONSTRAINT_NAME = 'fk_bookings_series'
+           AND CONSTRAINT_TYPE = 'FOREIGN KEY'"
+    );
+    $foreignKey->execute();
+    if ((int)$foreignKey->fetchColumn() === 0) {
+        $pdo->exec("ALTER TABLE bookings
+            ADD CONSTRAINT fk_bookings_series FOREIGN KEY (series_id)
+            REFERENCES booking_series(id) ON DELETE SET NULL");
+    }
+    stepOK("Đảm bảo schema đặt sân theo tháng đã sẵn sàng");
+}
 
 try {
     $dsn = "mysql:host={$host};port={$port};charset=utf8mb4";
@@ -90,7 +387,7 @@ try {
         stepSkip("Bảng time_slots đã tồn tại (" . rowCount($pdo,'time_slots') . " dòng)");
     }
 
-    stepInfo("\n===== BUỚC 2: Tạo bảng USERS (phân quyền ADMIN/STAFF) =====");
+    stepInfo("\n===== BUỚC 2: Tạo bảng USERS (phân quyền ADMIN/USER) =====");
     if (!tableExists($pdo, 'users')) {
         $pdo->exec("CREATE TABLE users (
             id              INT PRIMARY KEY AUTO_INCREMENT,
@@ -98,8 +395,8 @@ try {
             password_hash   VARCHAR(255) NOT NULL,
             full_name       VARCHAR(100) NOT NULL,
             phone           VARCHAR(20)  NULL,
-            role            ENUM('ADMIN','STAFF') NOT NULL DEFAULT 'STAFF',
-            status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+            role            ENUM('ADMIN','USER') NOT NULL DEFAULT 'USER',
+            status          ENUM('active','inactive','pending') NOT NULL DEFAULT 'active',
             created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at      DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -123,6 +420,46 @@ try {
         stepOK("Tạo bảng customers");
     } else {
         stepSkip("Bảng customers đã tồn tại (" . rowCount($pdo,'customers') . " dòng)");
+    }
+
+    $customerIdColumn = $pdo->query("SHOW COLUMNS FROM customers LIKE 'id'")->fetch();
+    if (!$customerIdColumn) {
+        throw new RuntimeException("Không tìm thấy cột customers.id");
+    }
+    if (stripos($customerIdColumn['Extra'], 'auto_increment') === false) {
+        $customerIdType = strtolower($customerIdColumn['Type']);
+        if (!preg_match('/^int(?:\(\d+\))?(?: unsigned)?$/', $customerIdType)) {
+            throw new RuntimeException(
+                "customers.id có kiểu không hỗ trợ tự sửa ({$customerIdColumn['Type']}); cần kiểm tra cấu trúc thủ công."
+            );
+        }
+
+        $primaryKeyClause = '';
+        if ($customerIdColumn['Key'] === '') {
+            $invalidIds = (int)$pdo->query(
+                "SELECT COUNT(*) FROM customers WHERE id IS NULL"
+            )->fetchColumn();
+            $duplicateIds = (int)$pdo->query(
+                "SELECT COUNT(*) FROM (SELECT id FROM customers GROUP BY id HAVING COUNT(*) > 1) duplicate_ids"
+            )->fetchColumn();
+            if ($invalidIds > 0 || $duplicateIds > 0) {
+                throw new RuntimeException(
+                    "Không thể tự sửa customers.id vì có ID rỗng hoặc trùng; dữ liệu được giữ nguyên."
+                );
+            }
+            $primaryKeyClause = ', ADD PRIMARY KEY (id)';
+        } elseif ($customerIdColumn['Key'] !== 'PRI' && $customerIdColumn['Key'] !== 'UNI') {
+            throw new RuntimeException(
+                "customers.id đang có index không tương thích ({$customerIdColumn['Key']}); cần kiểm tra cấu trúc thủ công."
+            );
+        }
+
+        $pdo->exec(
+            "ALTER TABLE customers MODIFY id {$customerIdType} NOT NULL AUTO_INCREMENT{$primaryKeyClause}"
+        );
+        stepOK("Sửa customers.id thành khóa tự tăng, giữ nguyên dữ liệu khách hàng");
+    } else {
+        stepSkip("customers.id đã tự tăng");
     }
 
     stepInfo("\n===== BUỚC 3B: Tạo bảng PITCH_LOCKS (khóa khung giờ sân) =====");
@@ -234,6 +571,16 @@ try {
         stepSkip("Phương thức thanh toán VNPay đã sẵn sàng");
     }
 
+    stepInfo("\n===== BUỚC 6B: Sửa ID tự tăng cho các bảng hiện có =====");
+    stepInfo("Chuẩn bị schema đặt sân theo tháng");
+    ensureMonthlyBookingSchema($pdo);
+    foreach (['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'bookings', 'booking_series', 'bookings_old_v1', 'services', 'booking_services'] as $table) {
+        ensureAutoIncrementId($pdo, $table);
+    }
+    ensurePendingUserStatus($pdo);
+    ensureUniqueUsernames($pdo);
+    ensureUserAdminRoles($pdo);
+
     stepInfo("\n===== BUỚC 7: Migrate dữ liệu từ bookings_old_v1 -> bookings V2 =====");
     if (tableExists($pdo, 'bookings_old_v1') && tableExists($pdo, 'bookings')) {
         $newCount = rowCount($pdo, 'bookings');
@@ -300,10 +647,10 @@ try {
     echo "✅  NÂNG CẤP CSDL V2 THÀNH CÔNG!\n";
     echo "========================================\n";
     echo "Tiếp theo, chạy: php database/seed_users.php\n";
-    echo "   Để tạo tài khoản ADMIN (admin/admin123) và STAFF (staff/staff123)\n\n";
+    echo "   Tài khoản USER mới đăng ký được kích hoạt ngay; ADMIN vẫn có thể khóa tài khoản.\n\n";
 
     // In bảng tổng kết
-    $finalTables = ['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'bookings'];
+    $finalTables = ['users', 'customers', 'pitches', 'time_slots', 'pitch_locks', 'booking_series', 'bookings'];
     echo "TỔNG KẾT CÁC BẢNG:\n";
     foreach ($finalTables as $t) {
         if (tableExists($pdo, $t)) {

@@ -5,6 +5,11 @@
 <?php
 $id = (int)$booking['id'];
 $stt = $booking['status'];
+$bookingServicesTotal = array_sum(array_map(
+    static fn ($item) => (float)$item['subtotal'],
+    $bookingServices ?? []
+));
+$pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -32,6 +37,11 @@ $stt = $booking['status'];
 
 <?php if ($success): ?><div class="alert alert-success" role="alert"><?php echo $success; ?></div><?php endif; ?>
 <?php if ($error): ?><div class="alert alert-danger" role="alert"><?php echo $error; ?></div><?php endif; ?>
+<?php if (!empty($booking['series_id'])): ?>
+    <div class="alert alert-info" role="alert">
+        Lịch đặt theo tháng #<?php echo (int)$booking['series_id']; ?> — khung giờ này được giữ mỗi ngày trong tháng.
+    </div>
+<?php endif; ?>
 
 <!-- HÀNH ĐỘNG NHANH -->
 <div class="card border-0 shadow-sm mb-4">
@@ -123,6 +133,41 @@ $stt = $booking['status'];
             </div>
         </div>
 
+        <?php if (!empty($bookingServices)): ?>
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-transparent">
+                    <h5 class="fw-bold mb-0">🧾 Dịch vụ đã chọn</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Dịch vụ</th>
+                                    <th class="text-end">Đơn giá</th>
+                                    <th class="text-center">Số lượng</th>
+                                    <th class="text-end">Thành tiền</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($bookingServices as $item): ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo e($item['service_name'] ?? 'Dịch vụ'); ?></div>
+                                            <small class="text-muted"><?php echo e($item['service_category'] ?? ''); ?></small>
+                                        </td>
+                                        <td class="text-end"><?php echo formatMoney($item['unit_price']); ?> / <?php echo e($item['service_unit'] ?? ''); ?></td>
+                                        <td class="text-center"><?php echo (int)$item['quantity']; ?></td>
+                                        <td class="text-end fw-semibold"><?php echo formatMoney($item['subtotal']); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+
         <?php if (!empty($history)): ?>
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-transparent"><h5 class="fw-bold mb-0">📜 Lịch sử đặt sân của KH này</h5></div>
@@ -160,7 +205,17 @@ $stt = $booking['status'];
             <div class="card-body">
                 <div class="d-flex justify-content-between py-2 border-bottom">
                     <span class="text-muted">Giá sân (<?php echo $hours; ?> giờ × <?php echo formatMoney($booking['price_per_hour'] ?? 0); ?>/giờ)</span>
-                    <span class="fw-semibold"><?php echo formatMoney($booking['total_price']); ?></span>
+                    <span class="fw-semibold"><?php echo formatMoney($pitchTotal); ?></span>
+                </div>
+                <?php if ($bookingServicesTotal > 0): ?>
+                    <div class="d-flex justify-content-between py-2 border-bottom">
+                        <span class="text-muted">Dịch vụ đi kèm</span>
+                        <span class="fw-semibold"><?php echo formatMoney($bookingServicesTotal); ?></span>
+                    </div>
+                <?php endif; ?>
+                <div class="d-flex justify-content-between py-2 border-bottom">
+                    <span class="fw-semibold">Tổng tiền</span>
+                    <span class="fw-bold text-success"><?php echo formatMoney($booking['total_price']); ?></span>
                 </div>
                 <div class="d-flex justify-content-between py-2 border-bottom">
                     <span class="text-muted">Tiền đặt cọc</span>
