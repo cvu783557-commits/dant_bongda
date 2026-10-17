@@ -5,7 +5,10 @@ namespace App\Controllers;
 use App\Controller;
 use App\Models\Pitch;
 use App\Models\Booking;
+use App\Models\BookingService;
 use App\Models\Customer;
+use App\Models\PitchLock;
+use App\Models\Service;
 use App\Models\User;
 use App\Services\Vnpay;
 use Rakit\Validation\Validator;
@@ -14,6 +17,9 @@ class PitchController extends Controller
 {
     protected $pitch;
     protected $booking;
+    protected $bookingService;
+    protected $pitchLock;
+    protected $service;
     protected $customer;
     protected $user;
     protected $validator;
@@ -22,6 +28,9 @@ class PitchController extends Controller
     {
         $this->pitch     = new Pitch();
         $this->booking   = new Booking();
+        $this->bookingService = new BookingService();
+        $this->pitchLock = new PitchLock();
+        $this->service   = new Service();
         $this->customer  = new Customer();
         $this->user      = new User();
         $this->validator = new Validator();
@@ -29,30 +38,84 @@ class PitchController extends Controller
 
     public function index()
     {
-        $pitches = $this->pitch->getAvailable();
+        $date = $_GET['date'] ?? date('Y-m-d');
+        $dateParts = is_string($date) ? explode('-', $date) : [];
+        $dateValid = count($dateParts) === 3
+            && ctype_digit(implode('', $dateParts))
+            && checkdate((int)$dateParts[1], (int)$dateParts[2], (int)$dateParts[0])
+            && $date === sprintf('%04d-%02d-%02d', (int)$dateParts[0], (int)$dateParts[1], (int)$dateParts[2]);
+        $filterError = null;
+        if (!$dateValid || $date < date('Y-m-d')) {
+            $date = date('Y-m-d');
+            $filterError = 'Ngày xem không hợp lệ hoặc đã qua. Đang hiển thị lịch từ hôm nay.';
+        }
+
+        $nextHour = (int)date('G') + (date('i') === '00' ? 0 : 1);
+        $defaultTime = $nextHour <= 22 ? sprintf('%02d:00', max(6, $nextHour)) : '18:00';
+        if ($nextHour > 22 && $date === date('Y-m-d') && !isset($_GET['date'])) {
+            $date = date('Y-m-d', strtotime('+1 day'));
+        }
+        $time = $_GET['time'] ?? $defaultTime;
+        if (!is_string($time) || !preg_match('/^(0[6-9]|1[0-9]|2[0-2]):00$/', $time)) {
+            $time = '18:00';
+            $filterError = 'Vui lòng chọn giờ bắt đầu từ 06:00 đến 22:00.';
+        }
+        if ($date === date('Y-m-d') && $time . ':00' <= date('H:i:s')) {
+            $nextAvailableHour = (int)date('G') + 1;
+            if ($nextAvailableHour <= 22) {
+                $time = sprintf('%02d:00', max(6, $nextAvailableHour));
+            } else {
+                $date = date('Y-m-d', strtotime('+1 day'));
+                $time = '18:00';
+            }
+            $filterError = 'Khung giờ đã qua. Đang hiển thị khung giờ sắp tới.';
+        }
+
+        $type = $_GET['type'] ?? '';
+        if (!is_string($type) || !in_array($type, ['', '5', '7'], true)) {
+            $type = '';
+        }
+
+        $availableOnly = ($_GET['availability'] ?? '') === 'available';
+        $startTime = $time . ':00';
+        $endTime = date('H:i:s', strtotime($startTime . ' +1 hour'));
+        $pitches = $this->pitch->getPublicListings($date, $startTime, $endTime, $type, $availableOnly);
+        foreach ($pitches as &$pitch) {
+            $pitch['code'] = 'S' . str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT);
+        }
+        unset($pitch);
 
         $success = getFlash('success');
-        $error   = getFlash('error');
+        $error   = getFlash('error') ?: $filterError;
 
         return view('home', [
             'pitches' => $pitches,
+            'services' => $this->service->getActive(),
             'success' => $success,
             'error'   => $error,
+            'filters' => [
+                'date' => $date,
+                'time' => $time,
+                'type' => (string)$type,
+                'availability' => $availableOnly ? 'available' : '',
+            ],
+            'timeOptions' => range(6, 22),
             'currentUser' => $this->user->getActiveUser(),
         ]);
     }
 
-    private function publicTimeSlots()
+    private function publicTimeSlots($openingTime = '06:00:00', $closingTime = '23:00:00')
     {
         $slots = [];
-        for ($h = 6; $h <= 22; $h++) {
-            $hh = str_pad((string)$h, 2, '0', STR_PAD_LEFT);
-            $next = str_pad((string)($h + 1), 2, '0', STR_PAD_LEFT);
+        $start = ((int)substr($openingTime, 0, 2) * 3600) + ((int)substr($openingTime, 3, 2) * 60);
+        $close = ((int)substr($closingTime, 0, 2) * 3600) + ((int)substr($closingTime, 3, 2) * 60);
+        for ($slotStart = $start; $slotStart + 3600 <= $close; $slotStart += 3600) {
+            $slotEnd = $slotStart + 3600;
             $slots[] = [
-                'label'    => "{$hh}:00 - {$next}:00",
-                'start'    => "{$hh}:00",
-                'end'      => "{$next}:00",
-                'start_sec' => $h * 3600,
+                'label'    => gmdate('H:i', $slotStart) . ' - ' . gmdate('H:i', $slotEnd),
+                'start'    => gmdate('H:i', $slotStart),
+                'end'      => gmdate('H:i', $slotEnd),
+                'start_sec' => $slotStart,
             ];
         }
         return $slots;
@@ -70,10 +133,14 @@ class PitchController extends Controller
         $today = date('Y-m-d');
         if ($date < $today) $date = $today;
 
-        $hourSlots = $this->publicTimeSlots();
+        $openingTime = $pitch['opening_time'] ?? '06:00:00';
+        $closingTime = $pitch['closing_time'] ?? '23:00:00';
+        $hourSlots = $this->publicTimeSlots($openingTime, $closingTime);
         $bookings  = $this->booking->getByPitchAndDate($id, $date, false);
+        $locks = $this->pitchLock->getByPitchAndDate($id, $date);
 
         $takenSlots = [];
+        $lockedSlots = [];
         foreach ($bookings as $bk) {
             $sH = (int)substr($bk['start_time'], 0, 2);
             $sM = (int)substr($bk['start_time'], 3, 2);
@@ -89,18 +156,33 @@ class PitchController extends Controller
                 }
             }
         }
+        foreach ($locks as $lock) {
+            $sStart = ((int)substr($lock['start_time'], 0, 2) * 3600)
+                + ((int)substr($lock['start_time'], 3, 2) * 60);
+            $sEnd = ((int)substr($lock['end_time'], 0, 2) * 3600)
+                + ((int)substr($lock['end_time'], 3, 2) * 60);
+            foreach ($hourSlots as $idx => $hs) {
+                if ($hs['start_sec'] < $sEnd && $hs['start_sec'] + 3600 > $sStart) {
+                    $lockedSlots[$idx] = $lock;
+                }
+            }
+        }
 
         $success = getFlash('success');
         $error   = getFlash('error');
 
         return view('pitches.show', [
             'pitch'         => $pitch,
+            'services'      => $this->service->getAvailableForBooking(),
             'hourSlots'     => $hourSlots,
             'date'          => $date,
             'takenSlots'    => $takenSlots,
+            'lockedSlots'   => $lockedSlots,
             'bookingsToday' => $bookings,
-            'minStart'      => '06:00',
-            'maxEnd'        => '23:00',
+            'minStart'      => formatTime($openingTime),
+            'maxStart'      => date('H:i', strtotime($closingTime . ' -1 minute')),
+            'minEnd'        => date('H:i', strtotime($openingTime . ' +1 minute')),
+            'maxEnd'        => formatTime($closingTime),
             'bookingMonth'  => date('Y-m'),
             'success'       => $success,
             'error'         => $error,
@@ -143,8 +225,8 @@ class PitchController extends Controller
         $errors = $this->validate($this->validator, $data, $rules);
 
         $pitch = $this->pitch->find((int)($data['pitch_id'] ?? 0));
-        if (!$pitch) {
-            $errors['pitch_id'] = 'Sân không tồn tại';
+        if (!$pitch || $pitch['status'] !== 'active') {
+            $errors['pitch_id'] = 'Sân không tồn tại hoặc hiện không nhận đặt sân';
         }
 
         $bookingDate = $data['booking_date'] ?? '';
@@ -192,8 +274,13 @@ class PitchController extends Controller
             if ($startTime >= $endTime) {
                 $errors['end_time'] = 'Giờ kết thúc phải lớn hơn giờ bắt đầu';
             } else {
-                if (!$this->booking->isWithinOperatingHours($startTime, $endTime)) {
-                    $errors['start_time'] = 'Giờ đặt nằm ngoài khung hoạt động (06:00 - 23:00)';
+                $pitchOpening = $pitch['opening_time'] ?? Booking::MIN_OPERATING_HOUR;
+                $pitchClosing = $pitch['closing_time'] ?? Booking::MAX_OPERATING_HOUR;
+                if (!$this->booking->isWithinOperatingHours($startTime, $endTime)
+                    || $startTime < $pitchOpening
+                    || $endTime > $pitchClosing) {
+                    $errors['start_time'] = 'Giờ đặt nằm ngoài khung hoạt động của sân ('
+                        . substr($pitchOpening, 0, 5) . ' - ' . substr($pitchClosing, 0, 5) . ')';
                 }
             }
         }
@@ -203,6 +290,57 @@ class PitchController extends Controller
             $todayStart = strtotime($bookingDate . ' ' . $startTime);
             if ($todayStart < $nowSec) {
                 $errors['start_time'] = 'Không thể đặt khung giờ đã qua trong ngày hôm nay';
+            }
+        }
+
+        $serviceItems = [];
+        $selectedServiceIds = $data['selected_services'] ?? [];
+        $serviceQuantities = $data['service_quantities'] ?? [];
+        if (!is_array($selectedServiceIds) || !is_array($serviceQuantities)) {
+            $errors['services'] = 'Danh sách dịch vụ không hợp lệ.';
+        } else {
+            $availableServices = [];
+            foreach ($this->service->getAvailableForBooking() as $availableService) {
+                $availableServices[(int)$availableService['id']] = $availableService;
+            }
+
+            $seenServiceIds = [];
+            foreach ($selectedServiceIds as $selectedServiceId) {
+                if (!is_scalar($selectedServiceId) || !ctype_digit((string)$selectedServiceId)) {
+                    $errors['services'] = 'Dịch vụ được chọn không hợp lệ.';
+                    break;
+                }
+                $serviceId = (int)$selectedServiceId;
+                if (isset($seenServiceIds[$serviceId])) {
+                    $errors['services'] = 'Dịch vụ bị chọn lặp lại.';
+                    break;
+                }
+                $seenServiceIds[$serviceId] = true;
+
+                if (!isset($availableServices[$serviceId])) {
+                    $errors['services'] = 'Một dịch vụ vừa hết hàng hoặc ngừng kinh doanh. Vui lòng tải lại trang.';
+                    break;
+                }
+
+                $quantityInput = $serviceQuantities[$serviceId] ?? null;
+                if (!is_scalar($quantityInput) || !preg_match('/^[1-9]\d*$/', (string)$quantityInput)) {
+                    $errors['services'] = 'Số lượng dịch vụ được chọn không hợp lệ.';
+                    break;
+                }
+
+                $quantity = (int)$quantityInput;
+                $occurrenceCount = $bookingMode === 'monthly' ? count($occurrenceDates) : 1;
+                if ($quantity * $occurrenceCount > (int)$availableServices[$serviceId]['stock']) {
+                    $errors['services'] = 'Dịch vụ "' . $availableServices[$serviceId]['name']
+                        . '" không đủ số lượng cho ' . $occurrenceCount . ' buổi.';
+                    break;
+                }
+
+                $serviceItems[] = [
+                    'service_id' => $serviceId,
+                    'quantity' => $quantity,
+                    'unit_price' => (float)$availableServices[$serviceId]['price'],
+                ];
             }
         }
 
@@ -220,7 +358,12 @@ class PitchController extends Controller
         );
 
         $hours = Booking::calcHoursDiff($startTime, $endTime);
-        $sessionTotal = max(0, round($hours * (float)$pitch['price_per_hour'], 0));
+        $serviceTotalPerSession = array_sum(array_map(
+            static fn ($item) => $item['quantity'] * $item['unit_price'],
+            $serviceItems
+        ));
+        $sessionTotal = max(0, round($hours * (float)$pitch['price_per_hour'], 0))
+            + $serviceTotalPerSession;
         $sessionDeposit = max(1, (int)ceil($sessionTotal * 0.30));
         $total = $bookingMode === 'monthly' ? $sessionTotal * count($occurrenceDates) : $sessionTotal;
         $deposit = $bookingMode === 'monthly'
@@ -252,6 +395,7 @@ class PitchController extends Controller
                 'total_price' => $total,
                 'deposit' => $deposit,
                 'note' => isset($data['notes']) ? trim($data['notes']) : '',
+                'services' => $serviceItems,
             ], $occurrences);
         } else {
             $result = $this->booking->create([
@@ -268,6 +412,7 @@ class PitchController extends Controller
                 'status'         => Booking::STATUS_PENDING,
                 'note'           => isset($data['notes']) ? trim($data['notes']) : '',
                 'created_by'     => null,
+                'services'       => $serviceItems,
             ]);
         }
 
@@ -450,6 +595,7 @@ class PitchController extends Controller
 
         return view('bookings.success', [
             'booking' => $booking,
+            'bookingServices' => $this->bookingService->allByBooking((int)$booking['id']),
             'series' => $series,
             'success' => $success,
             'error'   => $error,

@@ -242,6 +242,63 @@ class Booking extends Model
             && ($endTime   <= self::MAX_OPERATING_HOUR);
     }
 
+    private function attachServicesToBookings(array $bookingIds, array $serviceItems)
+    {
+        if (!$serviceItems) {
+            return;
+        }
+
+        usort($serviceItems, static fn ($a, $b) => (int)$a['service_id'] <=> (int)$b['service_id']);
+        foreach ($serviceItems as $item) {
+            $serviceId = (int)$item['service_id'];
+            $quantity = (int)$item['quantity'];
+            $service = $this->connection->executeQuery(
+                "SELECT id, name, price, stock FROM services
+                 WHERE id = ? AND status = 'active' FOR UPDATE",
+                [$serviceId]
+            )->fetchAssociative();
+
+            if (!$service) {
+                throw new \RuntimeException('Một dịch vụ đã ngừng kinh doanh. Vui lòng tải lại trang và chọn lại.');
+            }
+            if ((float)$service['price'] !== (float)$item['unit_price']) {
+                throw new \RuntimeException('Giá dịch vụ "' . $service['name'] . '" vừa thay đổi. Vui lòng tải lại trang.');
+            }
+
+            $requiredStock = $quantity * count($bookingIds);
+            if ((int)$service['stock'] < $requiredStock) {
+                throw new \RuntimeException(
+                    'Dịch vụ "' . $service['name'] . '" không đủ tồn kho cho '
+                    . count($bookingIds) . ' buổi đã chọn.'
+                );
+            }
+
+            $updated = $this->connection->executeStatement(
+                "UPDATE services SET stock = stock - ?, updated_at = NOW()
+                 WHERE id = ? AND status = 'active' AND stock >= ?",
+                [$requiredStock, $serviceId, $requiredStock]
+            );
+            if ($updated !== 1) {
+                throw new \RuntimeException('Không thể giữ tồn kho dịch vụ "' . $service['name'] . '". Vui lòng thử lại.');
+            }
+
+            foreach ($bookingIds as $bookingId) {
+                $this->connection->executeStatement(
+                    "INSERT INTO booking_services
+                        (booking_id, service_id, quantity, unit_price, subtotal, created_at)
+                     VALUES (?, ?, ?, ?, ?, NOW())",
+                    [
+                        (int)$bookingId,
+                        $serviceId,
+                        $quantity,
+                        (float)$service['price'],
+                        $quantity * (float)$service['price'],
+                    ]
+                );
+            }
+        }
+    }
+
     /**
      * Kiểm tra trùng với khóa khung giờ
      */
@@ -316,6 +373,7 @@ class Booking extends Model
             ]);
 
             $id = (int)$this->connection->lastInsertId();
+            $this->attachServicesToBookings([$id], $data['services'] ?? []);
 
             $this->connection->commit();
 
@@ -324,7 +382,12 @@ class Booking extends Model
             if ($this->connection->isTransactionActive()) {
                 $this->connection->rollBack();
             }
-            return ['success' => false, 'error' => 'Lỗi hệ thống: ' . $e->getMessage()];
+            return [
+                'success' => false,
+                'error' => $e instanceof \RuntimeException
+                    ? $e->getMessage()
+                    : 'Lỗi hệ thống khi tạo lịch đặt. Vui lòng thử lại.',
+            ];
         }
     }
 
@@ -420,6 +483,8 @@ class Booking extends Model
                 $bookingIds[] = (int)$this->connection->lastInsertId();
             }
 
+            $this->attachServicesToBookings($bookingIds, $seriesData['services'] ?? []);
+
             $this->connection->commit();
             return [
                 'success' => true,
@@ -432,7 +497,12 @@ class Booking extends Model
                 $this->connection->rollBack();
             }
             error_log('Monthly booking creation failed: ' . $e->getMessage());
-            return ['success' => false, 'error' => 'Không thể tạo lịch đặt tháng. Vui lòng thử lại.'];
+            return [
+                'success' => false,
+                'error' => $e instanceof \RuntimeException
+                    ? $e->getMessage()
+                    : 'Không thể tạo lịch đặt tháng. Vui lòng thử lại.',
+            ];
         }
     }
 
@@ -608,22 +678,47 @@ class Booking extends Model
 
     public function cancel($id, $reason)
     {
-        $booking = $this->find($id);
-        if (!$booking) return ['success' => false, 'error' => 'Lịch đặt không tồn tại'];
+        $this->connection->beginTransaction();
+        try {
+            $booking = $this->connection->executeQuery(
+                "SELECT id, status FROM {$this->table} WHERE id = ? FOR UPDATE",
+                [(int)$id]
+            )->fetchAssociative();
+            if (!$booking) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Lịch đặt không tồn tại'];
+            }
 
-        $sql = "UPDATE {$this->table} SET
-                    status = ?,
-                    cancellation_reason = ?,
-                    updated_at = NOW()
-                WHERE id = ?";
+            if ($booking['status'] !== self::STATUS_CANCELLED) {
+                $services = $this->connection->executeQuery(
+                    "SELECT service_id, SUM(quantity) AS quantity
+                     FROM booking_services WHERE booking_id = ?
+                     GROUP BY service_id ORDER BY service_id ASC",
+                    [(int)$id]
+                )->fetchAllAssociative();
+                foreach ($services as $service) {
+                    $this->connection->executeStatement(
+                        "UPDATE services SET stock = stock + ?, updated_at = NOW() WHERE id = ?",
+                        [(int)$service['quantity'], (int)$service['service_id']]
+                    );
+                }
 
-        $this->connection->executeStatement($sql, [
-            self::STATUS_CANCELLED,
-            trim($reason) ?: null,
-            (int)$id,
-        ]);
+                $this->connection->executeStatement(
+                    "UPDATE {$this->table} SET status = ?, cancellation_reason = ?, updated_at = NOW()
+                     WHERE id = ?",
+                    [self::STATUS_CANCELLED, trim($reason) ?: null, (int)$id]
+                );
+            }
 
-        return ['success' => true];
+            $this->connection->commit();
+            return ['success' => true];
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('Booking cancellation failed for #' . (int)$id . ': ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Không thể hủy đơn đặt sân.'];
+        }
     }
 
     public function addPayment($id, $amount, $method = 'cash')
@@ -777,8 +872,45 @@ class Booking extends Model
 
     public function delete($id)
     {
-        $sql = "DELETE FROM {$this->table} WHERE id = ?";
-        return $this->connection->executeStatement($sql, [(int)$id]);
+        $this->connection->beginTransaction();
+        try {
+            $booking = $this->connection->executeQuery(
+                "SELECT id, status FROM {$this->table} WHERE id = ? FOR UPDATE",
+                [(int)$id]
+            )->fetchAssociative();
+            if (!$booking) {
+                $this->connection->commit();
+                return 0;
+            }
+
+            if ($booking['status'] !== self::STATUS_CANCELLED) {
+                $services = $this->connection->executeQuery(
+                    "SELECT service_id, SUM(quantity) AS quantity
+                     FROM booking_services WHERE booking_id = ?
+                     GROUP BY service_id ORDER BY service_id ASC",
+                    [(int)$id]
+                )->fetchAllAssociative();
+                foreach ($services as $service) {
+                    $this->connection->executeStatement(
+                        "UPDATE services SET stock = stock + ?, updated_at = NOW() WHERE id = ?",
+                        [(int)$service['quantity'], (int)$service['service_id']]
+                    );
+                }
+            }
+
+            $deleted = $this->connection->executeStatement(
+                "DELETE FROM {$this->table} WHERE id = ?",
+                [(int)$id]
+            );
+            $this->connection->commit();
+            return $deleted;
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('Booking deletion failed for #' . (int)$id . ': ' . $e->getMessage());
+            throw $e;
+        }
     }
 
     /* ------------------------- THỐNG KÊ (DASHBOARD) ------------------------- */

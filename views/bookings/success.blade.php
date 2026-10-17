@@ -111,6 +111,20 @@
                         <div class="col-7"><?php echo htmlspecialchars($booking['customer_email']); ?></div>
                     </div>
                     <?php endif; ?>
+                    <?php if (!empty($bookingServices)): ?>
+                    <div class="row mb-2">
+                        <div class="col-5 text-muted">Dịch vụ:</div>
+                        <div class="col-7">
+                            <?php foreach ($bookingServices as $service): ?>
+                                <div>
+                                    <?php echo e($service['service_name']); ?>
+                                    × <?php echo (int)$service['quantity']; ?>
+                                    — <?php echo formatMoney($service['subtotal']); ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <div class="row border-top pt-3 mt-3">
                         <div class="col-5 fw-semibold">Tổng tiền:</div>
                         <div class="col-7 fw-bold text-success fs-5"><?php echo formatMoney($series['total_price'] ?? $booking['total_price']); ?></div>
