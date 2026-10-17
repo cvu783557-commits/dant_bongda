@@ -205,14 +205,29 @@ FROM (
 WHERE NOT EXISTS (SELECT 1 FROM services s WHERE s.name = samples.name);
 
 -- Add default pitches only when a pitch with the same name is absent.
+-- Keep existing default pitch records in sync without changing their IDs or bookings.
+UPDATE pitches SET name = CASE name
+    WHEN 'Sân A1 - Sân 5 người cỏ nhân tạo' THEN 'Sân A1 - Sân 5 người cỏ nhân tạo - Sân bóng Phòng không - Không quân'
+    WHEN 'Sân A2 - Sân 5 người cỏ tự nhiên' THEN 'Sân A2 - Sân 5 người cỏ tự nhiên - Sân bóng Cao đẳng Múa'
+    WHEN 'Sân B1 - Sân 7 người cao cấp' THEN 'Sân B1 - Sân 7 người cao cấp - Sân bóng Đại học Thủy Lợi'
+    WHEN 'Sân B2 - Sân 7 người cỏ nhân tạo' THEN 'Sân B2 - Sân 7 người cỏ nhân tạo - Sân bóng Học viện An Ninh'
+    ELSE name
+END
+WHERE name IN (
+    'Sân A1 - Sân 5 người cỏ nhân tạo',
+    'Sân A2 - Sân 5 người cỏ tự nhiên',
+    'Sân B1 - Sân 7 người cao cấp',
+    'Sân B2 - Sân 7 người cỏ nhân tạo'
+);
+
 INSERT INTO pitches (name, type, price_per_hour, description, status)
 SELECT samples.name, samples.type, samples.price_per_hour, samples.description, 'active'
 FROM (
-    SELECT 'Sân A1 - Sân 5 người cỏ nhân tạo' AS name, 5 AS type, 250000 AS price_per_hour,
+    SELECT 'Sân A1 - Sân 5 người cỏ nhân tạo - Sân bóng Phòng không - Không quân' AS name, 5 AS type, 250000 AS price_per_hour,
            'Sân 5 người cỏ nhân tạo.' AS description
-    UNION ALL SELECT 'Sân A2 - Sân 5 người cỏ tự nhiên', 5, 200000, 'Sân 5 người cỏ tự nhiên.'
-    UNION ALL SELECT 'Sân B1 - Sân 7 người cao cấp', 7, 450000, 'Sân 7 người tiêu chuẩn.'
-    UNION ALL SELECT 'Sân B2 - Sân 7 người cỏ nhân tạo', 7, 480000, 'Sân 7 người cỏ nhân tạo.'
+    UNION ALL SELECT 'Sân A2 - Sân 5 người cỏ tự nhiên - Sân bóng Cao đẳng Múa', 5, 200000, 'Sân 5 người cỏ tự nhiên.'
+    UNION ALL SELECT 'Sân B1 - Sân 7 người cao cấp - Sân bóng Đại học Thủy Lợi', 7, 450000, 'Sân 7 người tiêu chuẩn.'
+    UNION ALL SELECT 'Sân B2 - Sân 7 người cỏ nhân tạo - Sân bóng Học viện An Ninh', 7, 480000, 'Sân 7 người cỏ nhân tạo.'
 ) AS samples
 WHERE NOT EXISTS (SELECT 1 FROM pitches p WHERE p.name = samples.name);
 

@@ -13,8 +13,21 @@
         }
         .slot-badge {
             font-size: 0.8rem;
-            padding: 4px 6px;
+            padding: 6px;
             border-radius: 6px;
+            min-height: 54px;
+        }
+        .slot-select {
+            width: 100%;
+            border: 1px solid transparent;
+            transition: background-color .15s ease, border-color .15s ease;
+        }
+        .slot-select:not(:disabled) { cursor: pointer; }
+        .slot-select:disabled { cursor: not-allowed; opacity: .75; }
+        .slot-select.is-selected {
+            background-color: #198754;
+            border-color: #146c43;
+            color: #fff;
         }
     </style>
 </head>
@@ -67,10 +80,11 @@
             <h2 class="fw-bold mb-2"><?php echo htmlspecialchars($pitch['name']); ?></h2>
             <div class="d-flex flex-wrap gap-2 mb-3">
                 <span class="badge bg-success-subtle text-success border border-success-subtle">Sân <?php echo (int)$pitch['type']; ?> người</span>
+                <span class="text-success fw-bold fs-5">Giá thường: <?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</span>
+                <span class="text-danger fw-semibold">17:00–20:00: <?php echo formatMoney(600000); ?> / giờ</span>
                 <span class="badge <?php echo ($pitch['status'] ?? 'active') === 'active' ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'; ?>">
                     <?php echo (($pitch['status'] ?? 'active') === 'active') ? 'Đang hoạt động' : 'Tạm đóng'; ?>
                 </span>
-                <span class="text-success fw-bold fs-5"><?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</span>
             </div>
 
             <div class="d-flex flex-wrap gap-2 mb-4">
@@ -88,7 +102,6 @@
 
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
-<<<<<<< HEAD
                     <h6 class="fw-bold mb-3">Thông tin tổng quan sân</h6>
                     <div class="row g-3 small">
                         <div class="col-md-6">
@@ -125,7 +138,7 @@
                     ['from' => '06:00', 'to' => '08:00', 'weekday' => 250000, 'weekend' => 300000],
                     ['from' => '08:00', 'to' => '12:00', 'weekday' => 250000, 'weekend' => 300000],
                     ['from' => '12:00', 'to' => '17:00', 'weekday' => 275000, 'weekend' => 325000],
-                    ['from' => '17:00', 'to' => '20:00', 'weekday' => 300000, 'weekend' => 350000],
+                    ['from' => '17:00', 'to' => '20:00', 'weekday' => 600000, 'weekend' => 600000],
                     ['from' => '20:00', 'to' => '23:00', 'weekday' => 325000, 'weekend' => 375000],
                 ];
             ?>
@@ -172,8 +185,6 @@
 
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
-=======
->>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
                     <h6 class="fw-bold mb-3">Thông tin sân và tiện ích</h6>
                     <div class="small mb-2"><strong>Mã sân:</strong> S<?php echo str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT); ?></div>
                     <div class="small mb-2"><strong>Địa chỉ:</strong> <?php echo !empty($pitch['address']) ? e($pitch['address']) : 'Chưa cập nhật'; ?></div>
@@ -210,8 +221,6 @@
                 </div>
             </div>
 
-<<<<<<< HEAD
-=======
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
                     <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
@@ -220,28 +229,28 @@
                             <?php
                                 $locked = isset($lockedSlots[$idx]);
                                 $taken = isset($takenSlots[$idx]);
-                                $slotClass = $locked
-                                    ? 'bg-warning-subtle text-warning-emphasis'
-                                    : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis');
+                                $unavailable = $locked || $taken;
                             ?>
+                            <?php $slotRate = $s['start'] >= '17:00' && $s['start'] < '20:00' ? 600000 : (float)$pitch['price_per_hour']; ?>
                             <div class="col-4">
-                                <div class="slot-badge text-center <?php echo $slotClass; ?>">
-                                    <?php echo htmlspecialchars($s['label']); ?>
-                                    <?php if ($locked): ?>
-                                        • Bảo trì / tạm khóa
-                                    <?php elseif ($taken): ?>
-                                        • Đã đặt
-                                    <?php endif; ?>
-                                </div>
+                                <button type="button"
+                                        class="slot-badge slot-select text-center <?php echo $locked ? 'bg-warning-subtle text-warning-emphasis' : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'); ?>"
+                                        data-slot-index="<?php echo (int)$idx; ?>"
+                                        data-slot-start="<?php echo htmlspecialchars($s['start']); ?>"
+                                        data-slot-end="<?php echo htmlspecialchars($s['end']); ?>"
+                                        aria-pressed="false"
+                                        <?php echo $unavailable ? 'disabled' : ''; ?>>
+                                    <span class="d-block"><?php echo htmlspecialchars($s['label']); ?></span>
+                                    <small><?php echo $locked ? 'Bảo trì / tạm khóa' : ($taken ? 'Đã đặt' : formatMoney($slotRate) . ' / giờ'); ?></small>
+                                </button>
                             </div>
                         <?php endforeach; ?>
                     </div>
                     <div class="mt-3 small text-muted">
-                        Lưu ý: Các khung giờ "Đã đặt" không thể chọn. Bạn có thể đặt liên tục nhiều giờ bằng cách chọn Giờ bắt đầu & Giờ kết thúc.
+                        Bấm một khung giờ để chọn 1 tiếng; bấm khung liền kề để nối thêm giờ. Khung đã đặt không thể chọn.
                     </div>
                 </div>
-            </div>
->>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
+                </div>
         </div>
 
         <div class="col-lg-6">
@@ -394,8 +403,9 @@
                                 <input type="text" id="quantityDisplay" readonly value="0 giờ" class="form-control-plaintext fw-semibold">
                             </div>
                             <div class="col-6 text-end">
-                                <label class="form-label">Giá / giờ</label>
-                                <div class="form-control-plaintext fw-semibold text-success"><?php echo formatMoney($pitch['price_per_hour']); ?></div>
+                                <label class="form-label">Giá theo khung giờ</label>
+                                <div class="small fw-semibold text-success">Thường: <?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</div>
+                                <div class="small fw-semibold text-danger">17:00–20:00: <?php echo formatMoney(600000); ?> / giờ</div>
                             </div>
                         </div>
 
@@ -450,6 +460,9 @@
 <script>
 (function(){
     const PRICE_PER_HOUR = <?php echo (float)$pitch['price_per_hour']; ?>;
+    const EVENING_RATE = 600000;
+    const EVENING_START = 17 * 3600;
+    const EVENING_END = 20 * 3600;
     const PITCH_ID       = <?php echo (int)$pitch['id']; ?>;
     const BOOKING_DATE   = "<?php echo htmlspecialchars($date); ?>";
     const CHECK_URL      = "<?php echo route('admin/bookings/check-overlap'); ?>";
@@ -466,6 +479,7 @@
     const monthlyFields = document.getElementById('monthlyFields');
     const quantityLabel = document.getElementById('quantityLabel');
     const quantityEl = document.getElementById('quantityDisplay');
+    const slotButtons = [...document.querySelectorAll('.slot-select:not(:disabled)')];
     const serviceInputs = Array.from(document.querySelectorAll('.service-select'));
     const serviceQuantityInputs = Array.from(document.querySelectorAll('.service-quantity'));
 
@@ -476,6 +490,55 @@
         if(!t) return null;
         const [h,m] = t.split(':').map(Number);
         return h*3600 + m*60;
+    }
+
+    function priceForPeriod(start, end){
+        const startSeconds = timeToSec(start);
+        const endSeconds = timeToSec(end);
+        const eveningSeconds = Math.max(0, Math.min(endSeconds, EVENING_END) - Math.max(startSeconds, EVENING_START));
+        const baseSeconds = (endSeconds - startSeconds) - eveningSeconds;
+        return Math.round((baseSeconds * PRICE_PER_HOUR + eveningSeconds * EVENING_RATE) / 3600);
+    }
+
+    function syncSlotButtons(){
+        const selectedStart = timeToSec(startEl.value);
+        const selectedEnd = timeToSec(endEl.value);
+        slotButtons.forEach(button => {
+            const slotStart = timeToSec(button.dataset.slotStart);
+            const slotEnd = timeToSec(button.dataset.slotEnd);
+            const selected = selectedStart !== null && selectedEnd !== null
+                && slotStart >= selectedStart && slotEnd <= selectedEnd;
+            button.classList.toggle('is-selected', selected);
+            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+    }
+
+    function selectSlot(button){
+        const slotStart = timeToSec(button.dataset.slotStart);
+        const slotEnd = timeToSec(button.dataset.slotEnd);
+        const selectedStart = timeToSec(startEl.value);
+        const selectedEnd = timeToSec(endEl.value);
+
+        if(selectedStart === slotStart && selectedEnd === slotEnd){
+            startEl.value = '';
+            endEl.value = '';
+            overlapEl.classList.add('d-none');
+            syncSlotButtons();
+            recalc();
+            return;
+        }
+
+        if(selectedStart !== null && selectedEnd !== null && selectedEnd > selectedStart
+            && (slotStart === selectedEnd || slotEnd === selectedStart)){
+            startEl.value = slotEnd === selectedStart ? button.dataset.slotStart : startEl.value;
+            endEl.value = slotStart === selectedEnd ? button.dataset.slotEnd : endEl.value;
+        }else{
+            startEl.value = button.dataset.slotStart;
+            endEl.value = button.dataset.slotEnd;
+        }
+        syncSlotButtons();
+        recalc();
+        checkOverlap();
     }
 
     function monthlyOccurrenceCount(){
@@ -524,7 +587,7 @@
         quantityEl.value = isMonthly
             ? sessions + ' ngày'
             : hours.toFixed(2).replace(/\.?0+$/,'') + ' giờ';
-        const sessionTotal = Math.round(hours * PRICE_PER_HOUR) + selectedServicesTotal();
+    const sessionTotal = priceForPeriod(startEl.value, endEl.value) + selectedServicesTotal();
         const total = sessionTotal * sessions;
         totalEl.textContent = fmtMoney(total);
         const deposit = Math.max(1, Math.ceil(total * 0.30));
@@ -613,14 +676,16 @@
                 endEl.value = String(nh).padStart(2,'0') + ':' + String(m).padStart(2,'0');
             }
         }
+        syncSlotButtons();
         recalc(); checkOverlap();
     });
-    endEl.addEventListener('input', function(){ recalc(); checkOverlap(); });
+    endEl.addEventListener('input', function(){ syncSlotButtons(); recalc(); checkOverlap(); });
+    slotButtons.forEach(button => button.addEventListener('click', () => selectSlot(button)));
     modeEl.addEventListener('change', updateMode);
     monthEl.addEventListener('change', recalc);
+    syncSlotButtons();
     updateMode();
 
-<<<<<<< HEAD
     const savePitchBtn = document.querySelector('.save-pitch-btn');
     const sharePitchBtn = document.querySelector('.share-pitch-btn');
 
@@ -676,8 +741,6 @@
         });
     }
 
-=======
->>>>>>> 30a73d6d463086f9432647965b867cdfd8e0649c
     form.addEventListener('submit', async function(e){
         const valid = await checkOverlap();
         if(!valid){
