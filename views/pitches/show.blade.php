@@ -221,36 +221,6 @@
                 </div>
             </div>
 
-            <div class="card border-0 bg-light mt-4">
-                <div class="card-body">
-                    <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
-                    <div class="row g-2">
-                        <?php foreach ($hourSlots as $idx => $s): ?>
-                            <?php
-                                $locked = isset($lockedSlots[$idx]);
-                                $taken = isset($takenSlots[$idx]);
-                                $unavailable = $locked || $taken;
-                            ?>
-                            <?php $slotRate = $s['start'] >= '17:00' && $s['start'] < '20:00' ? 600000 : (float)$pitch['price_per_hour']; ?>
-                            <div class="col-4">
-                                <button type="button"
-                                        class="slot-badge slot-select text-center <?php echo $locked ? 'bg-warning-subtle text-warning-emphasis' : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'); ?>"
-                                        data-slot-index="<?php echo (int)$idx; ?>"
-                                        data-slot-start="<?php echo htmlspecialchars($s['start']); ?>"
-                                        data-slot-end="<?php echo htmlspecialchars($s['end']); ?>"
-                                        aria-pressed="false"
-                                        <?php echo $unavailable ? 'disabled' : ''; ?>>
-                                    <span class="d-block"><?php echo htmlspecialchars($s['label']); ?></span>
-                                    <small><?php echo $locked ? 'Bảo trì / tạm khóa' : ($taken ? 'Đã đặt' : formatMoney($slotRate) . ' / giờ'); ?></small>
-                                </button>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <div class="mt-3 small text-muted">
-                        Bấm một khung giờ để chọn 1 tiếng; bấm khung liền kề để nối thêm giờ. Khung đã đặt không thể chọn.
-                    </div>
-                </div>
-                </div>
         </div>
 
         <div class="col-lg-6">
@@ -316,80 +286,137 @@
                             </div>
                         </div>
 
+                        <div class="card border-0 bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
+                                <div class="row g-2">
+                                    <?php
+                                        $statusPriceTable = [
+                                            ['from' => '06:00', 'to' => '08:00', 'rate' => 250000],
+                                            ['from' => '08:00', 'to' => '12:00', 'rate' => 250000],
+                                            ['from' => '12:00', 'to' => '17:00', 'rate' => 275000],
+                                            ['from' => '17:00', 'to' => '20:00', 'rate' => 600000],
+                                            ['from' => '20:00', 'to' => '23:00', 'rate' => 325000],
+                                        ];
+                                    ?>
+                                    <?php foreach ($hourSlots as $idx => $s): ?>
+                                        <?php
+                                            $locked = isset($lockedSlots[$idx]);
+                                            $taken = isset($takenSlots[$idx]);
+                                            $unavailable = $locked || $taken;
+                                            $slotRate = (float)$pitch['price_per_hour'];
+                                            foreach ($statusPriceTable as $priceBlock) {
+                                                if ($s['start'] >= $priceBlock['from'] && $s['start'] < $priceBlock['to']) {
+                                                    $slotRate = (float)$priceBlock['rate'];
+                                                    break;
+                                                }
+                                            }
+                                        ?>
+                                        <div class="col-4">
+                                            <button type="button"
+                                                    class="slot-badge slot-select text-center <?php echo $locked ? 'bg-warning-subtle text-warning-emphasis' : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'); ?>"
+                                                    data-slot-index="<?php echo (int)$idx; ?>"
+                                                    data-slot-start="<?php echo htmlspecialchars($s['start']); ?>"
+                                                    data-slot-end="<?php echo htmlspecialchars($s['end']); ?>"
+                                                    aria-pressed="false"
+                                                    <?php echo $unavailable ? 'disabled' : ''; ?>>
+                                                <span class="d-block"><?php echo htmlspecialchars($s['label']); ?></span>
+                                                <small><?php echo $locked ? 'Bảo trì / tạm khóa' : ($taken ? 'Đã đặt' : formatMoney($slotRate) . ' / giờ'); ?></small>
+                                            </button>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <div class="mt-3 small text-muted">
+                                    Bấm một khung giờ để chọn 1 tiếng; bấm khung liền kề để nối thêm giờ. Khung đã đặt không thể chọn.
+                                </div>
+                            </div>
+                        </div>
+
                         <div id="overlapBox" class="alert d-none mb-3">                        </div>
 
                         <div class="card border mb-4">
                             <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
                                     <h5 class="fw-bold mb-0">Chọn dịch vụ đi kèm</h5>
-                                    <span class="badge bg-light text-secondary border">Tùy chọn</span>
+                                    <button type="button"
+                                            class="btn btn-link btn-sm text-success p-0 text-decoration-none"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#serviceOptions"
+                                            aria-expanded="false"
+                                            aria-controls="serviceOptions">
+                                        Mở ra
+                                    </button>
                                 </div>
                                 <p class="small text-muted mb-3" id="serviceBookingHint">
                                     Có thể chọn nhiều dịch vụ. Đặt theo tháng sẽ tính số lượng đã chọn cho từng buổi.
                                 </p>
-                                <?php if (empty($services)): ?>
-                                    <div class="small text-muted">Hiện chưa có dịch vụ còn hàng để chọn.</div>
-                                <?php else: ?>
-                                    <div class="d-flex flex-column gap-2">
-                                        <?php
-                                            $oldSelectedServices = array_map(
-                                                'strval',
-                                                is_array($old['selected_services'] ?? null) ? $old['selected_services'] : []
-                                            );
-                                            $oldServiceQuantities = is_array($old['service_quantities'] ?? null)
-                                                ? $old['service_quantities']
-                                                : [];
-                                        ?>
-                                        <?php foreach ($services as $service): ?>
+
+                                <div class="collapse" id="serviceOptions">
+                                    <?php if (empty($services)): ?>
+                                        <div class="small text-muted">Hiện chưa có dịch vụ còn hàng để chọn.</div>
+                                    <?php else: ?>
+                                        <div class="d-flex flex-column gap-2">
                                             <?php
-                                                $serviceId = (int)$service['id'];
-                                                $serviceSelected = in_array((string)$serviceId, $oldSelectedServices, true);
-                                                $serviceQuantity = max(
-                                                    1,
-                                                    min((int)$service['stock'], (int)($oldServiceQuantities[$serviceId] ?? 1))
+                                                $oldSelectedServices = array_map(
+                                                    'strval',
+                                                    is_array($old['selected_services'] ?? null) ? $old['selected_services'] : []
                                                 );
+                                                $oldServiceQuantities = is_array($old['service_quantities'] ?? null)
+                                                    ? $old['service_quantities']
+                                                    : [];
                                             ?>
-                                            <div class="border rounded p-3">
-                                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                                                    <div class="form-check flex-grow-1">
-                                                        <input class="form-check-input service-select"
-                                                               type="checkbox"
-                                                               id="service-<?php echo $serviceId; ?>"
-                                                               name="selected_services[]"
-                                                               value="<?php echo $serviceId; ?>"
-                                                               data-price="<?php echo (float)$service['price']; ?>"
-                                                               data-stock="<?php echo (int)$service['stock']; ?>"
-                                                               <?php echo $serviceSelected ? 'checked' : ''; ?>>
-                                                        <label class="form-check-label" for="service-<?php echo $serviceId; ?>">
-                                                            <span class="fw-semibold"><?php echo e($service['name']); ?></span>
-                                                            <span class="text-success fw-semibold ms-1">
-                                                                <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?>
-                                                            </span>
-                                                            <span class="d-block small text-muted">
-                                                                Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
-                                                                <?php if (!empty($service['description'])): ?>
-                                                                    · <?php echo e($service['description']); ?>
-                                                                <?php endif; ?>
-                                                            </span>
-                                                        </label>
-                                                    </div>
-                                                    <div style="width:110px;">
-                                                        <label class="form-label small mb-1" for="service-quantity-<?php echo $serviceId; ?>">Số lượng</label>
-                                                        <input class="form-control form-control-sm service-quantity"
-                                                               type="number"
-                                                               id="service-quantity-<?php echo $serviceId; ?>"
-                                                               name="service_quantities[<?php echo $serviceId; ?>]"
-                                                               min="1"
-                                                               max="<?php echo (int)$service['stock']; ?>"
-                                                               value="<?php echo $serviceQuantity; ?>"
-                                                               <?php echo $serviceSelected ? 'required' : ''; ?>
-                                                               <?php echo $serviceSelected ? '' : 'disabled'; ?>>
+                                            <?php foreach ($services as $service): ?>
+                                                <?php
+                                                    $serviceId = (int)$service['id'];
+                                                    $serviceSelected = in_array((string)$serviceId, $oldSelectedServices, true);
+                                                    $serviceQuantity = max(
+                                                        1,
+                                                        min((int)$service['stock'], (int)($oldServiceQuantities[$serviceId] ?? 1))
+                                                    );
+                                                ?>
+                                                <div class="border rounded p-3">
+                                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                                                        <div class="form-check flex-grow-1">
+                                                            <input class="form-check-input service-select"
+                                                                   type="checkbox"
+                                                                   id="service-<?php echo $serviceId; ?>"
+                                                                   name="selected_services[]"
+                                                                   value="<?php echo $serviceId; ?>"
+                                                                   data-price="<?php echo (float)$service['price']; ?>"
+                                                                   data-stock="<?php echo (int)$service['stock']; ?>"
+                                                                   <?php echo $serviceSelected ? 'checked' : ''; ?>>
+                                                            <label class="form-check-label" for="service-<?php echo $serviceId; ?>">
+                                                                <span class="fw-semibold"><?php echo e($service['name']); ?></span>
+                                                                <span class="text-success fw-semibold ms-1">
+                                                                    <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?>
+                                                                </span>
+                                                                <span class="d-block small text-muted">
+                                                                    Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                                    <?php if (!empty($service['description'])): ?>
+                                                                        · <?php echo e($service['description']); ?>
+                                                                    <?php endif; ?>
+                                                                </span>
+                                                            </label>
+                                                        </div>
+                                                        <div style="width:110px;">
+                                                            <label class="form-label small mb-1" for="service-quantity-<?php echo $serviceId; ?>">Số lượng</label>
+                                                            <input class="form-control form-control-sm service-quantity"
+                                                                   type="number"
+                                                                   id="service-quantity-<?php echo $serviceId; ?>"
+                                                                   name="service_quantities[<?php echo $serviceId; ?>]"
+                                                                   min="1"
+                                                                   max="<?php echo (int)$service['stock']; ?>"
+                                                                   value="<?php echo $serviceQuantity; ?>"
+                                                                   <?php echo $serviceSelected ? 'required' : ''; ?>
+                                                                   <?php echo $serviceSelected ? '' : 'disabled'; ?>>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+
                                 <div class="d-flex justify-content-between align-items-center mt-3 small">
                                     <span class="text-muted">Tiền dịch vụ (mỗi buổi / tổng tháng)</span>
                                     <strong class="text-success" id="serviceTotalDisplay">0 ₫</strong>
@@ -459,10 +486,13 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
-    const PRICE_PER_HOUR = <?php echo (float)$pitch['price_per_hour']; ?>;
-    const EVENING_RATE = 600000;
-    const EVENING_START = 17 * 3600;
-    const EVENING_END = 20 * 3600;
+    const PRICE_TABLE = [
+        { start: 6 * 3600, end: 8 * 3600, rate: 250000 },
+        { start: 8 * 3600, end: 12 * 3600, rate: 250000 },
+        { start: 12 * 3600, end: 17 * 3600, rate: 275000 },
+        { start: 17 * 3600, end: 20 * 3600, rate: 600000 },
+        { start: 20 * 3600, end: 23 * 3600, rate: 325000 },
+    ];
     const PITCH_ID       = <?php echo (int)$pitch['id']; ?>;
     const BOOKING_DATE   = "<?php echo htmlspecialchars($date); ?>";
     const CHECK_URL      = "<?php echo route('admin/bookings/check-overlap'); ?>";
@@ -495,9 +525,19 @@
     function priceForPeriod(start, end){
         const startSeconds = timeToSec(start);
         const endSeconds = timeToSec(end);
-        const eveningSeconds = Math.max(0, Math.min(endSeconds, EVENING_END) - Math.max(startSeconds, EVENING_START));
-        const baseSeconds = (endSeconds - startSeconds) - eveningSeconds;
-        return Math.round((baseSeconds * PRICE_PER_HOUR + eveningSeconds * EVENING_RATE) / 3600);
+        if (startSeconds === null || endSeconds === null || endSeconds <= startSeconds) {
+            return 0;
+        }
+
+        let total = 0;
+        for (const block of PRICE_TABLE) {
+            const overlap = Math.max(0, Math.min(endSeconds, block.end) - Math.max(startSeconds, block.start));
+            if (overlap > 0) {
+                total += (overlap / 3600) * block.rate;
+            }
+        }
+
+        return Math.round(total);
     }
 
     function syncSlotButtons(){
