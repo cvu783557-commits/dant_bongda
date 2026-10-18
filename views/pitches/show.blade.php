@@ -42,6 +42,12 @@
         <div class="collapse navbar-collapse justify-content-end" id="topNav">
             <ul class="navbar-nav">
                 <li class="nav-item"><a class="nav-link" href="<?php echo route('/'); ?>">Trang chủ</a></li>
+
+
+                <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/login'); ?>">Trang quản lý</a></li>
+
+                <li class="nav-item"><a class="nav-link" href="<?php echo route('services'); ?>">Dịch vụ</a></li>
+
                 <?php if (!empty($currentUser)): ?>
                     <li class="nav-item"><span class="nav-link"><?php echo e($currentUser['full_name']); ?> (<?php echo e($currentUser['role']); ?>)</span></li>
                     <?php if (($currentUser['role'] ?? '') === 'ADMIN'): ?>
@@ -56,6 +62,7 @@
                 <?php else: ?>
                     <li class="nav-item"><a class="nav-link" href="<?php echo route('login'); ?>">Đăng nhập</a></li>
                 <?php endif; ?>
+
             </ul>
         </div>
     </div>
