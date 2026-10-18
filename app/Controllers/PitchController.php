@@ -243,8 +243,11 @@ class PitchController extends Controller
 
         $bookingMode = $data['booking_mode'] ?? 'single';
         $data['booking_mode'] = $bookingMode;
+        $paymentMethod = $data['payment_method'] ?? 'bank';
+        $data['payment_method'] = $paymentMethod;
         $rules = [
             'booking_mode'   => 'required|in:single,monthly',
+            'payment_method' => 'required|in:bank,qr',
             'pitch_id'       => 'required|integer',
             'customer_name'  => 'required|min:2|max:100',
             'customer_phone' => 'required|regex:/^0[0-9]{9,10}$/',
@@ -474,7 +477,8 @@ class PitchController extends Controller
                 $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
                 $bookingMode === 'monthly'
                     ? 'Dat coc lich san thang #' . (int)$result['series_id']
-                    : 'Dat coc don san #' . $bookingId
+                    : 'Dat coc don san #' . $bookingId,
+                $paymentMethod === 'bank' ? 'VNBANK' : 'VNPAYQR'
             );
         } catch (\Throwable $e) {
             $this->logError('VNPay payment URL error for booking #' . $bookingId . ': ' . $e->getMessage());
