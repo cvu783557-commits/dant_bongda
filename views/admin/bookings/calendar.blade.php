@@ -143,7 +143,7 @@ $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
                     ?>
                         <tr>
                             <td class="sticky-column-left bg-white fw-semibold align-middle">
-                                <div><?php echo e($p['name']); ?></div>
+                                <div><?php echo e($p['name']); ?> · Sân <?php echo (int)$p['court_number']; ?></div>
                                 <div class="small text-muted fw-normal">Sân <?php echo (int)$p['type']; ?> người • <?php echo formatMoney($p['price_per_hour']); ?>/h</div>
                             </td>
                             <?php for ($i = 0; $i < count($slots); $i++):
@@ -158,9 +158,9 @@ $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
                                     <td class="text-center text-muted align-middle <?php echo $date === $today && substr($s['end_time'],0,5) < date('H:i') ? 'bg-light opacity-50' : ''; ?>"
                                         style="min-width: 110px; height: 66px; <?php echo $date >= $today ? 'cursor:pointer;' : ''; ?>"
                                         <?php if ($date >= $today && !empty($canCreate)): ?>
-                                            onclick="location.href='<?php echo route('admin/bookings/create') . '?date=' . $date . '&pitch_id=' . $p['id'] . '&start_time=' . substr($s['start_time'],0,5); ?>'"
+                                            onclick="location.href='<?php echo route('admin/bookings/create') . '?date=' . $date . '&pitch_id=' . $p['id'] . '&court_number=' . $p['court_number'] . '&start_time=' . substr($s['start_time'],0,5); ?>'"
                                             title="Click để đặt giờ này (hoặc dùng nút 🔒 để khóa)"
-                                            ondblclick="if(confirm('🔒 Khóa khung giờ <?php echo substr($s['start_time'],0,5); ?> - <?php echo substr($s['end_time'],0,5); ?> của sân này?')){location.href='<?php echo route('admin/pitch-lock/create') . '?date=' . $date . '&pitch_id=' . $p['id'] . '&start_time=' . substr($s['start_time'],0,5) . '&end_time=' . substr($s['end_time'],0,5); ?>';}"
+                                            ondblclick="if(confirm('🔒 Khóa khung giờ <?php echo substr($s['start_time'],0,5); ?> - <?php echo substr($s['end_time'],0,5); ?> của Sân <?php echo (int)$p['court_number']; ?>?')){location.href='<?php echo route('admin/pitch-lock/create') . '?date=' . $date . '&pitch_id=' . $p['id'] . '&court_number=' . $p['court_number'] . '&start_time=' . substr($s['start_time'],0,5) . '&end_time=' . substr($s['end_time'],0,5); ?>';}"
                                         <?php endif; ?>>
                                         <?php if ($date >= $today): ?>
                                             <span class="small text-success fw-semibold">Trống</span>
@@ -225,7 +225,7 @@ $nextDate = date('Y-m-d', strtotime($date . ' +1 day'));
                             <?php if (!empty($canLock)): ?>
                                 <td class="text-center align-middle bg-warning bg-opacity-10" style="min-width: 120px;">
                                     <?php if ($date >= $today): ?>
-                                        <a href="<?php echo route('admin/pitch-lock/create') . '?date=' . $date . '&pitch_id=' . $p['id']; ?>"
+                                        <a href="<?php echo route('admin/pitch-lock/create') . '?date=' . $date . '&pitch_id=' . $p['id'] . '&court_number=' . $p['court_number']; ?>"
                                            class="btn btn-sm btn-warning text-dark fw-semibold w-100 mb-1" title="Khóa 1 hoặc nhiều giờ liên tục của sân <?php echo e($p['name']); ?>">
                                             🔒 Khóa sân này
                                         </a>

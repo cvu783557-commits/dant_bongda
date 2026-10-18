@@ -171,6 +171,7 @@
                         <option value="">Tất cả</option>
                         <option value="5" <?php echo $filters['type'] === '5' ? 'selected' : ''; ?>>Sân 5 người</option>
                         <option value="7" <?php echo $filters['type'] === '7' ? 'selected' : ''; ?>>Sân 7 người</option>
+                        <option value="11" <?php echo $filters['type'] === '11' ? 'selected' : ''; ?>>Sân 11 người</option>
                     </select>
                 </div>
                 <div class="col-sm-6 col-lg-2">
@@ -255,6 +256,11 @@
                                 </span>
                                 <span class="badge border <?php echo $availabilityClass; ?>"><?php echo e($availabilityLabel); ?></span>
                             </div>
+                            <?php if ((int)($p['field_count'] ?? 1) > 1 && $p['availability_status'] !== 'outside_hours'): ?>
+                                <div class="small text-success fw-semibold mb-2">
+                                    Còn <?php echo (int)$p['available_court_count']; ?>/<?php echo (int)$p['field_count']; ?> sân con
+                                </div>
+                            <?php endif; ?>
                             <div class="small text-muted mb-1">Mã sân: <?php echo e($p['code']); ?></div>
                             <h5 class="card-title fw-bold mb-2"><?php echo e($p['name']); ?></h5>
                             <div class="text-success fw-bold fs-5 mb-3">

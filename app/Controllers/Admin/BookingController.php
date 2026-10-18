@@ -379,11 +379,16 @@ class BookingController extends Controller
         $pitchMap  = [];
         foreach ($pitches as $p) {
             if ($pitchId && (int)$pitchId !== (int)$p['id']) continue;
-            $pitchMap[(int)$p['id']] = [
-                'pitch'   => $p,
-                'booking' => $this->booking->getByPitchAndDate((int)$p['id'], $date, false),
-                'locks'   => $this->pitchLock->getByPitchAndDate((int)$p['id'], $date),
-            ];
+            $fieldCount = max(1, (int)($p['field_count'] ?? 1));
+            for ($courtNumber = 1; $courtNumber <= $fieldCount; $courtNumber++) {
+                $courtPitch = $p;
+                $courtPitch['court_number'] = $courtNumber;
+                $pitchMap[(int)$p['id'] . '-' . $courtNumber] = [
+                    'pitch'   => $courtPitch,
+                    'booking' => $this->booking->getByPitchAndDate((int)$p['id'], $date, false, $courtNumber),
+                    'locks'   => $this->pitchLock->getByPitchAndDate((int)$p['id'], $date, $courtNumber),
+                ];
+            }
         }
 
         // Mỗi slot sẽ map với booking nào đó overlap nó
@@ -485,6 +490,7 @@ class BookingController extends Controller
         $createData = [
             'customer_id'    => (int)$customer['id'],
             'pitch_id'       => (int)$data['pitch_id'],
+            'court_number'   => (int)($data['court_number'] ?? 1),
             'booking_date'   => $data['booking_date'],
             'start_time'     => $startTime,
             'end_time'       => $endTime,
@@ -615,6 +621,7 @@ class BookingController extends Controller
         $update = [
             'customer_id'    => $custId,
             'pitch_id'       => (int)($data['pitch_id'] ?? $booking['pitch_id']),
+            'court_number'   => (int)($data['court_number'] ?? $booking['court_number'] ?? 1),
             'booking_date'   => $data['booking_date'] ?? $booking['booking_date'],
             'start_time'     => $startTime,
             'end_time'       => $endTime,
@@ -807,13 +814,16 @@ class BookingController extends Controller
         header('Content-Type: application/json; charset=utf-8');
 
         $pitchId   = (int)($_GET['pitch_id']    ?? $_POST['pitch_id']    ?? 0);
+        $courtNumber = (int)($_GET['court_number'] ?? $_POST['court_number'] ?? 1);
         $date      = trim($_GET['booking_date'] ?? $_POST['booking_date'] ?? '');
         $startTime = $this->normalizeTime($_GET['start_time'] ?? $_POST['start_time'] ?? '00:00');
         $endTime   = $this->normalizeTime($_GET['end_time']   ?? $_POST['end_time']   ?? '00:00');
         $excludeId = (int)($_GET['exclude_id']  ?? $_POST['exclude_id']  ?? 0);
 
         $errors = [];
-        if (!$this->pitch->find($pitchId)) $errors[] = 'Sân không tồn tại';
+        $pitch = $this->pitch->find($pitchId);
+        if (!$pitch) $errors[] = 'Sân không tồn tại';
+        elseif ($courtNumber < 1 || $courtNumber > max(1, (int)($pitch['field_count'] ?? 1))) $errors[] = 'Sân con không hợp lệ';
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $errors[] = 'Ngày không hợp lệ';
         if ($startTime >= $endTime) $errors[] = 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc';
         if (!$this->booking->isWithinOperatingHours($startTime, $endTime)) {
@@ -824,7 +834,7 @@ class BookingController extends Controller
             return;
         }
 
-        $lockOverlap = $this->pitchLock->checkOverlap($pitchId, $date, $startTime, $endTime);
+        $lockOverlap = $this->pitchLock->checkOverlap($pitchId, $date, $startTime, $endTime, null, $courtNumber);
         if ($lockOverlap) {
             echo json_encode([
                 'ok' => false,
@@ -836,7 +846,7 @@ class BookingController extends Controller
             return;
         }
 
-        $overlap = $this->booking->checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId);
+        $overlap = $this->booking->checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId, $courtNumber);
         if ($overlap) {
             echo json_encode([
                 'ok' => false,
@@ -872,6 +882,10 @@ class BookingController extends Controller
         $pitch   = $this->pitch->find($pitchId);
         if ($pitchId <= 0 || !$pitch) $errors['pitch_id'] = 'Vui lòng chọn sân hợp lệ';
         elseif ($pitch['status'] !== 'active') $errors['pitch_id'] = 'Sân đã ngưng hoạt động';
+        $courtNumber = (int)($data['court_number'] ?? 1);
+        if ($pitch && ($courtNumber < 1 || $courtNumber > max(1, (int)($pitch['field_count'] ?? 1)))) {
+            $errors['court_number'] = 'Vui lòng chọn sân con hợp lệ';
+        }
 
         $date = trim($data['booking_date'] ?? '');
         if ($date === '') $errors['booking_date'] = 'Vui lòng chọn ngày đặt sân';
@@ -929,14 +943,14 @@ class BookingController extends Controller
             $excludeId = $existing ? (int)$existing['id'] : null;
             $statusCur = $existing['status'] ?? null;
             if ($statusCur !== Booking::STATUS_CANCELLED) {
-                $lockOverlap = $this->pitchLock->checkOverlap($pitchId, $date, $startTime, $endTime);
+                $lockOverlap = $this->pitchLock->checkOverlap($pitchId, $date, $startTime, $endTime, null, $courtNumber);
                 if ($lockOverlap) {
                     $errors['_overlap'] = 'Khung giờ này đã bị KHÓA'
                         . (!empty($lockOverlap['reason']) ? ' (Lý do: ' . $lockOverlap['reason'] . ')' : '')
                         . ' (' . substr($lockOverlap['start_time'],0,5) . ' đến ' . substr($lockOverlap['end_time'],0,5) . ')';
                 }
                 if (empty($errors)) {
-                    $overlap = $this->booking->checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId);
+                    $overlap = $this->booking->checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId, $courtNumber);
                     if ($overlap) {
                         $errors['_overlap'] = 'Khung giờ này đã có khách đặt: đơn #' . $overlap['id']
                             . ' - Khách ' . ($overlap['customer_name'] ?? '')
@@ -964,6 +978,7 @@ class BookingController extends Controller
         }
 
         $pitchId = (int)($_GET['pitch_id'] ?? 0);
+        $courtNumber = (int)($_GET['court_number'] ?? 1);
         $date    = trim($_GET['date']      ?? date('Y-m-d'));
         $start   = trim($_GET['start_time'] ?? '');
         $end     = trim($_GET['end_time']   ?? '');
@@ -972,6 +987,7 @@ class BookingController extends Controller
         return view('admin.bookings.lock_form', [
             'pitches'     => $this->pitch->all('active'),
             'pitchId'     => $pitchId,
+            'courtNumber' => max(1, $courtNumber),
             'date'        => $date,
             'startDefault'=> $start,
             'endDefault'  => $end,
@@ -990,6 +1006,7 @@ class BookingController extends Controller
 
         $data = $_POST;
         $pitchId   = (int)($data['pitch_id'] ?? 0);
+        $courtNumber = (int)($data['court_number'] ?? 1);
         $date      = trim($data['lock_date'] ?? '');
         $startTime = $this->normalizeTime($data['start_time'] ?? '');
         $endTime   = $this->normalizeTime($data['end_time']   ?? '');
@@ -998,6 +1015,7 @@ class BookingController extends Controller
         $errors = [];
         $pitch = $this->pitch->find($pitchId);
         if (!$pitchId || !$pitch) $errors[] = 'Vui lòng chọn sân hợp lệ';
+        elseif ($courtNumber < 1 || $courtNumber > max(1, (int)($pitch['field_count'] ?? 1))) $errors[] = 'Vui lòng chọn sân con hợp lệ';
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || !strtotime($date)) $errors[] = 'Ngày không hợp lệ';
         else {
             $today = date('Y-m-d');
@@ -1016,14 +1034,14 @@ class BookingController extends Controller
             return;
         }
 
-        $existLock = $this->pitchLock->checkOverlap($pitchId, $date, $startTime, $endTime);
+        $existLock = $this->pitchLock->checkOverlap($pitchId, $date, $startTime, $endTime, null, $courtNumber);
         if ($existLock) {
             setFlash('error', 'Khung giờ này đã khóa rồi (#' . $existLock['id'] . ')');
             redirect('admin/pitch-lock/create?pitch_id=' . $pitchId . '&date=' . $date);
             return;
         }
 
-        $bookingOverlap = $this->booking->checkOverlap($pitchId, $date, $startTime, $endTime);
+        $bookingOverlap = $this->booking->checkOverlap($pitchId, $date, $startTime, $endTime, null, $courtNumber);
         if ($bookingOverlap) {
             setFlash('error', 'Không thể khóa: đã có lịch đặt #' . $bookingOverlap['id'] . '. Hãy hủy lịch đặt trước.');
             redirect('admin/pitch-lock/create?pitch_id=' . $pitchId . '&date=' . $date);
@@ -1032,6 +1050,7 @@ class BookingController extends Controller
 
         $res = $this->pitchLock->create([
             'pitch_id'   => $pitchId,
+            'court_number' => $courtNumber,
             'lock_date'  => $date,
             'start_time' => $startTime,
             'end_time'   => $endTime,

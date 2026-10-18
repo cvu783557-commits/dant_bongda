@@ -81,7 +81,7 @@ class PitchController extends Controller
         }
 
         $type = $_GET['type'] ?? '';
-        if (!is_string($type) || !in_array($type, ['', '5', '7'], true)) {
+        if (!is_string($type) || !in_array($type, ['', '5', '7', '11'], true)) {
             $type = '';
         }
 
@@ -99,11 +99,40 @@ class PitchController extends Controller
         $availableOnly = ($_GET['availability'] ?? '') === 'available';
         $startTime = $time . ':00';
         $endTime = date('H:i:s', strtotime($startTime . ' +1 hour'));
-        $pitches = $this->pitch->getPublicListings($date, $startTime, $endTime, $type, $availableOnly, $district);
+        $pitches = $this->pitch->getPublicListings($date, $startTime, $endTime, $type, false, $district);
         foreach ($pitches as &$pitch) {
             $pitch['code'] = 'S' . str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT);
+            $fieldCount = max(1, (int)($pitch['field_count'] ?? 1));
+            $pitch['available_court_count'] = 0;
+            if ($pitch['availability_status'] !== 'outside_hours') {
+                $blockedCourts = [];
+                foreach ($this->pitch->getBlockedCourts((int)$pitch['id'], $date, $startTime, $endTime) as $block) {
+                    $courtNumber = (int)$block['court_number'];
+                    if ($courtNumber < 1 || $courtNumber > $fieldCount) {
+                        continue;
+                    }
+                    $blockedCourts[$courtNumber][$block['block_type']] = true;
+                }
+                $pitch['available_court_count'] = $fieldCount - count($blockedCourts);
+                if ($pitch['available_court_count'] === 0) {
+                    $hasBooking = false;
+                    foreach ($blockedCourts as $blockTypes) {
+                        if (isset($blockTypes['booked'])) {
+                            $hasBooking = true;
+                            break;
+                        }
+                    }
+                    $pitch['availability_status'] = $hasBooking ? 'booked' : 'maintenance';
+                }
+            }
         }
         unset($pitch);
+        if ($availableOnly) {
+            $pitches = array_values(array_filter(
+                $pitches,
+                static fn ($pitch) => $pitch['availability_status'] === 'available'
+            ));
+        }
 
         $success = getFlash('success');
         $error   = getFlash('error') ?: $filterError;
@@ -163,53 +192,60 @@ class PitchController extends Controller
 
         $pitches = [];
         foreach ($this->pitch->all('active') as $pitch) {
-            $slots = $this->publicTimeSlots(
+            $baseSlots = $this->publicTimeSlots(
                 $pitch['opening_time'] ?? Booking::MIN_OPERATING_HOUR,
                 $pitch['closing_time'] ?? Booking::MAX_OPERATING_HOUR
             );
-            $bookings = $this->booking->getByPitchAndDate((int)$pitch['id'], $date, false);
-            $locks = $this->pitchLock->getByPitchAndDate((int)$pitch['id'], $date);
-            $currentTime = (int)date('G') * 3600 + (int)date('i') * 60;
+            $fieldCount = max(1, (int)($pitch['field_count'] ?? 1));
 
-            foreach ($slots as &$slot) {
-                $slotStart = $slot['start_sec'];
-                $slotEnd = $slotStart + 3600;
-                $slot['status'] = 'available';
+            for ($courtNumber = 1; $courtNumber <= $fieldCount; $courtNumber++) {
+                $slots = $baseSlots;
+                $bookings = $this->booking->getByPitchAndDate((int)$pitch['id'], $date, false, $courtNumber);
+                $locks = $this->pitchLock->getByPitchAndDate((int)$pitch['id'], $date, $courtNumber);
+                $currentTime = (int)date('G') * 3600 + (int)date('i') * 60;
 
-                foreach ($locks as $lock) {
-                    $lockStart = ((int)substr($lock['start_time'], 0, 2) * 3600)
-                        + ((int)substr($lock['start_time'], 3, 2) * 60);
-                    $lockEnd = ((int)substr($lock['end_time'], 0, 2) * 3600)
-                        + ((int)substr($lock['end_time'], 3, 2) * 60);
-                    if ($slotStart < $lockEnd && $slotEnd > $lockStart) {
-                        $slot['status'] = 'locked';
-                        break;
-                    }
-                }
+                foreach ($slots as &$slot) {
+                    $slotStart = $slot['start_sec'];
+                    $slotEnd = $slotStart + 3600;
+                    $slot['status'] = 'available';
 
-                if ($slot['status'] === 'available') {
-                    foreach ($bookings as $booking) {
-                        $bookingStart = ((int)substr($booking['start_time'], 0, 2) * 3600)
-                            + ((int)substr($booking['start_time'], 3, 2) * 60);
-                        $bookingEnd = ((int)substr($booking['end_time'], 0, 2) * 3600)
-                            + ((int)substr($booking['end_time'], 3, 2) * 60);
-                        if ($slotStart < $bookingEnd && $slotEnd > $bookingStart) {
-                            $slot['status'] = 'booked';
+                    foreach ($locks as $lock) {
+                        $lockStart = ((int)substr($lock['start_time'], 0, 2) * 3600)
+                            + ((int)substr($lock['start_time'], 3, 2) * 60);
+                        $lockEnd = ((int)substr($lock['end_time'], 0, 2) * 3600)
+                            + ((int)substr($lock['end_time'], 3, 2) * 60);
+                        if ($slotStart < $lockEnd && $slotEnd > $lockStart) {
+                            $slot['status'] = 'locked';
                             break;
                         }
                     }
-                }
 
-                if ($slot['status'] === 'available'
-                    && $date === date('Y-m-d')
-                    && $slotStart < $currentTime) {
-                    $slot['status'] = 'past';
+                    if ($slot['status'] === 'available') {
+                        foreach ($bookings as $booking) {
+                            $bookingStart = ((int)substr($booking['start_time'], 0, 2) * 3600)
+                                + ((int)substr($booking['start_time'], 3, 2) * 60);
+                            $bookingEnd = ((int)substr($booking['end_time'], 0, 2) * 3600)
+                                + ((int)substr($booking['end_time'], 3, 2) * 60);
+                            if ($slotStart < $bookingEnd && $slotEnd > $bookingStart) {
+                                $slot['status'] = 'booked';
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($slot['status'] === 'available'
+                        && $date === date('Y-m-d')
+                        && $slotStart < $currentTime) {
+                        $slot['status'] = 'past';
+                    }
                 }
+                unset($slot);
+
+                $courtPitch = $pitch;
+                $courtPitch['court_number'] = $courtNumber;
+                $courtPitch['slots'] = $slots;
+                $pitches[] = $courtPitch;
             }
-            unset($slot);
-
-            $pitch['slots'] = $slots;
-            $pitches[] = $pitch;
         }
 
         $currentUser = $this->user->getActiveUser();
@@ -232,6 +268,12 @@ class PitchController extends Controller
             return;
         }
 
+        $fieldCount = max(1, (int)($pitch['field_count'] ?? 1));
+        $courtNumber = filter_var($_GET['court'] ?? ($_SESSION['old']['court_number'] ?? 1), FILTER_VALIDATE_INT);
+        if ($courtNumber === false || $courtNumber < 1 || $courtNumber > $fieldCount) {
+            $courtNumber = 1;
+        }
+
         $date  = $_GET['date'] ?? date('Y-m-d');
         $today = date('Y-m-d');
         if ($date < $today) $date = $today;
@@ -239,8 +281,8 @@ class PitchController extends Controller
         $openingTime = $pitch['opening_time'] ?? '06:00:00';
         $closingTime = $pitch['closing_time'] ?? '23:00:00';
         $hourSlots = $this->publicTimeSlots($openingTime, $closingTime);
-        $bookings  = $this->booking->getByPitchAndDate($id, $date, false);
-        $locks = $this->pitchLock->getByPitchAndDate($id, $date);
+        $bookings  = $this->booking->getByPitchAndDate($id, $date, false, $courtNumber);
+        $locks = $this->pitchLock->getByPitchAndDate($id, $date, $courtNumber);
 
         $takenSlots = [];
         $lockedSlots = [];
@@ -282,6 +324,8 @@ class PitchController extends Controller
             'services'      => $this->service->getAvailableForBooking(),
             'hourSlots'     => $hourSlots,
             'date'          => $date,
+            'courtNumber'   => $courtNumber,
+            'fieldCount'    => $fieldCount,
             'takenSlots'    => $takenSlots,
             'lockedSlots'   => $lockedSlots,
             'bookingsToday' => $bookings,
@@ -361,10 +405,12 @@ class PitchController extends Controller
         $data['booking_mode'] = $bookingMode;
         $paymentMethod = $data['payment_method'] ?? 'bank';
         $data['payment_method'] = $paymentMethod;
+        $data['court_number'] = $data['court_number'] ?? '1';
         $rules = [
             'booking_mode'   => 'required|in:single,monthly',
             'payment_method' => 'required|in:bank,qr',
             'pitch_id'       => 'required|integer',
+            'court_number'   => 'required|integer|min:1',
             'customer_name'  => 'required|min:2|max:100',
             'customer_phone' => 'required|regex:/^0[0-9]{9,10}$/',
             'customer_email' => 'nullable|email',
@@ -383,7 +429,10 @@ class PitchController extends Controller
         $pitch = $this->pitch->find((int)($data['pitch_id'] ?? 0));
         if (!$pitch || $pitch['status'] !== 'active') {
             $errors['pitch_id'] = 'Sân không tồn tại hoặc hiện không nhận đặt sân';
+        } elseif ((int)$data['court_number'] > max(1, (int)($pitch['field_count'] ?? 1))) {
+            $errors['court_number'] = 'Sân con được chọn không tồn tại tại địa điểm này.';
         }
+        $courtNumber = max(1, (int)$data['court_number']);
 
         $bookingDate = $data['booking_date'] ?? '';
         $startTime   = trim($data['start_time'] ?? '') . ':00';
@@ -503,7 +552,7 @@ class PitchController extends Controller
         if (!empty($errors)) {
             setFlash('error', reset($errors));
             redirect('pitches/' . ((int)($data['pitch_id'] ?? 0)) . '?date='
-                . urlencode($bookingDate ?: date('Y-m-d')));
+                . urlencode($bookingDate ?: date('Y-m-d')) . '&court=' . $courtNumber);
             return;
         }
 
@@ -545,6 +594,7 @@ class PitchController extends Controller
             $result = $this->booking->createMonthlySeries([
                 'customer_id' => (int)$customer['id'],
                 'pitch_id' => (int)$pitch['id'],
+                'court_number' => $courtNumber,
                 'booking_month' => $bookingMonth . '-01',
                 'start_time' => $startTime,
                 'end_time' => $endTime,
@@ -558,6 +608,7 @@ class PitchController extends Controller
             $result = $this->booking->create([
                 'customer_id'    => (int)$customer['id'],
                 'pitch_id'       => (int)$pitch['id'],
+                'court_number'   => $courtNumber,
                 'booking_date'   => $bookingDate,
                 'start_time'     => $startTime,
                 'end_time'       => $endTime,
@@ -577,7 +628,7 @@ class PitchController extends Controller
 
         if (!$result['success']) {
             setFlash('error', $result['error'] ?? 'Đặt sân không thành công');
-            redirect('pitches/' . ((int)$pitch['id']) . '?date=' . $bookingDate);
+            redirect('pitches/' . ((int)$pitch['id']) . '?date=' . $bookingDate . '&court=' . $courtNumber);
             return;
         }
 
@@ -617,7 +668,7 @@ class PitchController extends Controller
                 $this->booking->cancel($bookingId, 'Không khởi tạo được thanh toán VNPay');
             }
             setFlash('error', 'Không thể khởi tạo giao dịch VNPay. Vui lòng thử lại hoặc liên hệ quản lý.');
-            redirect('pitches/' . (int)$pitch['id'] . '?date=' . urlencode($bookingDate));
+            redirect('pitches/' . (int)$pitch['id'] . '?date=' . urlencode($bookingDate) . '&court=' . $courtNumber);
             return;
         }
 

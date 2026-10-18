@@ -33,28 +33,13 @@ class Pitch extends Model
         $sql = "SELECT p.*,
                     CASE
                         WHEN ? < p.opening_time OR ? > p.closing_time THEN 'outside_hours'
-                        WHEN EXISTS (
-                            SELECT 1 FROM pitch_locks pl
-                            WHERE pl.pitch_id = p.id AND pl.lock_date = ?
-                              AND pl.start_time < ? AND pl.end_time > ?
-                        ) THEN 'maintenance'
-                        WHEN EXISTS (
-                            SELECT 1 FROM bookings b
-                            WHERE b.pitch_id = p.id AND b.booking_date = ?
-                              AND b.start_time < ? AND b.end_time > ?
-                              AND b.status <> 'cancelled'
-                        ) THEN 'booked'
                         ELSE 'available'
                     END AS availability_status
                 FROM {$this->table} p
                 WHERE p.status = 'active'";
-        $params = [
-            $startTime, $endTime,
-            $date, $endTime, $startTime,
-            $date, $endTime, $startTime,
-        ];
+        $params = [$startTime, $endTime];
 
-        if (in_array((int)$type, [5, 7], true)) {
+        if (in_array((int)$type, [5, 7, 11], true)) {
             $sql .= " AND p.type = ?";
             $params[] = (int)$type;
         }
@@ -66,25 +51,25 @@ class Pitch extends Model
             $params[] = '%' . $district . '%';
         }
 
-        if ($availableOnly) {
-            $sql .= " AND ? >= p.opening_time AND ? <= p.closing_time
-                      AND NOT EXISTS (
-                          SELECT 1 FROM pitch_locks pl
-                          WHERE pl.pitch_id = p.id AND pl.lock_date = ?
-                            AND pl.start_time < ? AND pl.end_time > ?
-                      )
-                      AND NOT EXISTS (
-                          SELECT 1 FROM bookings b
-                          WHERE b.pitch_id = p.id AND b.booking_date = ?
-                            AND b.start_time < ? AND b.end_time > ?
-                            AND b.status <> 'cancelled'
-                      )";
-            array_push($params, $startTime, $endTime, $date, $endTime, $startTime, $date, $endTime, $startTime);
-        }
-
         $sql .= " ORDER BY p.price_per_hour ASC, p.id ASC";
 
         return $this->connection->executeQuery($sql, $params)->fetchAllAssociative();
+    }
+
+    public function getBlockedCourts(int $pitchId, string $date, string $startTime, string $endTime): array
+    {
+        return $this->connection->executeQuery(
+            "SELECT court_number, 'booked' AS block_type
+             FROM bookings
+             WHERE pitch_id = ? AND booking_date = ? AND status <> 'cancelled'
+               AND start_time < ? AND end_time > ?
+             UNION
+             SELECT court_number, 'maintenance' AS block_type
+             FROM pitch_locks
+             WHERE pitch_id = ? AND lock_date = ?
+               AND start_time < ? AND end_time > ?",
+            [$pitchId, $date, $endTime, $startTime, $pitchId, $date, $endTime, $startTime]
+        )->fetchAllAssociative();
     }
 
     public function find($id)
@@ -97,9 +82,9 @@ class Pitch extends Model
     {
         $sql = "INSERT INTO {$this->table}
                 (name, type, price_per_hour, description, image, address, opening_time,
-                 closing_time, grass_quality, has_lighting, has_changing_room, has_parking,
+                 closing_time, field_count, grass_quality, has_lighting, has_changing_room, has_parking,
                  extra_services, status, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())";
 
         $this->connection->executeStatement($sql, [
             $data['name'],
@@ -110,6 +95,7 @@ class Pitch extends Model
             $data['address'] ?? null,
             $data['opening_time'] ?? '06:00:00',
             $data['closing_time'] ?? '23:00:00',
+            max(1, (int)($data['field_count'] ?? 1)),
             $data['grass_quality'] ?? null,
             (int)($data['has_lighting'] ?? 0),
             (int)($data['has_changing_room'] ?? 0),
@@ -138,6 +124,7 @@ class Pitch extends Model
             'address',
             'opening_time',
             'closing_time',
+            'field_count',
             'grass_quality',
             'has_lighting',
             'has_changing_room',
@@ -146,7 +133,7 @@ class Pitch extends Model
         ] as $field) {
             if (array_key_exists($field, $data)) {
                 $sql .= ", {$field} = ?";
-                $params[] = in_array($field, ['has_lighting', 'has_changing_room', 'has_parking'], true)
+                $params[] = in_array($field, ['has_lighting', 'has_changing_room', 'has_parking', 'field_count'], true)
                     ? (int)$data[$field]
                     : $data[$field];
             }
