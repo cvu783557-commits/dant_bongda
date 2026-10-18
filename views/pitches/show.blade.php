@@ -444,7 +444,28 @@
                             Đặt cọc 30% tổng tiền qua VNPay để gửi yêu cầu đặt sân. Phần còn lại thanh toán tại sân.
                             <div class="small mt-1">Tiền cọc tạm tính: <strong id="depositDisplay"><?php echo formatMoney(0); ?></strong></div>
                         </div>
-
+                        <fieldset class="mb-4">
+                            <legend class="form-label fw-semibold">Phương thức thanh toán VNPay</legend>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="payment_method" id="paymentBank"
+                                       value="bank" required
+                                       <?php echo ($old['payment_method'] ?? 'bank') === 'bank' ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="paymentBank">
+                                    Thẻ ATM / tài khoản ngân hàng (sandbox)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="payment_method" id="paymentQr"
+                                       value="qr" required
+                                       <?php echo ($old['payment_method'] ?? 'bank') === 'qr' ? 'checked' : ''; ?>>
+                                <label class="form-check-label" for="paymentQr">
+                                    Quét mã QR
+                                </label>
+                            </div>
+                            <div class="form-text">
+                                Tài khoản test chỉ nhập trên trang sandbox VNPay/ngân hàng. Không nhập mật khẩu hoặc OTP tại website này.
+                            </div>
+                        </fieldset>
                         <div class="mb-3">
                             <label class="form-label">Họ tên khách hàng <span class="text-danger">*</span></label>
                             <input type="text" name="customer_name" class="form-control" required

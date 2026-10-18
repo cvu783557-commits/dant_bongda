@@ -27,7 +27,13 @@ class Vnpay
         }
     }
 
-    public function createPaymentUrl(int|string $transactionRef, int $amount, string $clientIp, string $orderInfo): string
+    public function createPaymentUrl(
+        int|string $transactionRef,
+        int $amount,
+        string $clientIp,
+        string $orderInfo,
+        string $bankCode = ''
+    ): string
     {
         $input = [
             'vnp_Version' => '2.1.0',
@@ -43,6 +49,13 @@ class Vnpay
             'vnp_IpAddr' => $clientIp,
             'vnp_CreateDate' => date('YmdHis'),
         ];
+
+        if ($bankCode !== '') {
+            if (!in_array($bankCode, ['VNBANK', 'VNPAYQR'], true)) {
+                throw new \InvalidArgumentException('Phương thức thanh toán VNPay không hợp lệ.');
+            }
+            $input['vnp_BankCode'] = $bankCode;
+        }
 
         $query = $this->buildQuery($input);
         $signature = hash_hmac('sha512', $query, $this->hashSecret);
