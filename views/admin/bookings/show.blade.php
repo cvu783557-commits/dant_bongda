@@ -106,6 +106,7 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
                     <div class="col-sm-4 text-muted">Sân</div>
                     <div class="col-sm-8 fw-semibold">
                         <?php echo e($booking['pitch_name']); ?>
+                        <span class="badge bg-success-subtle text-success ms-1">Sân <?php echo (int)($booking['court_number'] ?? 1); ?></span>
                         <span class="badge bg-secondary ms-1">Sân <?php echo (int)$booking['pitch_type']; ?> người</span>
                     </div>
                     <div class="col-sm-4 text-muted">Ngày đặt</div>

@@ -5,8 +5,13 @@
 <?php
 $id = (int)$booking['id'];
 $priceMap = [];
-foreach ($pitches as $p) $priceMap[(int)$p['id']] = (float)$p['price_per_hour'];
+$courtCountMap = [];
+foreach ($pitches as $p) {
+    $priceMap[(int)$p['id']] = (float)$p['price_per_hour'];
+    $courtCountMap[(int)$p['id']] = max(1, (int)($p['field_count'] ?? 1));
+}
 $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
+$courtCountMapJs = json_encode($courtCountMap, JSON_UNESCAPED_UNICODE);
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -108,7 +113,7 @@ $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Sân <span class="text-danger">*</span></label>
-                        <select name="pitch_id" id="pitch_id" class="form-select" required onchange="calcTotal();">
+                        <select name="pitch_id" id="pitch_id" class="form-select" required onchange="calcTotal(); syncCourtOptions(); checkOverlap();">
                             <?php foreach ($pitches as $p): ?>
                                 <option value="<?php echo $p['id']; ?>"
                                     <?php echo (int)old('pitch_id', $booking['pitch_id']) === (int)$p['id'] ? 'selected' : ''; ?>
@@ -116,6 +121,15 @@ $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
                                     <?php echo e($p['name']); ?> (Sân <?php echo (int)$p['type']; ?> - <?php echo formatMoney($p['price_per_hour']); ?>/giờ)
                                 </option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="court_number">Sân con <span class="text-danger">*</span></label>
+                        <select name="court_number" id="court_number" class="form-select" required onchange="checkOverlap();">
+                            <?php for ($court = 1; $court <= ($courtCountMap[(int)old('pitch_id', $booking['pitch_id'])] ?? 1); $court++): ?>
+                                <option value="<?php echo $court; ?>" <?php echo (int)old('court_number', $booking['court_number'] ?? 1) === $court ? 'selected' : ''; ?>>Sân <?php echo $court; ?></option>
+                            <?php endfor; ?>
                         </select>
                     </div>
 
@@ -179,8 +193,24 @@ $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
 
 <script>
 var priceMap = <?php echo $priceMapJs; ?>;
+var courtCountMap = <?php echo $courtCountMapJs; ?>;
 var EXCLUDE_ID = <?php echo $id; ?>;
 var overlapOk = true;
+
+function syncCourtOptions() {
+    var pitchId = Number(document.getElementById('pitch_id').value) || 0;
+    var select = document.getElementById('court_number');
+    var count = courtCountMap[pitchId] || 1;
+    var selected = Number(select.value) || 1;
+    select.innerHTML = '';
+    for (var court = 1; court <= count; court++) {
+        var option = document.createElement('option');
+        option.value = court;
+        option.textContent = 'Sân ' + court;
+        select.appendChild(option);
+    }
+    select.value = selected <= count ? String(selected) : '1';
+}
 
 function hoursBetween(s,e){ if(!s||!e) return 0; var a=s.split(':').map(Number),b=e.split(':').map(Number); var d=(b[0]*60+(b[1]||0) - a[0]*60-(a[1]||0))/60; return d>0?d:0;}
 function fm(n){return new Intl.NumberFormat('vi-VN').format(Number(n)||0)+' ₫';}
@@ -197,6 +227,7 @@ function checkOverlap(){
         dt  = document.getElementById('booking_date').value,
         st  = document.getElementById('start_time').value,
         et  = document.getElementById('end_time').value;
+    var court = document.getElementById('court_number').value;
     var sEl=document.getElementById('overlap_status'),
         mEl=document.getElementById('overlap_message'),
         box=document.getElementById('overlap_box'),
@@ -205,7 +236,7 @@ function checkOverlap(){
     if(!pid||!dt||!st||!et){ sEl.textContent='Chọn sân+ngày+giờ để kiểm tra'; mEl.textContent=''; box.className='mb-3 p-3 bg-light rounded border'; return;}
     if(st>=et){ box.className='mb-3 p-3 bg-danger bg-opacity-10 border border-danger rounded'; sEl.textContent='⚠ Giờ không hợp lệ'; mEl.textContent='Start < End'; return;}
     sp.classList.remove('d-none'); sEl.textContent='Đang kiểm tra...';
-    fetch('<?php echo route('admin/bookings/check-overlap'); ?>?pitch_id='+pid+'&booking_date='+dt+'&start_time='+st+'&end_time='+et+'&exclude_id='+EXCLUDE_ID)
+    fetch('<?php echo route('admin/bookings/check-overlap'); ?>?pitch_id='+pid+'&court_number='+court+'&booking_date='+dt+'&start_time='+st+'&end_time='+et+'&exclude_id='+EXCLUDE_ID)
         .then(function(r){return r.json();}).then(function(res){
             sp.classList.add('d-none');
             if(res && res.ok && !res.overlap){
@@ -226,6 +257,6 @@ function beforeSubmit(){
     if(!overlapOk){return confirm('⚠ Có vẻ trùng lịch hoặc chưa kiểm tra. Backend vẫn sẽ kiểm tra lại. Tiếp tục?');}
     return true;
 }
-document.addEventListener('DOMContentLoaded',function(){ calcTotal(); checkOverlap(); });
+document.addEventListener('DOMContentLoaded',function(){ syncCourtOptions(); calcTotal(); checkOverlap(); });
 </script>
 @endsection

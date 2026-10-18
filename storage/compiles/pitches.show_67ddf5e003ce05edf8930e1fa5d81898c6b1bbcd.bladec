@@ -286,19 +286,33 @@
 
  <form method="get" action="" class="mb-4">
  <label class="form-label fw-semibold">Xem tình trạng sân theo ngày:</label>
- <div class="d-flex gap-2">
+ <div class="row g-2">
+ <div class="col-sm-6">
  <input type="date"
  name="date"
  value="<?php echo htmlspecialchars($date); ?>"
  min="<?php echo date('Y-m-d'); ?>"
  class="form-control"
  required>
+ </div>
+ <div class="col-sm-4">
+ <select name="court" class="form-select" aria-label="Chọn sân con">
+ <?php for ($court = 1; $court <= $fieldCount; $court++): ?>
+ <option value="<?php echo $court; ?>" <?php echo $court === $courtNumber ? 'selected' : ''; ?>>
+ Sân <?php echo $court; ?>
+ </option>
+ <?php endfor; ?>
+ </select>
+ </div>
+ <div class="col-sm-2">
  <button type="submit" class="btn btn-outline-success">Xem lịch</button>
+ </div>
  </div>
  </form>
 
  <form method="post" id="bookingForm" action="<?php echo route('bookings'); ?>" novalidate>
  <input type="hidden" name="pitch_id" value="<?php echo (int)$pitch['id']; ?>">
+ <input type="hidden" name="court_number" value="<?php echo (int)$courtNumber; ?>">
  <input type="hidden" name="booking_date" value="<?php echo htmlspecialchars($date); ?>">
 
  <div class="mb-3">
@@ -344,7 +358,7 @@
 
  <div class="card border-0 bg-light mb-4">
  <div class="card-body">
- <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
+ <h6 class="fw-bold mb-3">Tình trạng Sân <?php echo (int)$courtNumber; ?> — Ngày <?php echo formatDate($date); ?></h6>
  <div class="row g-2">
  <?php
  $statusPriceTable = [
@@ -728,6 +742,7 @@
  const params = new URLSearchParams({
  pitch_id: PITCH_ID,
  booking_date: BOOKING_DATE,
+ court_number: <?php echo (int)$courtNumber; ?>,
  start_time: startEl.value + ':00',
  end_time: endEl.value + ':00',
  });

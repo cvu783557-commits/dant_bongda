@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS pitches (
     address        VARCHAR(255) NULL,
     opening_time   TIME NOT NULL DEFAULT '06:00:00',
     closing_time   TIME NOT NULL DEFAULT '23:00:00',
+    field_count    INT UNSIGNED NOT NULL DEFAULT 1,
     grass_quality  VARCHAR(100) NULL,
     has_lighting   TINYINT(1) NOT NULL DEFAULT 0,
     has_changing_room TINYINT(1) NOT NULL DEFAULT 0,
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS time_slots (
 CREATE TABLE IF NOT EXISTS pitch_locks (
     id         INT PRIMARY KEY AUTO_INCREMENT,
     pitch_id   INT NOT NULL,
+    court_number INT UNSIGNED NOT NULL DEFAULT 1,
     lock_date  DATE NOT NULL,
     start_time TIME NOT NULL,
     end_time   TIME NOT NULL,
@@ -73,6 +75,7 @@ CREATE TABLE IF NOT EXISTS pitch_locks (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_lock_pitch_date (pitch_id, lock_date),
+    INDEX idx_lock_pitch_court_date (pitch_id, court_number, lock_date),
     INDEX idx_lock_start_time (start_time),
     CONSTRAINT fk_pitchlock_pitch FOREIGN KEY (pitch_id)
         REFERENCES pitches(id) ON DELETE CASCADE,
@@ -88,6 +91,7 @@ CREATE TABLE IF NOT EXISTS booking_series (
     id             INT PRIMARY KEY AUTO_INCREMENT,
     customer_id    INT NOT NULL,
     pitch_id       INT NOT NULL,
+    court_number   INT UNSIGNED NOT NULL DEFAULT 1,
     booking_month  DATE NOT NULL,
     start_time     TIME NOT NULL,
     end_time       TIME NOT NULL,
@@ -100,6 +104,7 @@ CREATE TABLE IF NOT EXISTS booking_series (
     updated_at     DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_booking_series_customer (customer_id),
     INDEX idx_booking_series_pitch_month (pitch_id, booking_month),
+    INDEX idx_booking_series_pitch_court_month (pitch_id, court_number, booking_month),
     CONSTRAINT fk_booking_series_customer FOREIGN KEY (customer_id)
         REFERENCES customers(id) ON DELETE RESTRICT,
     CONSTRAINT fk_booking_series_pitch FOREIGN KEY (pitch_id)
@@ -114,6 +119,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     id                  INT PRIMARY KEY AUTO_INCREMENT,
     customer_id         INT NOT NULL,
     pitch_id            INT NOT NULL,
+    court_number        INT UNSIGNED NOT NULL DEFAULT 1,
     series_id           INT NULL,
     booking_date        DATE NOT NULL,
     start_time          TIME NOT NULL,
@@ -136,6 +142,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     INDEX idx_booking_status (status),
     INDEX idx_payment_status (payment_status),
     INDEX idx_pitch_date (pitch_id, booking_date),
+    INDEX idx_booking_pitch_court_date (pitch_id, court_number, booking_date),
     INDEX idx_customer_id (customer_id),
     INDEX idx_created_by (created_by),
     INDEX idx_booking_series (series_id),

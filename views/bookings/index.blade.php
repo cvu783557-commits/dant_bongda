@@ -64,6 +64,7 @@
                             <div>
                                 <h2 class="h5 fw-bold mb-1"><?php echo e($booking['pitch_name']); ?></h2>
                                 <div class="text-secondary">
+                                    Sân <?php echo (int)($booking['court_number'] ?? 1); ?> ·
                                     <?php echo e(formatDate($booking['booking_date'])); ?>
                                     · <?php echo e(formatTime($booking['start_time'])); ?>–<?php echo e(formatTime($booking['end_time'])); ?>
                                 </div>

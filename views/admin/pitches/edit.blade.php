@@ -24,7 +24,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Loại sân <span class="text-danger">*</span></label>
                         <select name="type" class="form-select" required>
-                            <?php foreach ([5,7] as $t): ?>
+                            <?php foreach ([5,7,11] as $t): ?>
                                 <option value="<?php echo $t; ?>"
                                     <?php
                                         $cur = $old['type'] ?? $pitch['type'];
@@ -37,6 +37,12 @@
                         <label class="form-label fw-semibold">Giá thuê / giờ (₫) <span class="text-danger">*</span></label>
                         <input type="number" name="price_per_hour" class="form-control" min="0" required
                                value="<?php echo htmlspecialchars($old['price_per_hour'] ?? $pitch['price_per_hour']); ?>">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Số sân con</label>
+                        <input type="number" name="field_count" class="form-control" min="1" max="50" required
+                               value="<?php echo e($old['field_count'] ?? $pitch['field_count'] ?? 1); ?>">
+                        <div class="form-text">Giảm số lượng sẽ không xóa lịch sử các sân đã đặt.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Địa chỉ sân</label>

@@ -73,7 +73,7 @@
                     </div>
                     <div class="row mb-2">
                         <div class="col-5 text-muted">Sân bóng:</div>
-                        <div class="col-7 fw-semibold"><?php echo htmlspecialchars($booking['pitch_name']); ?> (Sân <?php echo (int)$booking['pitch_type']; ?> người)</div>
+                        <div class="col-7 fw-semibold"><?php echo htmlspecialchars($booking['pitch_name']); ?> · Sân <?php echo (int)($booking['court_number'] ?? 1); ?> (<?php echo (int)$booking['pitch_type']; ?> người)</div>
                     </div>
                     <?php if ($series): ?>
                     <div class="row mb-2">

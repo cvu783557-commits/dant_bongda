@@ -633,13 +633,10 @@ try {
         WHERE NOT EXISTS (SELECT 1 FROM pitches p WHERE p.name = samples.name)");
         stepOK("Đảm bảo có sân mẫu 7 người (không thêm trùng tên)");
 
-        $pdo->exec("DELETE FROM pitches
-            WHERE type = 11
-              AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.pitch_id = pitches.id)
-              AND NOT EXISTS (SELECT 1 FROM pitch_locks pl WHERE pl.pitch_id = pitches.id)");
-        $pdo->exec("UPDATE pitches SET status = 'inactive' WHERE type = 11 AND status <> 'inactive'");
-        stepOK("Ngừng kinh doanh sân 11 người; giữ sân có lịch sử để bảo toàn dữ liệu");
     }
+
+    require __DIR__ . '/run_pitch_courts_migration.php';
+    require __DIR__ . '/seed_hanoi_pitches.php';
 
     $pdo->exec("SET FOREIGN_KEY_CHECKS = 1");
 

@@ -20,13 +20,23 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Chọn sân <span class="text-danger">*</span></label>
-                        <select name="pitch_id" class="form-select" required>
+                        <select name="pitch_id" id="lock_pitch_id" class="form-select" required onchange="syncLockCourts();">
                             <option value="">-- Vui lòng chọn sân --</option>
                             <?php foreach ($pitches as $p): ?>
-                                <option value="<?php echo $p['id']; ?>" <?php echo (int)$pitchId === (int)$p['id'] ? 'selected' : ''; ?>>
+                                <option value="<?php echo $p['id']; ?>" data-field-count="<?php echo max(1, (int)($p['field_count'] ?? 1)); ?>" <?php echo (int)$pitchId === (int)$p['id'] ? 'selected' : ''; ?>>
                                     <?php echo e($p['name']); ?> (Sân <?php echo (int)$p['type']; ?> người - <?php echo formatMoney($p['price_per_hour']); ?>/giờ)
                                 </option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="court_number">Sân con <span class="text-danger">*</span></label>
+                        <select name="court_number" id="court_number" class="form-select" required>
+                            <?php $courtCount = 1; foreach ($pitches as $p) { if ((int)$p['id'] === (int)$pitchId) $courtCount = max(1, (int)($p['field_count'] ?? 1)); } ?>
+                            <?php for ($court = 1; $court <= $courtCount; $court++): ?>
+                                <option value="<?php echo $court; ?>" <?php echo (int)$courtNumber === $court ? 'selected' : ''; ?>>Sân <?php echo $court; ?></option>
+                            <?php endfor; ?>
                         </select>
                     </div>
 
@@ -96,6 +106,22 @@
 </div>
 
 <script>
+function syncLockCourts() {
+    var pitchSelect = document.getElementById('lock_pitch_id');
+    var option = pitchSelect.options[pitchSelect.selectedIndex];
+    var count = Number(option && option.dataset.fieldCount) || 1;
+    var select = document.getElementById('court_number');
+    var selected = Number(select.value) || 1;
+    select.innerHTML = '';
+    for (var court = 1; court <= count; court++) {
+        var courtOption = document.createElement('option');
+        courtOption.value = court;
+        courtOption.textContent = 'Sân ' + court;
+        select.appendChild(courtOption);
+    }
+    select.value = selected <= count ? String(selected) : '1';
+}
+
 function syncReasonText() {
     var sel = document.getElementById('reason_select');
     var txt = document.getElementById('reason_text');
