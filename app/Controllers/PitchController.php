@@ -85,10 +85,21 @@ class PitchController extends Controller
             $type = '';
         }
 
+        $districtOptions = [
+            'Ba Đình', 'Bắc Từ Liêm', 'Cầu Giấy', 'Đống Đa', 'Gia Lâm', 'Hà Đông',
+            'Hai Bà Trưng', 'Hoàn Kiếm', 'Hoàng Mai', 'Long Biên', 'Nam Từ Liêm',
+            'Tây Hồ', 'Thanh Xuân', 'Đông Anh',
+        ];
+        $district = $_GET['district'] ?? '';
+        if (!is_string($district)
+            || ($district !== '__unassigned' && $district !== '' && !in_array($district, $districtOptions, true))) {
+            $district = '';
+        }
+
         $availableOnly = ($_GET['availability'] ?? '') === 'available';
         $startTime = $time . ':00';
         $endTime = date('H:i:s', strtotime($startTime . ' +1 hour'));
-        $pitches = $this->pitch->getPublicListings($date, $startTime, $endTime, $type, $availableOnly);
+        $pitches = $this->pitch->getPublicListings($date, $startTime, $endTime, $type, $availableOnly, $district);
         foreach ($pitches as &$pitch) {
             $pitch['code'] = 'S' . str_pad((string)$pitch['id'], 3, '0', STR_PAD_LEFT);
         }
@@ -108,8 +119,10 @@ class PitchController extends Controller
                 'time' => $time,
                 'type' => (string)$type,
                 'availability' => $availableOnly ? 'available' : '',
+                'district' => $district,
             ],
             'timeOptions' => range(6, 22),
+            'districtOptions' => $districtOptions,
             'currentUser' => $currentUser,
             'notificationCount' => ($currentUser['role'] ?? '') === 'USER'
                 ? $this->notification->unreadCount((int)$currentUser['id'])
