@@ -23,6 +23,9 @@ $router->post('/notifications/read-all', PitchController::class . '@markAllNotif
 
 $router->get('/pitches/(\d+)',  PitchController::class . '@show');
 
+// Trang xem dịch vụ dành cho người dùng (đồng bộ với Quản lý dịch vụ bên admin)
+$router->get('/services',  PitchController::class . '@services');
+
 $router->post('/bookings',           PitchController::class . '@bookingStore');
 $router->get('/bookings/success/(\d+)', PitchController::class . '@bookingSuccess');
 $router->get('/bookings/vnpay-return', PitchController::class . '@vnpayReturn');

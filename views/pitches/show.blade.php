@@ -44,6 +44,7 @@
                 <li class="nav-item"><a class="nav-link" href="<?php echo route('/'); ?>">Trang chủ</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?php echo route('schedule'); ?>">Xem lịch sân</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?php echo route('my-bookings'); ?>">Lịch sử đặt sân</a></li>
+                <li class="nav-item"><a class="nav-link" href="<?php echo route('services'); ?>">Dịch vụ</a></li>
                 <?php if (!empty($currentUser)): ?>
                     <?php if (($currentUser['role'] ?? '') === 'USER'): ?>
                         <li class="nav-item">
