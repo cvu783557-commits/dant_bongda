@@ -37,7 +37,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Địa chỉ sân</label>
                         <input type="text" name="address" class="form-control" maxlength="255"
-                               value="<?php echo e($old['address'] ?? ''); ?>" placeholder="Số nhà, đường, phường/xã, quận/huyện">
+                               value="<?php echo e($old['address'] ?? ''); ?>" placeholder="Số nhà, đường, phường/xã, quận/huyện, Hà Nội">
                     </div>
                     <div class="row g-3 mb-3">
                         <div class="col-sm-6">

@@ -49,6 +49,37 @@
             color: #334155;
             font-size: .78rem;
         }
+        .location-sidebar {
+            border-right: 1px solid #e2e8f0;
+            padding-right: 1rem;
+        }
+        .location-link {
+            display: block;
+            padding: .55rem .7rem;
+            border-radius: 4px;
+            color: #475569;
+            text-decoration: none;
+        }
+        .location-link:hover,
+        .location-link.active {
+            color: #146c43;
+            background: #e8f5ee;
+        }
+        .location-link.active { font-weight: 600; }
+        @media (max-width: 991.98px) {
+            .location-sidebar {
+                border-right: 0;
+                border-bottom: 1px solid #e2e8f0;
+                padding: 0 0 1rem;
+            }
+            .location-links {
+                display: flex;
+                gap: .35rem;
+                overflow-x: auto;
+                padding-bottom: .35rem;
+            }
+            .location-link { white-space: nowrap; }
+        }
     </style>
 </head>
 <body>
@@ -164,9 +195,42 @@
         </p>
     </div>
 
-    <?php if (count($pitches) === 0): ?>
-        <div class="alert alert-info">Không tìm thấy sân phù hợp với ngày, giờ và bộ lọc đã chọn. Vui lòng đổi khung giờ hoặc loại sân.</div>
-    <?php else: ?>
+    <?php
+        $areaParams = [
+            'date' => $filters['date'],
+            'time' => $filters['time'],
+            'type' => $filters['type'],
+            'availability' => $filters['availability'],
+        ];
+        $areaUrl = static function ($district) use ($areaParams) {
+            $params = $areaParams;
+            if ($district !== '') {
+                $params['district'] = $district;
+            }
+            return route('/') . '?' . http_build_query($params);
+        };
+    ?>
+    <div class="row g-4 align-items-start">
+        <aside class="col-lg-3" aria-label="Lọc sân theo khu vực">
+            <nav class="location-sidebar">
+                <div class="small text-uppercase fw-semibold text-secondary mb-2">Khu vực</div>
+                <div class="location-links">
+                    <a class="location-link <?php echo $filters['district'] === '' ? 'active' : ''; ?>"
+                       href="<?php echo e($areaUrl('')); ?>">Tất cả khu vực</a>
+                    <div class="w-100 small fw-bold text-dark px-2 pt-2">Hà Nội</div>
+                    <?php foreach ($districtOptions as $districtOption): ?>
+                        <a class="location-link <?php echo $filters['district'] === $districtOption ? 'active' : ''; ?>"
+                           href="<?php echo e($areaUrl($districtOption)); ?>"><?php echo e($districtOption); ?></a>
+                    <?php endforeach; ?>
+                    <a class="location-link <?php echo $filters['district'] === '__unassigned' ? 'active' : ''; ?>"
+                       href="<?php echo e($areaUrl('__unassigned')); ?>">Chưa cập nhật khu vực</a>
+                </div>
+            </nav>
+        </aside>
+        <main class="col-lg-9">
+            <?php if (count($pitches) === 0): ?>
+                <div class="alert alert-info">Không tìm thấy sân phù hợp với ngày, giờ và khu vực đã chọn.</div>
+            <?php else: ?>
         <div class="row g-4">
             <?php foreach ($pitches as $p): ?>
                 <?php
@@ -235,7 +299,9 @@
                 </div>
             <?php endforeach; ?>
         </div>
-    <?php endif; ?>
+            <?php endif; ?>
+        </main>
+    </div>
 
 </div>
 

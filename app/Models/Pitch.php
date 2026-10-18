@@ -28,7 +28,7 @@ class Pitch extends Model
         return $this->all('active');
     }
 
-    public function getPublicListings($date, $startTime, $endTime, $type = null, $availableOnly = false)
+    public function getPublicListings($date, $startTime, $endTime, $type = null, $availableOnly = false, $district = '')
     {
         $sql = "SELECT p.*,
                     CASE
@@ -57,6 +57,13 @@ class Pitch extends Model
         if (in_array((int)$type, [5, 7], true)) {
             $sql .= " AND p.type = ?";
             $params[] = (int)$type;
+        }
+
+        if ($district === '__unassigned') {
+            $sql .= " AND (p.address IS NULL OR TRIM(p.address) = '')";
+        } elseif ($district !== '') {
+            $sql .= " AND p.address LIKE ?";
+            $params[] = '%' . $district . '%';
         }
 
         if ($availableOnly) {
