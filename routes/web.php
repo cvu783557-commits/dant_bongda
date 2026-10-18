@@ -13,6 +13,13 @@ $router = new Router();
 
 // ====================== FRONTEND ======================
 $router->get('/',  PitchController::class . '@index');
+$router->get('/schedule', PitchController::class . '@schedule');
+$router->get('/my-bookings', PitchController::class . '@myBookings');
+$router->post('/my-bookings/(\d+)/cancel-request', PitchController::class . '@requestCancellation');
+$router->post('/my-bookings/(\d+)/rating', PitchController::class . '@rateBooking');
+$router->get('/notifications', PitchController::class . '@notifications');
+$router->post('/notifications/(\d+)/read', PitchController::class . '@markNotificationRead');
+$router->post('/notifications/read-all', PitchController::class . '@markAllNotificationsRead');
 
 $router->get('/pitches/(\d+)',  PitchController::class . '@show');
 
@@ -61,6 +68,9 @@ $router->post('/admin/services/(\d+)/delete',          AdminServiceController::c
 // Admin -> Quản lý đặt sân (version mới - đầy đủ nghiệp vụ)
 $router->get('/admin/bookings',                       AdminBookingController::class . '@index');
 $router->get('/admin/bookings/calendar',              AdminBookingController::class . '@calendar');
+$router->get('/admin/cancellation-requests',           AdminBookingController::class . '@cancellationRequests');
+$router->post('/admin/cancellation-requests/(\d+)/approve', AdminBookingController::class . '@approveCancellationRequest');
+$router->post('/admin/cancellation-requests/(\d+)/reject', AdminBookingController::class . '@rejectCancellationRequest');
 $router->get('/admin/bookings/create',                AdminBookingController::class . '@create');
 $router->post('/admin/bookings',                      AdminBookingController::class . '@store');
 $router->get('/admin/bookings/check-overlap',         AdminBookingController::class . '@checkOverlap');

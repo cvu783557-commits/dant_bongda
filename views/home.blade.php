@@ -62,7 +62,16 @@
         <div class="collapse navbar-collapse justify-content-end" id="topNav">
             <ul class="navbar-nav">
                 <li class="nav-item"><a class="nav-link" href="#pitches">Danh sách sân</a></li>
+                <li class="nav-item"><a class="nav-link" href="<?php echo route('schedule'); ?>">Xem lịch sân</a></li>
+                <li class="nav-item"><a class="nav-link" href="<?php echo route('my-bookings'); ?>">Lịch sử đặt sân</a></li>
                 <?php if (!empty($currentUser)): ?>
+                    <?php if (($currentUser['role'] ?? '') === 'USER'): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="<?php echo route('notifications'); ?>">
+                                Thông báo<?php if (!empty($notificationCount)): ?> <span class="badge rounded-pill bg-danger"><?php echo (int)$notificationCount; ?></span><?php endif; ?>
+                            </a>
+                        </li>
+                    <?php endif; ?>
                     <li class="nav-item"><span class="nav-link">Xin chào, <?php echo e($currentUser['full_name']); ?> (<?php echo e($currentUser['role']); ?>)</span></li>
                     <?php if (($currentUser['role'] ?? '') === 'ADMIN'): ?>
                         <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/bookings'); ?>">Quản trị</a></li>

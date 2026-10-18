@@ -202,6 +202,37 @@ class Booking extends Model
         return $this->connection->executeQuery($sql, $params)->fetchAllAssociative();
     }
 
+    public function getForUser(int $userId): array
+    {
+        return $this->connection->executeQuery(
+            "SELECT b.*, c.name AS customer_name, c.phone AS customer_phone,
+                    c.email AS customer_email, p.name AS pitch_name, p.type AS pitch_type,
+                    p.price_per_hour, u.full_name AS creator_name,
+                    pr.id AS rating_id, pr.rating AS customer_rating, pr.comment AS rating_comment
+             FROM {$this->table} b
+             LEFT JOIN customers c ON c.id = b.customer_id
+             LEFT JOIN pitches p ON p.id = b.pitch_id
+             LEFT JOIN users u ON u.id = b.created_by
+             LEFT JOIN pitch_ratings pr ON pr.booking_id = b.id AND pr.customer_user_id = b.created_by
+             WHERE b.created_by = ?
+             ORDER BY b.booking_date DESC, b.start_time DESC, b.id DESC",
+            [$userId]
+        )->fetchAllAssociative();
+    }
+
+    public function saveVnpayReference(int $bookingId, ?int $seriesId, string $transactionRef, string $createDate): int
+    {
+        $sql = "UPDATE {$this->table}
+                SET vnpay_txn_ref = ?, vnpay_transaction_date = ?, updated_at = NOW()
+                WHERE " . ($seriesId ? 'series_id = ?' : 'id = ?');
+        return $this->connection->executeStatement(
+            $sql,
+            $seriesId
+                ? [$transactionRef, $createDate, $seriesId]
+                : [$transactionRef, $createDate, $bookingId]
+        );
+    }
+
     /**
      * KIỂM TRA TRÙNG LỊCH - NGHIỆP VỤ CHÍNH
      * Các trường hợp trùng (overlap):
@@ -465,7 +496,7 @@ class Booking extends Model
                         (customer_id, pitch_id, booking_date, start_time, end_time,
                          total_price, deposit, paid_amount, payment_method, payment_status,
                          status, cancellation_reason, note, created_by, series_id, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, ?, NULL, ?, NULL, ?, NOW(), NOW())",
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, ?, NULL, ?, ?, ?, NOW(), NOW())",
                     [
                         (int)$seriesData['customer_id'],
                         $pitchId,
@@ -477,6 +508,7 @@ class Booking extends Model
                         self::PAY_UNPAID,
                         self::STATUS_PENDING,
                         $seriesData['note'] ?? '',
+                        isset($seriesData['created_by']) ? ((int)$seriesData['created_by'] ?: null) : null,
                         $seriesId,
                     ]
                 );
@@ -526,7 +558,7 @@ class Booking extends Model
         return $id ? (int)$id : null;
     }
 
-    public function recordSeriesVnpayDeposit(int $seriesId): array
+    public function recordSeriesVnpayDeposit(int $seriesId, ?string $transactionNo = null): array
     {
         $this->connection->beginTransaction();
         try {
@@ -560,10 +592,11 @@ class Booking extends Model
                     );
                     $this->connection->executeStatement(
                         "UPDATE {$this->table}
-                         SET paid_amount = deposit, payment_status = ?, updated_at = NOW()
+                         SET paid_amount = deposit, payment_status = ?,
+                             vnpay_transaction_no = COALESCE(?, vnpay_transaction_no), updated_at = NOW()
                          WHERE id = ?",
-                        [$paymentStatus, (int)$booking['id']]
-                    );
+                            [$paymentStatus, $transactionNo, (int)$booking['id']]
+                        );
                 }
                 $this->connection->executeStatement(
                     "UPDATE booking_series
@@ -574,6 +607,13 @@ class Booking extends Model
                         (float)$series['deposit'],
                         (float)$series['deposit']
                     ), $seriesId]
+                );
+            }
+            if ($transactionNo !== null) {
+                $this->connection->executeStatement(
+                    "UPDATE {$this->table} SET vnpay_transaction_no = ?, updated_at = NOW()
+                     WHERE series_id = ?",
+                    [$transactionNo, $seriesId]
                 );
             }
 
@@ -676,12 +716,12 @@ class Booking extends Model
         }
     }
 
-    public function cancel($id, $reason)
+    public function cancel($id, $reason, bool $refunded = false)
     {
         $this->connection->beginTransaction();
         try {
             $booking = $this->connection->executeQuery(
-                "SELECT id, status FROM {$this->table} WHERE id = ? FOR UPDATE",
+                "SELECT id, status, series_id FROM {$this->table} WHERE id = ? FOR UPDATE",
                 [(int)$id]
             )->fetchAssociative();
             if (!$booking) {
@@ -704,10 +744,46 @@ class Booking extends Model
                 }
 
                 $this->connection->executeStatement(
-                    "UPDATE {$this->table} SET status = ?, cancellation_reason = ?, updated_at = NOW()
+                    "UPDATE {$this->table}
+                     SET status = ?, cancellation_reason = ?,
+                         paid_amount = IF(?, 0, paid_amount),
+                         payment_status = IF(?, ?, payment_status),
+                         updated_at = NOW()
                      WHERE id = ?",
-                    [self::STATUS_CANCELLED, trim($reason) ?: null, (int)$id]
+                    [
+                        self::STATUS_CANCELLED,
+                        trim($reason) ?: null,
+                        $refunded ? 1 : 0,
+                        $refunded ? 1 : 0,
+                        self::PAY_UNPAID,
+                        (int)$id,
+                    ]
                 );
+                if ($refunded && !empty($booking['series_id'])) {
+                    $seriesId = (int)$booking['series_id'];
+                    $series = $this->findSeries($seriesId);
+                    if ($series) {
+                        $seriesPaid = (float)$this->connection->executeQuery(
+                            "SELECT COALESCE(SUM(paid_amount), 0)
+                             FROM {$this->table} WHERE series_id = ?",
+                            [$seriesId]
+                        )->fetchOne();
+                        $this->connection->executeStatement(
+                            "UPDATE booking_series
+                             SET paid_amount = ?, payment_status = ?, updated_at = NOW()
+                             WHERE id = ?",
+                            [
+                                $seriesPaid,
+                                self::calcPaymentStatus(
+                                    (float)$series['total_price'],
+                                    (float)$series['deposit'],
+                                    $seriesPaid
+                                ),
+                                $seriesId,
+                            ]
+                        );
+                    }
+                }
             }
 
             $this->connection->commit();
@@ -776,7 +852,7 @@ class Booking extends Model
         return ['success' => true];
     }
 
-    public function recordVnpayDeposit(int $id): array
+    public function recordVnpayDeposit(int $id, ?string $transactionNo = null): array
     {
         $this->connection->beginTransaction();
         try {
@@ -802,9 +878,15 @@ class Booking extends Model
                 $paymentStatus = self::calcPaymentStatus((float)$booking['total_price'], $deposit, $paid);
                 $this->connection->executeStatement(
                     "UPDATE {$this->table}
-                     SET paid_amount = ?, payment_status = ?, updated_at = NOW()
+                     SET paid_amount = ?, payment_status = ?,
+                         vnpay_transaction_no = COALESCE(?, vnpay_transaction_no), updated_at = NOW()
                      WHERE id = ?",
-                    [$paid, $paymentStatus, $id]
+                    [$paid, $paymentStatus, $transactionNo, $id]
+                );
+            } elseif ($transactionNo !== null) {
+                $this->connection->executeStatement(
+                    "UPDATE {$this->table} SET vnpay_transaction_no = ?, updated_at = NOW() WHERE id = ?",
+                    [$transactionNo, $id]
                 );
             }
 
