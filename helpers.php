@@ -30,7 +30,15 @@ if (!function_exists('base_url')) {
 
         if ($httpHost) {
             $basePath = $envBase ? parse_url($envBase, PHP_URL_PATH) : '';
-            $basePath = is_string($basePath) ? '/' . trim($basePath, '/') : '';
+            if (!is_string($basePath) || trim($basePath, '/') === '') {
+                $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+                $detectedPath = dirname($scriptName);
+                $basePath = $detectedPath === '.' || $detectedPath === '/'
+                    ? ''
+                    : '/' . trim($detectedPath, '/');
+            } else {
+                $basePath = '/' . trim($basePath, '/');
+            }
             $basePath = $basePath === '/' ? '' : $basePath;
 
             $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443
