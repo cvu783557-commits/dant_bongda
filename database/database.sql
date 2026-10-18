@@ -1,6 +1,7 @@
 -- Database schema for the football pitch booking application.
 -- Safe to re-run: this script does not drop tables or existing records.
--- For upgrading existing databases and enabling monthly bookings, run: php database/run_upgrade.php
+-- Existing databases: run database/run_upgrade.php, then the customer portal and
+-- ratings/notifications migration scripts with PHP.
 
 CREATE DATABASE IF NOT EXISTS db_football_field_booking
     CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -120,6 +121,9 @@ CREATE TABLE IF NOT EXISTS bookings (
     total_price         DECIMAL(12,0) NOT NULL DEFAULT 0,
     deposit             DECIMAL(12,0) NOT NULL DEFAULT 0,
     paid_amount         DECIMAL(12,0) NOT NULL DEFAULT 0,
+    vnpay_txn_ref       VARCHAR(100) NULL,
+    vnpay_transaction_no VARCHAR(15) NULL,
+    vnpay_transaction_date CHAR(14) NULL,
     payment_method      ENUM('cash','banking','momo','zalo','vnpay','other') NOT NULL DEFAULT 'cash',
     payment_status      ENUM('unpaid','deposit','partial','paid') NOT NULL DEFAULT 'unpaid',
     status              ENUM('pending','confirmed','in_progress','completed','cancelled') NOT NULL DEFAULT 'pending',
@@ -135,6 +139,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     INDEX idx_customer_id (customer_id),
     INDEX idx_created_by (created_by),
     INDEX idx_booking_series (series_id),
+    INDEX idx_booking_vnpay_txn_ref (vnpay_txn_ref),
     CONSTRAINT fk_bookings_v2_customer FOREIGN KEY (customer_id)
         REFERENCES customers(id) ON DELETE RESTRICT,
     CONSTRAINT fk_bookings_v2_pitch FOREIGN KEY (pitch_id)
@@ -147,6 +152,65 @@ CREATE TABLE IF NOT EXISTS bookings (
     CONSTRAINT chk_bookings_v2_total_price_nonneg CHECK (total_price >= 0),
     CONSTRAINT chk_bookings_v2_deposit_nonneg CHECK (deposit >= 0),
     CONSTRAINT chk_bookings_v2_paid_nonneg CHECK (paid_amount >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS booking_cancellation_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    booking_id INT NOT NULL,
+    customer_user_id INT NOT NULL,
+    request_reason VARCHAR(500) NOT NULL,
+    status ENUM('pending','processing','approved','refunded','rejected','manual_review') NOT NULL DEFAULT 'pending',
+    refund_amount DECIMAL(12,0) NOT NULL DEFAULT 0,
+    refund_request_id VARCHAR(32) NULL,
+    refund_response_code VARCHAR(14) NULL,
+    refund_message VARCHAR(500) NULL,
+    reviewed_by INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at DATETIME NULL,
+    INDEX idx_cancel_request_status (status, created_at),
+    INDEX idx_cancel_request_booking (booking_id, status),
+    INDEX idx_cancel_request_customer (customer_user_id, created_at),
+    CONSTRAINT fk_cancel_request_booking FOREIGN KEY (booking_id)
+        REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_cancel_request_customer FOREIGN KEY (customer_user_id)
+        REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_cancel_request_reviewer FOREIGN KEY (reviewed_by)
+        REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS pitch_ratings (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    booking_id INT NOT NULL,
+    pitch_id INT NOT NULL,
+    customer_user_id INT NOT NULL,
+    rating TINYINT UNSIGNED NOT NULL,
+    comment VARCHAR(1000) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_pitch_rating_booking (booking_id),
+    INDEX idx_pitch_ratings_pitch_created (pitch_id, created_at),
+    CONSTRAINT chk_pitch_rating_value CHECK (rating BETWEEN 1 AND 5),
+    CONSTRAINT fk_pitch_rating_booking FOREIGN KEY (booking_id)
+        REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_pitch_rating_pitch FOREIGN KEY (pitch_id)
+        REFERENCES pitches(id) ON DELETE CASCADE,
+    CONSTRAINT fk_pitch_rating_customer FOREIGN KEY (customer_user_id)
+        REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS user_notifications (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    type VARCHAR(40) NOT NULL,
+    title VARCHAR(160) NOT NULL,
+    message VARCHAR(500) NOT NULL,
+    url VARCHAR(255) NOT NULL,
+    dedupe_key VARCHAR(120) NOT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_notification_dedupe (user_id, dedupe_key),
+    INDEX idx_user_notifications_unread (user_id, is_read, created_at),
+    CONSTRAINT fk_user_notification_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Services module

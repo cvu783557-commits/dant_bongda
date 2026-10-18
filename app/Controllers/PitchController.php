@@ -7,6 +7,9 @@ use App\Models\Pitch;
 use App\Models\Booking;
 use App\Models\BookingService;
 use App\Models\Customer;
+use App\Models\CancellationRequest;
+use App\Models\Notification;
+use App\Models\PitchRating;
 use App\Models\PitchLock;
 use App\Models\Service;
 use App\Models\User;
@@ -21,6 +24,9 @@ class PitchController extends Controller
     protected $pitchLock;
     protected $service;
     protected $customer;
+    protected $cancellationRequest;
+    protected $notification;
+    protected $pitchRating;
     protected $user;
     protected $validator;
 
@@ -32,6 +38,9 @@ class PitchController extends Controller
         $this->pitchLock = new PitchLock();
         $this->service   = new Service();
         $this->customer  = new Customer();
+        $this->cancellationRequest = new CancellationRequest();
+        $this->notification = new Notification();
+        $this->pitchRating = new PitchRating();
         $this->user      = new User();
         $this->validator = new Validator();
     }
@@ -87,6 +96,7 @@ class PitchController extends Controller
 
         $success = getFlash('success');
         $error   = getFlash('error') ?: $filterError;
+        $currentUser = $this->user->getActiveUser();
 
         return view('home', [
             'pitches' => $pitches,
@@ -100,7 +110,10 @@ class PitchController extends Controller
                 'availability' => $availableOnly ? 'available' : '',
             ],
             'timeOptions' => range(6, 22),
-            'currentUser' => $this->user->getActiveUser(),
+            'currentUser' => $currentUser,
+            'notificationCount' => ($currentUser['role'] ?? '') === 'USER'
+                ? $this->notification->unreadCount((int)$currentUser['id'])
+                : 0,
         ]);
     }
 
@@ -119,6 +132,83 @@ class PitchController extends Controller
             ];
         }
         return $slots;
+    }
+
+    public function schedule()
+    {
+        $date = $_GET['date'] ?? date('Y-m-d');
+        $dateParts = is_string($date) ? explode('-', $date) : [];
+        $dateValid = count($dateParts) === 3
+            && ctype_digit(implode('', $dateParts))
+            && checkdate((int)$dateParts[1], (int)$dateParts[2], (int)$dateParts[0])
+            && $date === sprintf('%04d-%02d-%02d', (int)$dateParts[0], (int)$dateParts[1], (int)$dateParts[2]);
+        $error = null;
+        if (!$dateValid || $date < date('Y-m-d')) {
+            $date = date('Y-m-d');
+            $error = 'Ngày xem không hợp lệ hoặc đã qua. Đang hiển thị lịch từ hôm nay.';
+        }
+
+        $pitches = [];
+        foreach ($this->pitch->all('active') as $pitch) {
+            $slots = $this->publicTimeSlots(
+                $pitch['opening_time'] ?? Booking::MIN_OPERATING_HOUR,
+                $pitch['closing_time'] ?? Booking::MAX_OPERATING_HOUR
+            );
+            $bookings = $this->booking->getByPitchAndDate((int)$pitch['id'], $date, false);
+            $locks = $this->pitchLock->getByPitchAndDate((int)$pitch['id'], $date);
+            $currentTime = (int)date('G') * 3600 + (int)date('i') * 60;
+
+            foreach ($slots as &$slot) {
+                $slotStart = $slot['start_sec'];
+                $slotEnd = $slotStart + 3600;
+                $slot['status'] = 'available';
+
+                foreach ($locks as $lock) {
+                    $lockStart = ((int)substr($lock['start_time'], 0, 2) * 3600)
+                        + ((int)substr($lock['start_time'], 3, 2) * 60);
+                    $lockEnd = ((int)substr($lock['end_time'], 0, 2) * 3600)
+                        + ((int)substr($lock['end_time'], 3, 2) * 60);
+                    if ($slotStart < $lockEnd && $slotEnd > $lockStart) {
+                        $slot['status'] = 'locked';
+                        break;
+                    }
+                }
+
+                if ($slot['status'] === 'available') {
+                    foreach ($bookings as $booking) {
+                        $bookingStart = ((int)substr($booking['start_time'], 0, 2) * 3600)
+                            + ((int)substr($booking['start_time'], 3, 2) * 60);
+                        $bookingEnd = ((int)substr($booking['end_time'], 0, 2) * 3600)
+                            + ((int)substr($booking['end_time'], 3, 2) * 60);
+                        if ($slotStart < $bookingEnd && $slotEnd > $bookingStart) {
+                            $slot['status'] = 'booked';
+                            break;
+                        }
+                    }
+                }
+
+                if ($slot['status'] === 'available'
+                    && $date === date('Y-m-d')
+                    && $slotStart < $currentTime) {
+                    $slot['status'] = 'past';
+                }
+            }
+            unset($slot);
+
+            $pitch['slots'] = $slots;
+            $pitches[] = $pitch;
+        }
+
+        $currentUser = $this->user->getActiveUser();
+        return view('schedule', [
+            'date' => $date,
+            'pitches' => $pitches,
+            'error' => $error,
+            'currentUser' => $currentUser,
+            'notificationCount' => ($currentUser['role'] ?? '') === 'USER'
+                ? $this->notification->unreadCount((int)$currentUser['id'])
+                : 0,
+        ]);
     }
 
     public function show($id)
@@ -171,8 +261,11 @@ class PitchController extends Controller
         $success = getFlash('success');
         $error   = getFlash('error');
 
+        $currentUser = $this->user->getActiveUser();
         return view('pitches.show', [
             'pitch'         => $pitch,
+            'ratings'       => $this->pitchRating->forPitch((int)$id),
+            'ratingSummary' => $this->pitchRating->summaryForPitch((int)$id),
             'services'      => $this->service->getAvailableForBooking(),
             'hourSlots'     => $hourSlots,
             'date'          => $date,
@@ -187,7 +280,10 @@ class PitchController extends Controller
             'success'       => $success,
             'error'         => $error,
             'old'           => $_SESSION['old'] ?? [],
-            'currentUser'   => $this->user->getActiveUser(),
+            'currentUser'   => $currentUser,
+            'notificationCount' => ($currentUser['role'] ?? '') === 'USER'
+                ? $this->notification->unreadCount((int)$currentUser['id'])
+                : 0,
         ]);
     }
 
@@ -232,6 +328,13 @@ class PitchController extends Controller
     {
         $data = $_POST;
         keepOld($data);
+
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng trước khi đặt sân.');
+            redirect('login');
+            return;
+        }
 
         try {
             $vnpay = new Vnpay();
@@ -435,6 +538,7 @@ class PitchController extends Controller
                 'total_price' => $total,
                 'deposit' => $deposit,
                 'note' => isset($data['notes']) ? trim($data['notes']) : '',
+                'created_by' => (int)$currentUser['id'],
                 'services' => $serviceItems,
             ], $occurrences);
         } else {
@@ -451,7 +555,7 @@ class PitchController extends Controller
                 'payment_status' => Booking::PAY_UNPAID,
                 'status'         => Booking::STATUS_PENDING,
                 'note'           => isset($data['notes']) ? trim($data['notes']) : '',
-                'created_by'     => null,
+                'created_by'     => (int)$currentUser['id'],
                 'services'       => $serviceItems,
             ]);
         }
@@ -471,7 +575,7 @@ class PitchController extends Controller
             ? 'M' . (int)$result['series_id']
             : (string)$bookingId;
         try {
-            $paymentUrl = $vnpay->createPaymentUrl(
+            $paymentRequest = $vnpay->createPaymentRequest(
                 $paymentReference,
                 $deposit,
                 $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
@@ -480,6 +584,16 @@ class PitchController extends Controller
                     : 'Dat coc don san #' . $bookingId,
                 $paymentMethod === 'bank' ? 'VNBANK' : 'VNPAYQR'
             );
+            $savedReferences = $this->booking->saveVnpayReference(
+                $bookingId,
+                $bookingMode === 'monthly' ? (int)$result['series_id'] : null,
+                $paymentRequest['txn_ref'],
+                $paymentRequest['create_date']
+            );
+            if ($savedReferences < 1) {
+                throw new \RuntimeException('Không lưu được mã giao dịch VNPay cho đơn đặt sân.');
+            }
+            $paymentUrl = $paymentRequest['url'];
         } catch (\Throwable $e) {
             $this->logError('VNPay payment URL error for booking #' . $bookingId . ': ' . $e->getMessage());
             if ($bookingMode === 'monthly') {
@@ -543,13 +657,23 @@ class PitchController extends Controller
         }
 
         if (($_GET['vnp_ResponseCode'] ?? '') === '00' && ($_GET['vnp_TransactionStatus'] ?? '') === '00') {
+            $transactionNo = isset($_GET['vnp_TransactionNo']) && ctype_digit((string)$_GET['vnp_TransactionNo'])
+                ? (string)$_GET['vnp_TransactionNo']
+                : null;
             $payment = $isMonthly
-                ? $this->booking->recordSeriesVnpayDeposit($referenceId)
-                : $this->booking->recordVnpayDeposit($bookingId);
+                ? $this->booking->recordSeriesVnpayDeposit($referenceId, $transactionNo)
+                : $this->booking->recordVnpayDeposit($bookingId, $transactionNo);
             if (!$payment['success']) {
                 setFlash('error', $payment['error']);
             } else {
                 setFlash('success', 'Thanh toán tiền đặt cọc VNPay thành công.');
+                $this->notification->createForBookingOwner(
+                    (int)$bookingId,
+                    'payment',
+                    'Đặt cọc thành công',
+                    'VNPay đã xác nhận tiền đặt cọc cho đơn #' . (int)$bookingId . '.',
+                    'payment:booking:' . (int)$bookingId
+                );
             }
         } else {
             setFlash('error', 'Giao dịch VNPay chưa thành công. Đơn đặt sân đang chờ thanh toán.');
@@ -610,14 +734,181 @@ class PitchController extends Controller
             return;
         }
 
+        $transactionNo = isset($_GET['vnp_TransactionNo']) && ctype_digit((string)$_GET['vnp_TransactionNo'])
+            ? (string)$_GET['vnp_TransactionNo']
+            : null;
         $payment = $isMonthly
-            ? $this->booking->recordSeriesVnpayDeposit($referenceId)
-            : $this->booking->recordVnpayDeposit($bookingId);
+            ? $this->booking->recordSeriesVnpayDeposit($referenceId, $transactionNo)
+            : $this->booking->recordVnpayDeposit($bookingId, $transactionNo);
         if (!$payment['success']) {
             echo json_encode(['RspCode' => '99', 'Message' => 'Could not update payment']);
             return;
         }
+        $this->notification->createForBookingOwner(
+            (int)$bookingId,
+            'payment',
+            'Đặt cọc thành công',
+            'VNPay đã xác nhận tiền đặt cọc cho đơn #' . (int)$bookingId . '.',
+            'payment:booking:' . (int)$bookingId
+        );
         echo json_encode(['RspCode' => '00', 'Message' => 'Confirm Success']);
+    }
+
+    public function myBookings()
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để xem đơn đặt sân.');
+            redirect('login');
+            return;
+        }
+
+        return view('bookings.index', [
+            'bookings' => $this->booking->getForUser((int)$currentUser['id']),
+            'cancellationRequests' => $this->cancellationRequest->forCustomer((int)$currentUser['id']),
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'currentUser' => $currentUser,
+            'notificationCount' => $this->notification->unreadCount((int)$currentUser['id']),
+        ]);
+    }
+
+    public function rateBooking($id)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để đánh giá sân.');
+            redirect('login');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $rating = filter_var($_POST['rating'] ?? null, FILTER_VALIDATE_INT);
+        $comment = trim((string)($_POST['comment'] ?? ''));
+        if ($rating === false || $rating < 1 || $rating > 5 || mb_strlen($comment) > 1000) {
+            setFlash('error', 'Vui lòng chọn mức đánh giá từ 1 đến 5 sao và nhập nhận xét tối đa 1000 ký tự.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $result = $this->pitchRating->createForCompletedBooking(
+            (int)$id,
+            (int)$currentUser['id'],
+            $rating,
+            $comment
+        );
+        setFlash($result['success'] ? 'success' : 'error', $result['success']
+            ? 'Cảm ơn bạn đã đánh giá sân.'
+            : $result['error']);
+        redirect('my-bookings');
+    }
+
+    public function notifications()
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để xem thông báo.');
+            redirect('login');
+            return;
+        }
+
+        return view('notifications.index', [
+            'notifications' => $this->notification->forUser((int)$currentUser['id']),
+            'unreadCount' => $this->notification->unreadCount((int)$currentUser['id']),
+            'notificationCount' => $this->notification->unreadCount((int)$currentUser['id']),
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'currentUser' => $currentUser,
+        ]);
+    }
+
+    public function markNotificationRead($id)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để quản lý thông báo.');
+            redirect('login');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('notifications');
+            return;
+        }
+
+        if (!$this->notification->markRead((int)$id, (int)$currentUser['id'])) {
+            setFlash('error', 'Thông báo không tồn tại hoặc đã được đọc.');
+        }
+        redirect('notifications');
+    }
+
+    public function markAllNotificationsRead()
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để quản lý thông báo.');
+            redirect('login');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('notifications');
+            return;
+        }
+
+        $this->notification->markAllRead((int)$currentUser['id']);
+        setFlash('success', 'Đã đánh dấu tất cả thông báo là đã đọc.');
+        redirect('notifications');
+    }
+
+    public function requestCancellation($id)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để gửi yêu cầu hủy.');
+            redirect('login');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $reason = trim((string)($_POST['request_reason'] ?? ''));
+        if ($reason === '' || mb_strlen($reason) > 500) {
+            setFlash('error', 'Vui lòng nhập lý do hủy (tối đa 500 ký tự).');
+            redirect('my-bookings');
+            return;
+        }
+
+        $result = $this->cancellationRequest->createForCustomer(
+            (int)$id,
+            (int)$currentUser['id'],
+            $reason
+        );
+        if ($result['success']) {
+            $this->notification->createForUser(
+                (int)$currentUser['id'],
+                'cancellation',
+                'Đã tiếp nhận yêu cầu hủy',
+                'Yêu cầu hủy đơn #' . (int)$id . ' đã được gửi đến quản lý.',
+                route('my-bookings'),
+                'cancellation:request:' . (int)$result['id'] . ':created'
+            );
+        }
+        setFlash($result['success'] ? 'success' : 'error', $result['success']
+            ? 'Đã gửi yêu cầu hủy. Quản lý sẽ xem xét và xử lý tiền cọc.'
+            : $result['error']);
+        redirect('my-bookings');
     }
 
     public function bookingSuccess($id)

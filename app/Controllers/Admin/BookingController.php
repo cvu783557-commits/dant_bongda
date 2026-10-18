@@ -6,10 +6,13 @@ use App\Controller;
 use App\Models\Booking;
 use App\Models\BookingService;
 use App\Models\Customer;
+use App\Models\CancellationRequest;
+use App\Models\Notification;
 use App\Models\Pitch;
 use App\Models\PitchLock;
 use App\Models\TimeSlot;
 use App\Models\User;
+use App\Services\Vnpay;
 use Rakit\Validation\Validator;
 
 class BookingController extends Controller
@@ -22,6 +25,8 @@ class BookingController extends Controller
     protected $user;
     protected $validator;
     protected $pitchLock;
+    protected $cancellationRequest;
+    protected $notification;
 
     public function __construct()
     {
@@ -32,6 +37,8 @@ class BookingController extends Controller
         $this->timeSlot  = new TimeSlot();
         $this->user      = new User();
         $this->pitchLock = new PitchLock();
+        $this->cancellationRequest = new CancellationRequest();
+        $this->notification = new Notification();
         $this->validator = new Validator();
 
         if (session_status() === PHP_SESSION_NONE) session_start();
@@ -58,6 +65,197 @@ class BookingController extends Controller
     protected function currentUser()
     {
         return $this->user->getActiveUser();
+    }
+
+    public function cancellationRequests()
+    {
+        return view('admin.bookings.cancellation_requests', [
+            'requests' => $this->cancellationRequest->allForAdmin(),
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'currentUser' => $this->currentUser(),
+        ]);
+    }
+
+    public function approveCancellationRequest($id)
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/cancellation-requests');
+            return;
+        }
+
+        $request = $this->cancellationRequest->find((int)$id);
+        if (!$request || $request['status'] !== 'pending') {
+            setFlash('error', 'Yêu cầu không tồn tại hoặc đã được xử lý.');
+            redirect('admin/cancellation-requests');
+            return;
+        }
+
+        $admin = $this->currentUser();
+        $refundRequestId = date('YmdHis') . bin2hex(random_bytes(4));
+        $request = $this->cancellationRequest->claimForReview(
+            (int)$id,
+            (int)$admin['id'],
+            $refundRequestId
+        );
+        if (!$request) {
+            setFlash('error', 'Yêu cầu đang được xử lý ở phiên khác.');
+            redirect('admin/cancellation-requests');
+            return;
+        }
+
+        if ((float)$request['refund_amount'] <= 0
+            && $request['payment_method'] === 'vnpay'
+            && $request['payment_status'] === Booking::PAY_UNPAID
+            && !empty($request['vnpay_txn_ref'])) {
+            $message = 'VNPay chưa xác nhận giao dịch. Đối soát trạng thái giao dịch trước khi hủy để tránh bỏ sót tiền khách vừa thanh toán.';
+            $this->cancellationRequest->setStatus((int)$id, 'manual_review', null, $message);
+            $this->notifyCancellationStatus(
+                $request,
+                'manual_review',
+                'Yêu cầu hủy cần được kiểm tra',
+                $message
+            );
+            setFlash('error', $message);
+            redirect('admin/cancellation-requests');
+            return;
+        }
+
+        $refund = null;
+        if ((float)$request['refund_amount'] > 0) {
+            if (empty($request['vnpay_txn_ref'])
+                || empty($request['vnpay_transaction_no'])
+                || empty($request['vnpay_transaction_date'])) {
+                $message = 'Thiếu mã giao dịch VNPay gốc. Không gửi lệnh hoàn tiền; cần liên hệ VNPay/quản lý.';
+                $this->cancellationRequest->setStatus((int)$id, 'manual_review', null, $message);
+                $this->notifyCancellationStatus(
+                    $request,
+                    'manual_review',
+                    'Yêu cầu hủy cần được kiểm tra',
+                    $message
+                );
+                setFlash('error', $message);
+                redirect('admin/cancellation-requests');
+                return;
+            }
+
+            try {
+                $vnpay = new Vnpay();
+                $refund = $vnpay->refundDeposit(
+                    (string)$request['vnpay_txn_ref'],
+                    (int)$request['refund_amount'],
+                    (string)$request['vnpay_transaction_no'],
+                    (string)$request['vnpay_transaction_date'],
+                    (string)($admin['username'] ?? $admin['full_name'] ?? 'admin'),
+                    'Hoan tien don dat san #' . (int)$request['booking_id'],
+                    $_SERVER['SERVER_ADDR'] ?? '127.0.0.1',
+                    !empty($request['series_id']),
+                    $refundRequestId
+                );
+            } catch (\Throwable $e) {
+                $message = mb_substr($e->getMessage(), 0, 500);
+                $this->cancellationRequest->setStatus((int)$id, 'manual_review', null, $message);
+                $this->notifyCancellationStatus(
+                    $request,
+                    'manual_review',
+                    'Yêu cầu hủy cần được kiểm tra',
+                    'Chưa thể xác nhận hoàn tiền VNPay. Quản lý sẽ kiểm tra giao dịch trước khi cập nhật.'
+                );
+                setFlash('error', 'VNPay chưa xác nhận hoàn tiền. Đã khóa yêu cầu để tránh hoàn trùng; cần kiểm tra giao dịch thủ công.');
+                redirect('admin/cancellation-requests');
+                return;
+            }
+        }
+
+        $cancelResult = $this->booking->cancel(
+            (int)$request['booking_id'],
+            'Khách yêu cầu hủy: ' . $request['request_reason'],
+            (float)$request['refund_amount'] > 0
+        );
+        if (!$cancelResult['success']) {
+            $message = 'VNPay đã chấp nhận hoàn tiền nhưng không hủy được đơn. Cần đối soát thủ công.';
+            $this->cancellationRequest->setStatus(
+                (int)$id,
+                'manual_review',
+                $refund['response_code'] ?? null,
+                $message
+            );
+            $this->notifyCancellationStatus(
+                $request,
+                'manual_review',
+                'Yêu cầu hủy cần được kiểm tra',
+                $message
+            );
+            setFlash('error', $message);
+            redirect('admin/cancellation-requests');
+            return;
+        }
+
+        $status = $refund ? 'refunded' : 'approved';
+        $message = $refund
+            ? 'VNPay đã tiếp nhận hoàn ' . formatMoney($request['refund_amount']) . '.'
+            : 'Đơn đã hủy; đơn chưa thanh toán nên không phát sinh hoàn tiền.';
+        $this->cancellationRequest->setStatus(
+            (int)$id,
+            $status,
+            $refund['response_code'] ?? null,
+            $message
+        );
+        $this->notifyCancellationStatus(
+            $request,
+            'completed',
+            $refund ? 'Đơn đã hủy và hoàn cọc' : 'Đơn đã được hủy',
+            $message . ' Mã đơn #' . (int)$request['booking_id'] . '.'
+        );
+        setFlash('success', $message);
+        redirect('admin/cancellation-requests');
+    }
+
+    public function rejectCancellationRequest($id)
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/cancellation-requests');
+            return;
+        }
+
+        $reason = trim((string)($_POST['review_message'] ?? ''));
+        if ($reason === '' || mb_strlen($reason) > 500) {
+            setFlash('error', 'Vui lòng nhập lý do từ chối (tối đa 500 ký tự).');
+            redirect('admin/cancellation-requests');
+            return;
+        }
+        if (!$this->cancellationRequest->reject((int)$id, (int)$this->currentUserId(), $reason)) {
+            setFlash('error', 'Yêu cầu không tồn tại hoặc đã được xử lý.');
+            redirect('admin/cancellation-requests');
+            return;
+        }
+        $request = $this->cancellationRequest->find((int)$id);
+        if ($request) {
+            $this->notifyCancellationStatus(
+                $request,
+                'rejected',
+                'Yêu cầu hủy bị từ chối',
+                'Yêu cầu hủy đơn #' . (int)$request['booking_id'] . ' bị từ chối: ' . $reason
+            );
+        }
+        setFlash('success', 'Đã từ chối yêu cầu hủy.');
+        redirect('admin/cancellation-requests');
+    }
+
+    private function notifyCancellationStatus(array $request, string $event, string $title, string $message): void
+    {
+        $this->notification->createForUser(
+            (int)$request['customer_user_id'],
+            'cancellation',
+            $title,
+            $message,
+            route('my-bookings'),
+            'cancellation:request:' . (int)$request['id'] . ':' . $event
+        );
     }
 
     /* ============================================================
@@ -551,6 +749,18 @@ class BookingController extends Controller
             setFlash('error', $res['error']);
         } else {
             setFlash('success', $msg);
+            if ($target === Booking::STATUS_CONFIRMED || $target === Booking::STATUS_COMPLETED) {
+                $isCompleted = $target === Booking::STATUS_COMPLETED;
+                $this->notification->createForBookingOwner(
+                    (int)$id,
+                    $isCompleted ? 'booking_completed' : 'booking_confirmed',
+                    $isCompleted ? 'Lượt đặt sân đã hoàn thành' : 'Đơn đặt sân đã được xác nhận',
+                    $isCompleted
+                        ? 'Đơn #' . (int)$id . ' đã hoàn thành. Bạn có thể gửi đánh giá sân trong lịch sử đặt sân.'
+                        : 'Quản lý đã xác nhận đơn đặt sân #' . (int)$id . '.',
+                    'booking:status:' . (int)$id . ':' . $target
+                );
+            }
         }
         $ref = $_SERVER['HTTP_REFERER'] ?? ('admin/bookings/' . $id);
         redirect(str_replace(rtrim(base_url(), '/') . '/', '', $ref));

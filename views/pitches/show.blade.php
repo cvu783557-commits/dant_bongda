@@ -42,13 +42,17 @@
         <div class="collapse navbar-collapse justify-content-end" id="topNav">
             <ul class="navbar-nav">
                 <li class="nav-item"><a class="nav-link" href="<?php echo route('/'); ?>">Trang chủ</a></li>
-
-
-                <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/login'); ?>">Trang quản lý</a></li>
-
+                <li class="nav-item"><a class="nav-link" href="<?php echo route('schedule'); ?>">Xem lịch sân</a></li>
+                <li class="nav-item"><a class="nav-link" href="<?php echo route('my-bookings'); ?>">Lịch sử đặt sân</a></li>
                 <li class="nav-item"><a class="nav-link" href="<?php echo route('services'); ?>">Dịch vụ</a></li>
-
                 <?php if (!empty($currentUser)): ?>
+                    <?php if (($currentUser['role'] ?? '') === 'USER'): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="<?php echo route('notifications'); ?>">
+                                Thông báo<?php if (!empty($notificationCount)): ?> <span class="badge rounded-pill bg-danger"><?php echo (int)$notificationCount; ?></span><?php endif; ?>
+                            </a>
+                        </li>
+                    <?php endif; ?>
                     <li class="nav-item"><span class="nav-link"><?php echo e($currentUser['full_name']); ?> (<?php echo e($currentUser['role']); ?>)</span></li>
                     <?php if (($currentUser['role'] ?? '') === 'ADMIN'): ?>
                         <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/bookings'); ?>">Quản trị</a></li>
@@ -62,7 +66,6 @@
                 <?php else: ?>
                     <li class="nav-item"><a class="nav-link" href="<?php echo route('login'); ?>">Đăng nhập</a></li>
                 <?php endif; ?>
-
             </ul>
         </div>
     </div>
@@ -106,6 +109,45 @@
             <?php if (!empty($pitch['description'])): ?>
                 <p class="text-muted"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
             <?php endif; ?>
+
+            <section class="card border-0 shadow-sm mt-4">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h3 class="h5 fw-bold mb-1">Đánh giá sân</h3>
+                            <div class="text-secondary small">
+                                <?php if ($ratingSummary['total'] > 0): ?>
+                                    <span class="text-warning"><?php echo str_repeat('★', (int)round($ratingSummary['average'])); ?></span>
+                                    <?php echo number_format($ratingSummary['average'], 1); ?>/5 · <?php echo (int)$ratingSummary['total']; ?> lượt đánh giá
+                                <?php else: ?>
+                                    Chưa có đánh giá
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <a class="btn btn-sm btn-outline-success" href="<?php echo route('my-bookings'); ?>">Đánh giá sau khi đặt sân</a>
+                    </div>
+                    <?php if (!$ratings): ?>
+                        <p class="text-secondary mb-0">Hãy là người đầu tiên chia sẻ trải nghiệm sân này sau khi hoàn thành lượt đặt.</p>
+                    <?php else: ?>
+                        <div class="d-grid gap-3">
+                            <?php foreach ($ratings as $rating): ?>
+                                <article class="border-top pt-3">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <strong>Khách hàng đã đặt sân</strong>
+                                        <span class="text-warning" aria-label="<?php echo (int)$rating['rating']; ?> trên 5 sao">
+                                            <?php echo str_repeat('★', (int)$rating['rating']); ?><?php echo str_repeat('☆', 5 - (int)$rating['rating']); ?>
+                                        </span>
+                                    </div>
+                                    <div class="small text-secondary">Đã đặt sân ngày <?php echo e(formatDate($rating['booking_date'])); ?></div>
+                                    <?php if (!empty($rating['comment'])): ?>
+                                        <p class="mb-0 mt-2"><?php echo nl2br(e($rating['comment'])); ?></p>
+                                    <?php endif; ?>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </section>
 
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
@@ -234,6 +276,13 @@
             <div class="card border-0 shadow-sm">
                 <div class="card-body p-4">
                     <h4 class="fw-bold mb-4">Thông tin đặt sân</h4>
+
+                    <?php if (empty($currentUser) || ($currentUser['role'] ?? '') !== 'USER'): ?>
+                        <div class="alert alert-info">
+                            Vui lòng <a href="<?php echo route('login'); ?>">đăng nhập</a> hoặc
+                            <a href="<?php echo route('register'); ?>">đăng ký tài khoản khách</a> để đặt sân và quản lý đơn.
+                        </div>
+                    <?php endif; ?>
 
                     <form method="get" action="" class="mb-4">
                         <label class="form-label fw-semibold">Xem tình trạng sân theo ngày:</label>
