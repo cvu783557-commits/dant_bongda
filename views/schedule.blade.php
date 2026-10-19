@@ -9,6 +9,7 @@
         body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; color: #1f2937; }
         .schedule-slot { min-height: 72px; }
     </style>
+    <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">

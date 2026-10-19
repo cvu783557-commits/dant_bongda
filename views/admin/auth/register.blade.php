@@ -18,6 +18,7 @@
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
         }
     </style>
+    <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 <div class="container py-5">

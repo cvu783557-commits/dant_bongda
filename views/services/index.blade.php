@@ -39,6 +39,7 @@
             font-weight: 500;
         }
     </style>
+    <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 
