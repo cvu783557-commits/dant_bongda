@@ -11,6 +11,11 @@ use Bramus\Router\Router;
 
 $router = new Router();
 
+$router->get('/site-theme', static function () {
+	header('Content-Type: text/css; charset=utf-8');
+	readfile(__DIR__ . '/../assets/site-theme.css');
+});
+
 // ====================== FRONTEND ======================
 $router->get('/',  PitchController::class . '@index');
 $router->get('/schedule', PitchController::class . '@schedule');

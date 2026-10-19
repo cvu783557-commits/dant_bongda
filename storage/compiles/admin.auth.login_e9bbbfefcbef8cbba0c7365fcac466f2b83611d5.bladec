@@ -36,6 +36,7 @@
  box-shadow: 0 10px 30px rgba(25,135,84,0.4);
  }
  </style>
+ <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 
