@@ -240,6 +240,39 @@ function ensurePendingUserStatus($pdo) {
         stepOK("Kích hoạt {$activated} tài khoản USER cũ đang chờ duyệt");
     }
 }
+function ensureOwnerRoleAndProfile($pdo) {
+    $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
+    if (!$roleColumn) {
+        throw new RuntimeException("Không thể thêm OWNER vì users thiếu cột role.");
+    }
+    if (strpos($roleColumn['Type'], "'OWNER'") === false) {
+        $pdo->exec("ALTER TABLE users MODIFY role ENUM('ADMIN','USER','OWNER') NOT NULL DEFAULT 'USER'");
+        stepOK("Bổ sung quyền OWNER cho tài khoản người dùng");
+    } else {
+        stepSkip("Role OWNER đã sẵn sàng");
+    }
+
+    if (!tableExists($pdo, 'owner_profiles')) {
+        $pdo->exec("CREATE TABLE owner_profiles (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            user_id INT NOT NULL UNIQUE,
+            business_name VARCHAR(150) NOT NULL,
+            business_phone VARCHAR(20) NOT NULL,
+            business_address VARCHAR(255) NOT NULL,
+            tax_code VARCHAR(50) NULL,
+            description TEXT NULL,
+            status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_owner_profile_status (status),
+            CONSTRAINT fk_owner_profile_user FOREIGN KEY (user_id)
+                REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        stepOK("Tạo bảng owner_profiles để lưu hồ sơ doanh nghiệp chủ sân");
+    } else {
+        stepSkip("Bảng owner_profiles đã tồn tại");
+    }
+}
 function ensureUserAdminRoles($pdo) {
     $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
     if (!$roleColumn) {
@@ -248,23 +281,22 @@ function ensureUserAdminRoles($pdo) {
     if (strpos($roleColumn['Type'], "'ADMIN'") === false) {
         throw new RuntimeException("users.role thiếu quyền ADMIN; cần kiểm tra cấu trúc thủ công.");
     }
-    if (strpos($roleColumn['Type'], "'STAFF'") === false
-        && strpos($roleColumn['Type'], "'USER'") !== false) {
-        stepSkip("Vai trò ADMIN/USER đã sẵn sàng");
-        return;
+
+    if (strpos($roleColumn['Type'], "'OWNER'") === false) {
+        $pdo->exec("ALTER TABLE users MODIFY role ENUM('ADMIN','USER','OWNER') NOT NULL DEFAULT 'USER'");
+        stepOK("Bổ sung vai trò OWNER cho bảng users");
+    } else {
+        stepSkip("Vai trò ADMIN/USER/OWNER đã sẵn sàng");
     }
 
-    $pdo->exec(
-        "ALTER TABLE users MODIFY role ENUM('ADMIN','STAFF','USER') NOT NULL DEFAULT 'USER'"
-    );
-    $converted = $pdo->exec("UPDATE users SET role = 'USER' WHERE role = 'STAFF'");
-    $pdo->exec(
-        "ALTER TABLE users MODIFY role ENUM('ADMIN','USER') NOT NULL DEFAULT 'USER'"
-    );
+    $updated = $pdo->exec("UPDATE users SET role = 'USER' WHERE role = 'STAFF'");
+    if ($updated > 0) {
+        stepOK("Chuyển {$updated} tài khoản STAFF cũ sang USER");
+    }
+
     $activated = $pdo->exec(
         "UPDATE users SET status = 'active' WHERE role = 'USER' AND status = 'pending'"
     );
-    stepOK("Chuẩn hóa quyền còn ADMIN/USER; chuyển {$converted} tài khoản STAFF cũ sang USER");
     if ($activated > 0) {
         stepOK("Kích hoạt {$activated} tài khoản USER cũ đang chờ duyệt");
     }
@@ -578,6 +610,7 @@ try {
         ensureAutoIncrementId($pdo, $table);
     }
     ensurePendingUserStatus($pdo);
+    ensureOwnerRoleAndProfile($pdo);
     ensureUniqueUsernames($pdo);
     ensureUserAdminRoles($pdo);
 

@@ -20,6 +20,7 @@
  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
  }
  </style>
+ <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 

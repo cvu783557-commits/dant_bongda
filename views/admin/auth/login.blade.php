@@ -47,7 +47,7 @@
                 <div class="text-center mb-4">
                     <div class="brand-mark">⚽</div>
                     <h3 class="fw-bold mb-1">SânBóng.Pro</h3>
-                    <p class="text-muted mb-4">Đăng nhập bằng tài khoản USER hoặc ADMIN</p>
+                    <p class="text-muted mb-4">Đăng nhập bằng tài khoản USER, OWNER hoặc ADMIN</p>
                 </div>
 
                 <?php if ($success): ?>

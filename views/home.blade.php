@@ -108,6 +108,8 @@
                     <li class="nav-item"><span class="nav-link">Xin chào, <?php echo e($currentUser['full_name']); ?> (<?php echo e($currentUser['role']); ?>)</span></li>
                     <?php if (($currentUser['role'] ?? '') === 'ADMIN'): ?>
                         <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/bookings'); ?>">Quản trị</a></li>
+                    <?php elseif (($currentUser['role'] ?? '') === 'OWNER'): ?>
+                        <li class="nav-item"><a class="nav-link" href="<?php echo route('owner/dashboard'); ?>">Dashboard chủ sân</a></li>
                     <?php endif; ?>
                     <li class="nav-item">
                         <form method="post" action="<?php echo route('logout'); ?>">

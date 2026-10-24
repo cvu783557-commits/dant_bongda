@@ -1,6 +1,7 @@
 <?php
 
 use App\Controllers\PitchController;
+use App\Controllers\OwnerController;
 use App\Controllers\Admin\AuthController;
 use App\Controllers\Admin\BookingController as AdminBookingController;
 use App\Controllers\Admin\CustomerController as AdminCustomerController;
@@ -25,6 +26,16 @@ $router->post('/my-bookings/(\d+)/rating', PitchController::class . '@rateBookin
 $router->get('/notifications', PitchController::class . '@notifications');
 $router->post('/notifications/(\d+)/read', PitchController::class . '@markNotificationRead');
 $router->post('/notifications/read-all', PitchController::class . '@markAllNotificationsRead');
+
+// ====================== OWNER =========================
+$router->get('/owner/login', OwnerController::class . '@loginForm');
+$router->post('/owner/login', OwnerController::class . '@login');
+$router->get('/owner/register', OwnerController::class . '@registerForm');
+$router->post('/owner/register', OwnerController::class . '@register');
+$router->get('/owner/dashboard', OwnerController::class . '@dashboard');
+$router->get('/owner/pitches', OwnerController::class . '@pitches');
+$router->get('/owner/bookings', OwnerController::class . '@bookings');
+$router->get('/owner/revenue', OwnerController::class . '@revenue');
 
 $router->get('/pitches/(\d+)',  PitchController::class . '@show');
 
@@ -110,6 +121,8 @@ $router->get('/admin/customers/detail',             AdminCustomerController::cla
 // Admin -> Quản lý tài khoản và phân quyền
 $router->get('/admin/users',                        AdminUserController::class . '@index');
 $router->post('/admin/users/(\d+)/access',           AdminUserController::class . '@updateAccess');
+$router->post('/admin/users/(\d+)/approve-owner',    AdminUserController::class . '@approveOwner');
+$router->post('/admin/users/(\d+)/reject-owner',     AdminUserController::class . '@rejectOwner');
 
 // ------------------------
 

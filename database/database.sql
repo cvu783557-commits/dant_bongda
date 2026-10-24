@@ -14,12 +14,28 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     full_name     VARCHAR(100) NOT NULL,
     phone         VARCHAR(20) NULL,
-    role          ENUM('ADMIN','USER') NOT NULL DEFAULT 'USER',
+    role          ENUM('ADMIN','USER','OWNER') NOT NULL DEFAULT 'USER',
     status        ENUM('active','inactive','pending') NOT NULL DEFAULT 'active',
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_role (role),
     INDEX idx_user_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS owner_profiles (
+    id               INT PRIMARY KEY AUTO_INCREMENT,
+    user_id          INT NOT NULL UNIQUE,
+    business_name    VARCHAR(150) NOT NULL,
+    business_phone   VARCHAR(20) NOT NULL,
+    business_address VARCHAR(255) NOT NULL,
+    tax_code         VARCHAR(50) NULL,
+    description      TEXT NULL,
+    status           ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_owner_profile_status (status),
+    CONSTRAINT fk_owner_profile_user FOREIGN KEY (user_id)
+        REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS customers (

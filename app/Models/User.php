@@ -16,7 +16,7 @@ class User extends Model
             $sql .= " WHERE status = ?";
             $params[] = $status;
         }
-        $sql .= " ORDER BY FIELD(status, 'inactive', 'active', 'pending'), FIELD(role, 'ADMIN', 'USER'), full_name ASC";
+        $sql .= " ORDER BY FIELD(status, 'inactive', 'active', 'pending'), FIELD(role, 'ADMIN', 'OWNER', 'USER'), full_name ASC";
         return $this->connection->executeQuery($sql, $params)->fetchAllAssociative();
     }
 
@@ -40,24 +40,29 @@ class User extends Model
         );
     }
 
-    public function register($username, $password, $fullName, $phone = null)
+    public function register($username, $password, $fullName, $phone = null, $role = 'USER', $status = 'active')
     {
         $this->connection->insert($this->table, [
             'username' => $username,
             'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             'full_name' => $fullName,
             'phone' => $phone ?: null,
-            'role' => 'USER',
-            'status' => 'active',
+            'role' => in_array($role, ['ADMIN', 'USER', 'OWNER'], true) ? $role : 'USER',
+            'status' => in_array($status, ['active', 'inactive', 'pending'], true) ? $status : 'active',
         ]);
 
         return (int)$this->connection->lastInsertId();
     }
 
+    public function registerOwner($username, $password, $fullName, $phone = null)
+    {
+        return $this->register($username, $password, $fullName, $phone, 'OWNER', 'pending');
+    }
+
     public function updateAccess($id, $role, $status)
     {
-        if (!in_array($role, ['ADMIN', 'USER'], true)
-            || !in_array($status, ['active', 'inactive'], true)) {
+        if (!in_array($role, ['ADMIN', 'USER', 'OWNER'], true)
+            || !in_array($status, ['active', 'inactive', 'pending'], true)) {
             return ['success' => false, 'error' => 'Quyền hoặc trạng thái tài khoản không hợp lệ.'];
         }
 
@@ -118,7 +123,7 @@ class User extends Model
         if (!$uid) return null;
         $user = $this->find($uid);
         if (!$user || ($user['status'] ?? '') !== 'active'
-            || !in_array($user['role'] ?? '', ['ADMIN', 'USER'], true)) {
+            || !in_array($user['role'] ?? '', ['ADMIN', 'USER', 'OWNER'], true)) {
             unset($_SESSION['auth_user_id'], $_SESSION['auth_username'], $_SESSION['auth_role'], $_SESSION['auth_full_name']);
             return null;
         }
@@ -131,10 +136,28 @@ class User extends Model
         return $user && ($user['role'] ?? '') === 'ADMIN';
     }
 
+    public function isOwner($user = null)
+    {
+        if ($user === null) $user = $this->getActiveUser();
+        return $user && ($user['role'] ?? '') === 'OWNER';
+    }
+
     public function canAccessAdmin($user = null)
     {
         if ($user === null) $user = $this->getActiveUser();
         return $this->isAdmin($user);
+    }
+
+    public function canAccessOwner($user = null)
+    {
+        if ($user === null) $user = $this->getActiveUser();
+        return $this->isOwner($user);
+    }
+
+    public function isOwnerPending($user = null)
+    {
+        if ($user === null) $user = $this->getActiveUser();
+        return $user && ($user['role'] ?? '') === 'OWNER' && ($user['status'] ?? '') === 'pending';
     }
 
     public function canCreate($user = null)
