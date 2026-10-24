@@ -3,15 +3,18 @@
 namespace App\Controllers\Admin;
 
 use App\Controller;
+use App\Models\OwnerProfile;
 use App\Models\User;
 
 class UserController extends Controller
 {
     protected $user;
+    protected $ownerProfile;
 
     public function __construct()
     {
         $this->user = new User();
+        $this->ownerProfile = new OwnerProfile();
         $currentUser = $this->user->getActiveUser();
 
         if (!$currentUser) {
@@ -28,6 +31,7 @@ class UserController extends Controller
     {
         return view('admin.users.index', [
             'users' => $this->user->all(),
+            'ownerProfiles' => $this->ownerProfile->allForAdmin(),
             'currentUser' => $this->user->getActiveUser(),
             'success' => getFlash('success'),
             'error' => getFlash('error'),
@@ -61,7 +65,39 @@ class UserController extends Controller
             return;
         }
 
+        if ($role === 'OWNER' && $status === 'active') {
+            $this->ownerProfile->approve($targetId);
+        }
+
         setFlash('success', 'Đã cập nhật quyền và trạng thái tài khoản.');
+        redirect('admin/users');
+    }
+
+    public function approveOwner($id)
+    {
+        if (!isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên làm việc không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/users');
+            return;
+        }
+
+        $targetId = (int)$id;
+        $this->ownerProfile->approve($targetId);
+        setFlash('success', 'Đã phê duyệt doanh nghiệp và kích hoạt tài khoản chủ sân.');
+        redirect('admin/users');
+    }
+
+    public function rejectOwner($id)
+    {
+        if (!isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên làm việc không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/users');
+            return;
+        }
+
+        $targetId = (int)$id;
+        $this->ownerProfile->reject($targetId);
+        setFlash('success', 'Đã từ chối hồ sơ chủ sân.');
         redirect('admin/users');
     }
 }
