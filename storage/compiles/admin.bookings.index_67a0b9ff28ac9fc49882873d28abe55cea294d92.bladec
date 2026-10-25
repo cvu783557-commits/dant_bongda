@@ -136,7 +136,7 @@ $reset_url = route('admin/bookings');
  </td>
  <td>
  <div class="fw-semibold"><?php echo e($b['pitch_name']); ?></div>
- <small class="text-muted">Sân con <?php echo (int)($b['court_number'] ?? 1); ?> · <?php echo (int)$b['pitch_type']; ?> người</small>
+ <small class="text-muted">Sân <?php echo (int)$b['pitch_type']; ?> người</small>
  </td>
  <td class="text-nowrap"><?php echo formatDate($b['booking_date']); ?></td>
  <td class="text-nowrap fw-semibold">

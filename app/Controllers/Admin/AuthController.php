@@ -11,17 +11,7 @@ class AuthController extends Controller
 
     protected function redirectForUser($user)
     {
-        $role = $user['role'] ?? '';
-
-        if ($role === 'ADMIN') {
-            redirect('admin/bookings');
-        }
-
-        if ($role === 'OWNER') {
-            redirect('owner/dashboard');
-        }
-
-        redirect('');
+        redirect(($user['role'] ?? '') === 'ADMIN' ? 'admin/bookings' : '');
     }
 
     public function __construct()
