@@ -70,9 +70,6 @@
                     <a href="<?php echo route('login'); ?>" class="text-decoration-none text-success">Đã có tài khoản? Đăng nhập</a>
                 </div>
                 <div class="text-center mt-2">
-                    <a href="<?php echo route('owner/register'); ?>" class="text-decoration-none text-success">Đăng ký làm chủ sân</a>
-                </div>
-                <div class="text-center mt-2">
                     <a href="<?php echo route('/'); ?>" class="text-decoration-none small text-muted">← Về trang chủ</a>
                 </div>
             </div>
