@@ -25,7 +25,7 @@ if (!function_exists('is_upload')) {
 if (!function_exists('base_url')) {
     function base_url(): string
     {
-        $envBase = $_ENV['APP_URL'] ?? null;
+        $envBase = !empty($_ENV['APP_URL']) ? $_ENV['APP_URL'] : null;
         $httpHost = $_SERVER['HTTP_HOST'] ?? null;
 
         if ($httpHost) {
