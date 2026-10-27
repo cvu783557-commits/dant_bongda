@@ -2,13 +2,10 @@
 /storage/compiles/
 /storage/logs/
 /storage/cache/
-.env
 /vendor/
 node_modules/
 *.log
 .DS_Store
 Thumbs.db
 
-.env
 /storage/compiles/*
-
