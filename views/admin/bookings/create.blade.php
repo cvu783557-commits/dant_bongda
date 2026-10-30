@@ -9,8 +9,14 @@ $startSel   = old('start_time', $_GET['start_time'] ?? '');
 $endSel     = old('end_time', $_GET['end_time'] ?? '');
 
 $priceMap = [];
-foreach ($pitches as $p) $priceMap[(int)$p['id']] = (float)$p['price_per_hour'];
+$courtCountMap = [];
+foreach ($pitches as $p) {
+    $priceMap[(int)$p['id']] = (float)$p['price_per_hour'];
+    $courtCountMap[(int)$p['id']] = max(1, (int)($p['field_count'] ?? 1));
+}
 $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
+$courtCountMapJs = json_encode($courtCountMap, JSON_UNESCAPED_UNICODE);
+$courtNumberSel = (int)old('court_number', $_GET['court_number'] ?? 1);
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -108,7 +114,7 @@ $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
 
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Chọn sân <span class="text-danger">*</span></label>
-                        <select name="pitch_id" id="pitch_id" class="form-select" required onchange="calcTotal();">
+                        <select name="pitch_id" id="pitch_id" class="form-select" required onchange="calcTotal(); syncCourtOptions(); checkOverlap();">
                             <option value="">-- Vui lòng chọn sân --</option>
                             <?php foreach ($pitches as $p): ?>
                                 <option value="<?php echo $p['id']; ?>" <?php echo $pitchIdSel === (int)$p['id'] ? 'selected' : ''; ?>
@@ -116,6 +122,15 @@ $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
                                     <?php echo e($p['name']); ?> (Sân <?php echo (int)$p['type']; ?> người - <?php echo formatMoney($p['price_per_hour']); ?>/giờ)
                                 </option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="court_number">Sân con <span class="text-danger">*</span></label>
+                        <select name="court_number" id="court_number" class="form-select" required onchange="checkOverlap();">
+                            <?php for ($court = 1; $court <= ($courtCountMap[$pitchIdSel] ?? 1); $court++): ?>
+                                <option value="<?php echo $court; ?>" <?php echo $courtNumberSel === $court ? 'selected' : ''; ?>>Sân <?php echo $court; ?></option>
+                            <?php endfor; ?>
                         </select>
                     </div>
 
@@ -190,7 +205,23 @@ $priceMapJs = json_encode($priceMap, JSON_UNESCAPED_UNICODE);
 
 <script>
 var priceMap = <?php echo $priceMapJs; ?>;
+var courtCountMap = <?php echo $courtCountMapJs; ?>;
 var checking = false, overlapOk = false, overlapMsg = '';
+
+function syncCourtOptions() {
+    var pitchId = Number(document.getElementById('pitch_id').value) || 0;
+    var select = document.getElementById('court_number');
+    var count = courtCountMap[pitchId] || 1;
+    var selected = Number(select.value) || 1;
+    select.innerHTML = '';
+    for (var court = 1; court <= count; court++) {
+        var option = document.createElement('option');
+        option.value = court;
+        option.textContent = 'Sân ' + court;
+        select.appendChild(option);
+    }
+    select.value = selected <= count ? String(selected) : '1';
+}
 
 function hoursBetween(startStr, endStr) {
     if (!startStr || !endStr) return 0;
@@ -230,6 +261,7 @@ function checkOverlap() {
     var dt  = document.getElementById('booking_date').value;
     var st  = document.getElementById('start_time').value;
     var et  = document.getElementById('end_time').value;
+    var court = document.getElementById('court_number').value;
 
     var statusEl = document.getElementById('overlap_status');
     var msgEl    = document.getElementById('overlap_message');
@@ -259,6 +291,7 @@ function checkOverlap() {
 
     var url = '<?php echo route('admin/bookings/check-overlap'); ?>'
         + '?pitch_id=' + encodeURIComponent(pid)
+        + '&court_number=' + encodeURIComponent(court)
         + '&booking_date=' + encodeURIComponent(dt)
         + '&start_time=' + encodeURIComponent(st)
         + '&end_time=' + encodeURIComponent(et);
@@ -308,6 +341,7 @@ function beforeSubmit() {
 }
 
 document.addEventListener('DOMContentLoaded', function(){
+    syncCourtOptions();
     calcTotal();
     if (document.getElementById('pitch_id').value &&
         document.getElementById('booking_date').value &&

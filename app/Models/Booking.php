@@ -178,10 +178,14 @@ class Booking extends Model
         return $this->connection->executeQuery($sql, [$id])->fetchAssociative();
     }
 
-    public function getByPitchAndDate($pitchId, $date, $includeCancelled = false)
+    public function getByPitchAndDate($pitchId, $date, $includeCancelled = false, $courtNumber = null)
     {
         $sql = $this->buildBaseQuery() . " AND b.pitch_id = ? AND b.booking_date = ?";
         $params = [$pitchId, $date];
+        if ($courtNumber !== null) {
+            $sql .= " AND b.court_number = ?";
+            $params[] = (int)$courtNumber;
+        }
         if (!$includeCancelled) {
             $sql .= " AND b.status <> ?";
             $params[] = self::STATUS_CANCELLED;
@@ -242,17 +246,18 @@ class Booking extends Model
      *
      * @return array|null Trả về booking bị trùng, null nếu không trùng
      */
-    public function checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId = null)
+    public function checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId = null, $courtNumber = 1)
     {
         $sql = "SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
                 FROM {$this->table} b
                 LEFT JOIN customers c ON c.id = b.customer_id
                 WHERE b.pitch_id = ?
+                                    AND b.court_number = ?
                   AND b.booking_date = ?
                   AND b.status <> ?
                   AND b.start_time < ?
                   AND b.end_time   > ?";
-        $params = [$pitchId, $date, self::STATUS_CANCELLED, $endTime, $startTime];
+        $params = [$pitchId, (int)$courtNumber, $date, self::STATUS_CANCELLED, $endTime, $startTime];
 
         if ($excludeId !== null && $excludeId > 0) {
             $sql .= " AND b.id <> ?";
@@ -333,10 +338,10 @@ class Booking extends Model
     /**
      * Kiểm tra trùng với khóa khung giờ
      */
-    protected function checkPitchLockOverlap($pitchId, $date, $startTime, $endTime)
+    protected function checkPitchLockOverlap($pitchId, $date, $startTime, $endTime, $courtNumber = 1)
     {
         $lockObj = new \App\Models\PitchLock();
-        return $lockObj->checkOverlap($pitchId, $date, $startTime, $endTime);
+        return $lockObj->checkOverlap($pitchId, $date, $startTime, $endTime, null, $courtNumber);
     }
 
     /**
@@ -348,6 +353,7 @@ class Booking extends Model
 
         try {
             $pitchId    = (int)$data['pitch_id'];
+            $courtNumber = max(1, (int)($data['court_number'] ?? 1));
             $customerId = (int)$data['customer_id'];
             $date       = $data['booking_date'];
             $startTime  = $data['start_time'];
@@ -359,7 +365,7 @@ class Booking extends Model
             $pitchLockSql = "SELECT id FROM pitches WHERE id = ? FOR UPDATE";
             $this->connection->executeQuery($pitchLockSql, [$pitchId]);
 
-            $overlap = $this->checkOverlap($pitchId, $date, $startTime, $endTime);
+            $overlap = $this->checkOverlap($pitchId, $date, $startTime, $endTime, null, $courtNumber);
             if ($overlap) {
                 $this->connection->rollBack();
                 return [
@@ -369,7 +375,7 @@ class Booking extends Model
                 ];
             }
 
-            $lockOverlap = $this->checkPitchLockOverlap($pitchId, $date, $startTime, $endTime);
+            $lockOverlap = $this->checkPitchLockOverlap($pitchId, $date, $startTime, $endTime, $courtNumber);
             if ($lockOverlap) {
                 $this->connection->rollBack();
                 return [
@@ -381,14 +387,15 @@ class Booking extends Model
             $payStatus = self::calcPaymentStatus($total, $deposit, $paid);
 
             $sql = "INSERT INTO {$this->table}
-                (customer_id, pitch_id, booking_date, start_time, end_time,
+                (customer_id, pitch_id, court_number, booking_date, start_time, end_time,
                  total_price, deposit, paid_amount, payment_method, payment_status,
                  status, cancellation_reason, note, created_by, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
 
             $this->connection->executeStatement($sql, [
                 $customerId,
                 $pitchId,
+                $courtNumber,
                 $date,
                 $startTime,
                 $endTime,
@@ -431,6 +438,7 @@ class Booking extends Model
         $this->connection->beginTransaction();
         try {
             $pitchId = (int)$seriesData['pitch_id'];
+            $courtNumber = max(1, (int)($seriesData['court_number'] ?? 1));
             $this->connection->executeQuery(
                 'SELECT id FROM pitches WHERE id = ? FOR UPDATE',
                 [$pitchId]
@@ -441,7 +449,9 @@ class Booking extends Model
                     $pitchId,
                     $occurrence['booking_date'],
                     $seriesData['start_time'],
-                    $seriesData['end_time']
+                    $seriesData['end_time'],
+                    null,
+                    $courtNumber
                 );
                 if ($overlap) {
                     $this->connection->rollBack();
@@ -458,7 +468,8 @@ class Booking extends Model
                     $pitchId,
                     $occurrence['booking_date'],
                     $seriesData['start_time'],
-                    $seriesData['end_time']
+                    $seriesData['end_time'],
+                    $courtNumber
                 );
                 if ($lockOverlap) {
                     $this->connection->rollBack();
@@ -473,12 +484,13 @@ class Booking extends Model
 
             $this->connection->executeStatement(
                 "INSERT INTO booking_series
-                    (customer_id, pitch_id, booking_month, start_time, end_time,
+                    (customer_id, pitch_id, court_number, booking_month, start_time, end_time,
                      total_price, deposit, paid_amount, payment_method, payment_status, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, NOW())",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, NOW())",
                 [
                     (int)$seriesData['customer_id'],
                     $pitchId,
+                    $courtNumber,
                     $seriesData['booking_month'],
                     $seriesData['start_time'],
                     $seriesData['end_time'],
@@ -493,13 +505,14 @@ class Booking extends Model
             foreach ($occurrences as $occurrence) {
                 $this->connection->executeStatement(
                     "INSERT INTO {$this->table}
-                        (customer_id, pitch_id, booking_date, start_time, end_time,
+                        (customer_id, pitch_id, court_number, booking_date, start_time, end_time,
                          total_price, deposit, paid_amount, payment_method, payment_status,
                          status, cancellation_reason, note, created_by, series_id, created_at, updated_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, ?, NULL, ?, ?, ?, NOW(), NOW())",
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'vnpay', ?, ?, NULL, ?, ?, ?, NOW(), NOW())",
                     [
                         (int)$seriesData['customer_id'],
                         $pitchId,
+                        $courtNumber,
                         $occurrence['booking_date'],
                         $seriesData['start_time'],
                         $seriesData['end_time'],
@@ -640,6 +653,7 @@ class Booking extends Model
 
         try {
             $pitchId    = (int)($data['pitch_id']   ?? $booking['pitch_id']);
+            $courtNumber = (int)($data['court_number'] ?? $booking['court_number'] ?? 1);
             $date       = $data['booking_date']      ?? $booking['booking_date'];
             $startTime  = $data['start_time']        ?? $booking['start_time'];
             $endTime    = $data['end_time']          ?? $booking['end_time'];
@@ -649,6 +663,7 @@ class Booking extends Model
 
             $timeOrPitchChanged = (
                 $pitchId   !== (int)$booking['pitch_id'] ||
+                $courtNumber !== (int)($booking['court_number'] ?? 1) ||
                 $date      !== $booking['booking_date'] ||
                 $startTime !== $booking['start_time'] ||
                 $endTime   !== $booking['end_time']
@@ -658,7 +673,7 @@ class Booking extends Model
                 $lockSql = "SELECT id FROM pitches WHERE id = ? FOR UPDATE";
                 $this->connection->executeQuery($lockSql, [$pitchId]);
 
-                $overlap = $this->checkOverlap($pitchId, $date, $startTime, $endTime, (int)$id);
+                $overlap = $this->checkOverlap($pitchId, $date, $startTime, $endTime, (int)$id, $courtNumber);
                 if ($overlap) {
                     $this->connection->rollBack();
                     return [
@@ -667,7 +682,7 @@ class Booking extends Model
                     ];
                 }
 
-                $lockOverlap = $this->checkPitchLockOverlap($pitchId, $date, $startTime, $endTime);
+                $lockOverlap = $this->checkPitchLockOverlap($pitchId, $date, $startTime, $endTime, $courtNumber);
                 if ($lockOverlap) {
                     $this->connection->rollBack();
                     return [
@@ -685,6 +700,7 @@ class Booking extends Model
 
             if ($customerId !== null) { $sqlParts[] = "customer_id = ?";    $params[] = $customerId; }
             $sqlParts[] = "pitch_id = ?";        $params[] = $pitchId;
+            $sqlParts[] = "court_number = ?";    $params[] = $courtNumber;
             $sqlParts[] = "booking_date = ?";    $params[] = $date;
             $sqlParts[] = "start_time = ?";      $params[] = $startTime;
             $sqlParts[] = "end_time = ?";        $params[] = $endTime;

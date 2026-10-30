@@ -42,6 +42,9 @@ try {
 
     $pdo->exec($sql);
 
+    require __DIR__ . '/run_pitch_courts_migration.php';
+    require __DIR__ . '/seed_hanoi_pitches.php';
+
     // Verify
     $tables = ['pitches', 'time_slots', 'bookings', 'services', 'booking_services'];
     foreach ($tables as $t) {

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đơn đặt sân của tôi</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
@@ -64,6 +65,7 @@
                             <div>
                                 <h2 class="h5 fw-bold mb-1"><?php echo e($booking['pitch_name']); ?></h2>
                                 <div class="text-secondary">
+                                    Sân <?php echo (int)($booking['court_number'] ?? 1); ?> ·
                                     <?php echo e(formatDate($booking['booking_date'])); ?>
                                     · <?php echo e(formatTime($booking['start_time'])); ?>–<?php echo e(formatTime($booking['end_time'])); ?>
                                 </div>

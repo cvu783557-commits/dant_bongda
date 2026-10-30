@@ -30,6 +30,7 @@
             color: #fff;
         }
     </style>
+    <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 
@@ -80,7 +81,7 @@
         <div class="alert alert-danger" role="alert"><?php echo $error; ?></div>
     <?php endif; ?>
 
-    <div class="row g-5">
+    <div class="row g-4">
         <div class="col-lg-6">
             <a href="<?php echo route('/'); ?>" class="text-decoration-none small text-success mb-3 d-inline-block">← Quay lại danh sách sân</a>
             <img src="<?php echo $pitch['image'] ? (str_starts_with($pitch['image'], 'http') ? $pitch['image'] : file_url($pitch['image'])) : 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Football%20field%20green%20grass%20aerial&image_size=square'; ?>"
@@ -286,19 +287,33 @@
 
                     <form method="get" action="" class="mb-4">
                         <label class="form-label fw-semibold">Xem tình trạng sân theo ngày:</label>
-                        <div class="d-flex gap-2">
-                            <input type="date"
-                                   name="date"
-                                   value="<?php echo htmlspecialchars($date); ?>"
-                                   min="<?php echo date('Y-m-d'); ?>"
-                                   class="form-control"
-                                   required>
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <input type="date"
+                                       name="date"
+                                       value="<?php echo htmlspecialchars($date); ?>"
+                                       min="<?php echo date('Y-m-d'); ?>"
+                                       class="form-control"
+                                       required>
+                            </div>
+                            <div class="col-sm-4">
+                                <select name="court" class="form-select" aria-label="Chọn sân con">
+                                    <?php for ($court = 1; $court <= $fieldCount; $court++): ?>
+                                        <option value="<?php echo $court; ?>" <?php echo $court === $courtNumber ? 'selected' : ''; ?>>
+                                            Sân <?php echo $court; ?>
+                                        </option>
+                                    <?php endfor; ?>
+                                </select>
+                            </div>
+                            <div class="col-sm-2">
                             <button type="submit" class="btn btn-outline-success">Xem lịch</button>
+                            </div>
                         </div>
                     </form>
 
                     <form method="post" id="bookingForm" action="<?php echo route('bookings'); ?>" novalidate>
                         <input type="hidden" name="pitch_id" value="<?php echo (int)$pitch['id']; ?>">
+                        <input type="hidden" name="court_number" value="<?php echo (int)$courtNumber; ?>">
                         <input type="hidden" name="booking_date" value="<?php echo htmlspecialchars($date); ?>">
 
                         <div class="mb-3">
@@ -344,7 +359,7 @@
 
                         <div class="card border-0 bg-light mb-4">
                             <div class="card-body">
-                                <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
+                                <h6 class="fw-bold mb-3">Tình trạng Sân <?php echo (int)$courtNumber; ?> — Ngày <?php echo formatDate($date); ?></h6>
                                 <div class="row g-2">
                                     <?php
                                         $statusPriceTable = [
@@ -728,6 +743,7 @@
         const params = new URLSearchParams({
             pitch_id: PITCH_ID,
             booking_date: BOOKING_DATE,
+            court_number: <?php echo (int)$courtNumber; ?>,
             start_time: startEl.value + ':00',
             end_time: endEl.value + ':00',
         });

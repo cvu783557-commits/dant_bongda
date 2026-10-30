@@ -9,6 +9,7 @@
         body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; color: #1f2937; }
         .schedule-slot { min-height: 72px; }
     </style>
+    <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
@@ -62,14 +63,16 @@
                             <div>
                                 <h2 class="h5 fw-bold mb-1"><?php echo e($pitch['name']); ?></h2>
                                 <div class="small text-secondary">
+                                    Sân con <?php echo (int)$pitch['court_number']; ?>
+                                    ·
                                     Sân <?php echo (int)$pitch['type']; ?> người
                                     · <?php echo e(formatTime($pitch['opening_time'] ?? '06:00:00')); ?>–<?php echo e(formatTime($pitch['closing_time'] ?? '23:00:00')); ?>
                                     · <?php echo formatMoney($pitch['price_per_hour']); ?>/giờ
                                 </div>
                             </div>
                             <a class="btn btn-outline-success btn-sm"
-                               href="<?php echo route('pitches/' . (int)$pitch['id']) . '?date=' . urlencode($date); ?>">
-                                Đặt sân này
+                               href="<?php echo route('pitches/' . (int)$pitch['id']) . '?date=' . urlencode($date) . '&court=' . (int)$pitch['court_number']; ?>">
+                                Đặt sân <?php echo (int)$pitch['court_number']; ?>
                             </a>
                         </div>
                         <?php if (!$pitch['slots']): ?>
@@ -90,7 +93,7 @@
                                             'locked' => 'Đang khóa',
                                             'past' => 'Đã qua',
                                         ];
-                                        $slotUrl = route('pitches/' . (int)$pitch['id']) . '?date=' . urlencode($date);
+                                        $slotUrl = route('pitches/' . (int)$pitch['id']) . '?date=' . urlencode($date) . '&court=' . (int)$pitch['court_number'];
                                     ?>
                                     <div class="col">
                                         <?php if ($slot['status'] === 'available'): ?>

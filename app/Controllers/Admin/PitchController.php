@@ -104,8 +104,9 @@ class PitchController extends Controller
 
         $rules = [
             'name'           => 'required|min:3|max:100',
-            'type'           => 'required|in:5,7',
+            'type'           => 'required|in:5,7,11',
             'price_per_hour' => 'required|numeric|min:0',
+            'field_count'    => 'required|integer|min:1|max:50',
             'description'    => 'nullable|max:2000',
             'address'        => 'nullable|max:255',
             'opening_time'   => 'required',
@@ -142,6 +143,7 @@ class PitchController extends Controller
             'name'           => trim($data['name']),
             'type'           => (int)$data['type'],
             'price_per_hour' => (int)$data['price_per_hour'],
+            'field_count'    => (int)$data['field_count'],
             'description'    => trim($data['description'] ?? ''),
             'image'          => $imagePath,
             'address'        => trim($data['address'] ?? ''),
@@ -167,7 +169,7 @@ class PitchController extends Controller
             redirect404();
             return;
         }
-        if (!in_array((int)$pitch['type'], [5, 7], true)) {
+        if (!in_array((int)$pitch['type'], [5, 7, 11], true)) {
             setFlash('error', 'Sân loại này đã ngừng hoạt động và chỉ được lưu để giữ lịch sử đặt sân.');
             redirect('admin/pitches');
             return;
@@ -190,7 +192,7 @@ class PitchController extends Controller
             redirect404();
             return;
         }
-        if (!in_array((int)$pitch['type'], [5, 7], true)) {
+        if (!in_array((int)$pitch['type'], [5, 7, 11], true)) {
             setFlash('error', 'Không thể sửa sân loại đã ngừng hoạt động.');
             redirect('admin/pitches');
             return;
@@ -201,8 +203,9 @@ class PitchController extends Controller
 
         $rules = [
             'name'           => 'required|min:3|max:100',
-            'type'           => 'required|in:5,7',
+            'type'           => 'required|in:5,7,11',
             'price_per_hour' => 'required|numeric|min:0',
+            'field_count'    => 'required|integer|min:1|max:50',
             'description'    => 'nullable|max:2000',
             'address'        => 'nullable|max:255',
             'opening_time'   => 'required',
@@ -241,6 +244,7 @@ class PitchController extends Controller
             'name'           => trim($data['name']),
             'type'           => (int)$data['type'],
             'price_per_hour' => (int)$data['price_per_hour'],
+            'field_count'    => (int)$data['field_count'],
             'description'    => trim($data['description'] ?? ''),
             'address'        => trim($data['address'] ?? ''),
             'opening_time'   => $data['opening_time'] . ':00',

@@ -25,12 +25,20 @@ if (!function_exists('is_upload')) {
 if (!function_exists('base_url')) {
     function base_url(): string
     {
-        $envBase = $_ENV['APP_URL'] ?? null;
+        $envBase = !empty($_ENV['APP_URL']) ? $_ENV['APP_URL'] : null;
         $httpHost = $_SERVER['HTTP_HOST'] ?? null;
 
         if ($httpHost) {
             $basePath = $envBase ? parse_url($envBase, PHP_URL_PATH) : '';
-            $basePath = is_string($basePath) ? '/' . trim($basePath, '/') : '';
+            if (!is_string($basePath) || trim($basePath, '/') === '') {
+                $scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+                $detectedPath = dirname($scriptName);
+                $basePath = $detectedPath === '.' || $detectedPath === '/'
+                    ? ''
+                    : '/' . trim($detectedPath, '/');
+            } else {
+                $basePath = '/' . trim($basePath, '/');
+            }
             $basePath = $basePath === '/' ? '' : $basePath;
 
             $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443

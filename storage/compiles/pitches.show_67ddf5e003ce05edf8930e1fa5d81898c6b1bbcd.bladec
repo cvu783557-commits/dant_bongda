@@ -30,6 +30,7 @@
  color: #fff;
  }
  </style>
+ <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 
@@ -42,7 +43,17 @@
  <div class="collapse navbar-collapse justify-content-end" id="topNav">
  <ul class="navbar-nav">
  <li class="nav-item"><a class="nav-link" href="<?php echo route('/'); ?>">Trang chủ</a></li>
+ <li class="nav-item"><a class="nav-link" href="<?php echo route('schedule'); ?>">Xem lịch sân</a></li>
+ <li class="nav-item"><a class="nav-link" href="<?php echo route('my-bookings'); ?>">Lịch sử đặt sân</a></li>
+ <li class="nav-item"><a class="nav-link" href="<?php echo route('services'); ?>">Dịch vụ</a></li>
  <?php if (!empty($currentUser)): ?>
+ <?php if (($currentUser['role'] ?? '') === 'USER'): ?>
+ <li class="nav-item">
+ <a class="nav-link" href="<?php echo route('notifications'); ?>">
+ Thông báo<?php if (!empty($notificationCount)): ?> <span class="badge rounded-pill bg-danger"><?php echo (int)$notificationCount; ?></span><?php endif; ?>
+ </a>
+ </li>
+ <?php endif; ?>
  <li class="nav-item"><span class="nav-link"><?php echo e($currentUser['full_name']); ?> (<?php echo e($currentUser['role']); ?>)</span></li>
  <?php if (($currentUser['role'] ?? '') === 'ADMIN'): ?>
  <li class="nav-item"><a class="nav-link" href="<?php echo route('admin/bookings'); ?>">Quản trị</a></li>
@@ -70,7 +81,7 @@
  <div class="alert alert-danger" role="alert"><?php echo $error; ?></div>
  <?php endif; ?>
 
- <div class="row g-5">
+ <div class="row g-4">
  <div class="col-lg-6">
  <a href="<?php echo route('/'); ?>" class="text-decoration-none small text-success mb-3 d-inline-block">← Quay lại danh sách sân</a>
  <img src="<?php echo $pitch['image'] ? (str_starts_with($pitch['image'], 'http') ? $pitch['image'] : file_url($pitch['image'])) : 'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Football%20field%20green%20grass%20aerial&image_size=square'; ?>"
@@ -99,6 +110,45 @@
  <?php if (!empty($pitch['description'])): ?>
  <p class="text-muted"><?php echo nl2br(htmlspecialchars($pitch['description'])); ?></p>
  <?php endif; ?>
+
+ <section class="card border-0 shadow-sm mt-4">
+ <div class="card-body">
+ <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+ <div>
+ <h3 class="h5 fw-bold mb-1">Đánh giá sân</h3>
+ <div class="text-secondary small">
+ <?php if ($ratingSummary['total'] > 0): ?>
+ <span class="text-warning"><?php echo str_repeat('★', (int)round($ratingSummary['average'])); ?></span>
+ <?php echo number_format($ratingSummary['average'], 1); ?>/5 · <?php echo (int)$ratingSummary['total']; ?> lượt đánh giá
+ <?php else: ?>
+ Chưa có đánh giá
+ <?php endif; ?>
+ </div>
+ </div>
+ <a class="btn btn-sm btn-outline-success" href="<?php echo route('my-bookings'); ?>">Đánh giá sau khi đặt sân</a>
+ </div>
+ <?php if (!$ratings): ?>
+ <p class="text-secondary mb-0">Hãy là người đầu tiên chia sẻ trải nghiệm sân này sau khi hoàn thành lượt đặt.</p>
+ <?php else: ?>
+ <div class="d-grid gap-3">
+ <?php foreach ($ratings as $rating): ?>
+ <article class="border-top pt-3">
+ <div class="d-flex justify-content-between gap-2">
+ <strong>Khách hàng đã đặt sân</strong>
+ <span class="text-warning" aria-label="<?php echo (int)$rating['rating']; ?> trên 5 sao">
+ <?php echo str_repeat('★', (int)$rating['rating']); ?><?php echo str_repeat('☆', 5 - (int)$rating['rating']); ?>
+ </span>
+ </div>
+ <div class="small text-secondary">Đã đặt sân ngày <?php echo e(formatDate($rating['booking_date'])); ?></div>
+ <?php if (!empty($rating['comment'])): ?>
+ <p class="mb-0 mt-2"><?php echo nl2br(e($rating['comment'])); ?></p>
+ <?php endif; ?>
+ </article>
+ <?php endforeach; ?>
+ </div>
+ <?php endif; ?>
+ </div>
+ </section>
 
  <div class="card border-0 bg-light mt-4">
  <div class="card-body">
@@ -228,21 +278,42 @@
  <div class="card-body p-4">
  <h4 class="fw-bold mb-4">Thông tin đặt sân</h4>
 
+ <?php if (empty($currentUser) || ($currentUser['role'] ?? '') !== 'USER'): ?>
+ <div class="alert alert-info">
+ Vui lòng <a href="<?php echo route('login'); ?>">đăng nhập</a> hoặc
+ <a href="<?php echo route('register'); ?>">đăng ký tài khoản khách</a> để đặt sân và quản lý đơn.
+ </div>
+ <?php endif; ?>
+
  <form method="get" action="" class="mb-4">
  <label class="form-label fw-semibold">Xem tình trạng sân theo ngày:</label>
- <div class="d-flex gap-2">
+ <div class="row g-2">
+ <div class="col-sm-6">
  <input type="date"
  name="date"
  value="<?php echo htmlspecialchars($date); ?>"
  min="<?php echo date('Y-m-d'); ?>"
  class="form-control"
  required>
+ </div>
+ <div class="col-sm-4">
+ <select name="court" class="form-select" aria-label="Chọn sân con">
+ <?php for ($court = 1; $court <= $fieldCount; $court++): ?>
+ <option value="<?php echo $court; ?>" <?php echo $court === $courtNumber ? 'selected' : ''; ?>>
+ Sân <?php echo $court; ?>
+ </option>
+ <?php endfor; ?>
+ </select>
+ </div>
+ <div class="col-sm-2">
  <button type="submit" class="btn btn-outline-success">Xem lịch</button>
+ </div>
  </div>
  </form>
 
  <form method="post" id="bookingForm" action="<?php echo route('bookings'); ?>" novalidate>
  <input type="hidden" name="pitch_id" value="<?php echo (int)$pitch['id']; ?>">
+ <input type="hidden" name="court_number" value="<?php echo (int)$courtNumber; ?>">
  <input type="hidden" name="booking_date" value="<?php echo htmlspecialchars($date); ?>">
 
  <div class="mb-3">
@@ -288,7 +359,7 @@
 
  <div class="card border-0 bg-light mb-4">
  <div class="card-body">
- <h6 class="fw-bold mb-3">Tình trạng sân — Ngày <?php echo formatDate($date); ?></h6>
+ <h6 class="fw-bold mb-3">Tình trạng Sân <?php echo (int)$courtNumber; ?> — Ngày <?php echo formatDate($date); ?></h6>
  <div class="row g-2">
  <?php
  $statusPriceTable = [
@@ -444,7 +515,28 @@
  Đặt cọc 30% tổng tiền qua VNPay để gửi yêu cầu đặt sân. Phần còn lại thanh toán tại sân.
  <div class="small mt-1">Tiền cọc tạm tính: <strong id="depositDisplay"><?php echo formatMoney(0); ?></strong></div>
  </div>
-
+ <fieldset class="mb-4">
+ <legend class="form-label fw-semibold">Phương thức thanh toán VNPay</legend>
+ <div class="form-check">
+ <input class="form-check-input" type="radio" name="payment_method" id="paymentBank"
+ value="bank" required
+ <?php echo ($old['payment_method'] ?? 'bank') === 'bank' ? 'checked' : ''; ?>>
+ <label class="form-check-label" for="paymentBank">
+ Thẻ ATM / tài khoản ngân hàng (sandbox)
+ </label>
+ </div>
+ <div class="form-check">
+ <input class="form-check-input" type="radio" name="payment_method" id="paymentQr"
+ value="qr" required
+ <?php echo ($old['payment_method'] ?? 'bank') === 'qr' ? 'checked' : ''; ?>>
+ <label class="form-check-label" for="paymentQr">
+ Quét mã QR
+ </label>
+ </div>
+ <div class="form-text">
+ Tài khoản test chỉ nhập trên trang sandbox VNPay/ngân hàng. Không nhập mật khẩu hoặc OTP tại website này.
+ </div>
+ </fieldset>
  <div class="mb-3">
  <label class="form-label">Họ tên khách hàng <span class="text-danger">*</span></label>
  <input type="text" name="customer_name" class="form-control" required
@@ -651,6 +743,7 @@
  const params = new URLSearchParams({
  pitch_id: PITCH_ID,
  booking_date: BOOKING_DATE,
+ court_number: <?php echo (int)$courtNumber; ?>,
  start_time: startEl.value + ':00',
  end_time: endEl.value + ':00',
  });

@@ -44,12 +44,18 @@ class PitchLock extends Model
         return $this->connection->executeQuery($sql, [(int)$id])->fetchAssociative();
     }
 
-    public function getByPitchAndDate($pitchId, $date)
+    public function getByPitchAndDate($pitchId, $date, $courtNumber = null)
     {
         $sql = "SELECT * FROM {$this->table}
-                WHERE pitch_id = ? AND lock_date = ?
+                WHERE pitch_id = ? AND lock_date = ?";
+        $params = [(int)$pitchId, $date];
+        if ($courtNumber !== null) {
+            $sql .= " AND court_number = ?";
+            $params[] = (int)$courtNumber;
+        }
+        $sql .= "
                 ORDER BY start_time ASC";
-        return $this->connection->executeQuery($sql, [(int)$pitchId, $date])->fetchAllAssociative();
+        return $this->connection->executeQuery($sql, $params)->fetchAllAssociative();
     }
 
     public function getAllByPitchAndDate($pitchId, $date)
@@ -57,16 +63,17 @@ class PitchLock extends Model
         return $this->getByPitchAndDate($pitchId, $date);
     }
 
-    public function checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId = null)
+    public function checkOverlap($pitchId, $date, $startTime, $endTime, $excludeId = null, $courtNumber = 1)
     {
         $sql = "SELECT pl.*, p.name AS pitch_name
                 FROM {$this->table} pl
                 LEFT JOIN pitches p ON p.id = pl.pitch_id
                 WHERE pl.pitch_id = ?
+                                    AND pl.court_number = ?
                   AND pl.lock_date = ?
                   AND pl.start_time < ?
                   AND pl.end_time   > ?";
-        $params = [(int)$pitchId, $date, $endTime, $startTime];
+        $params = [(int)$pitchId, (int)$courtNumber, $date, $endTime, $startTime];
 
         if ($excludeId !== null && $excludeId > 0) {
             $sql .= " AND pl.id <> ?";
@@ -83,6 +90,7 @@ class PitchLock extends Model
         $this->connection->beginTransaction();
         try {
             $pitchId   = (int)$data['pitch_id'];
+            $courtNumber = max(1, (int)($data['court_number'] ?? 1));
             $date      = $data['lock_date'];
             $startTime = $data['start_time'];
             $endTime   = $data['end_time'];
@@ -90,7 +98,7 @@ class PitchLock extends Model
             $lockSql = "SELECT id FROM pitches WHERE id = ? FOR UPDATE";
             $this->connection->executeQuery($lockSql, [$pitchId]);
 
-            $overlap = $this->checkOverlap($pitchId, $date, $startTime, $endTime);
+            $overlap = $this->checkOverlap($pitchId, $date, $startTime, $endTime, null, $courtNumber);
             if ($overlap) {
                 $this->connection->rollBack();
                 return [
@@ -100,11 +108,12 @@ class PitchLock extends Model
             }
 
             $sql = "INSERT INTO {$this->table}
-                    (pitch_id, lock_date, start_time, end_time, reason, created_by, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                    (pitch_id, court_number, lock_date, start_time, end_time, reason, created_by, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
 
             $this->connection->executeStatement($sql, [
                 $pitchId,
+                $courtNumber,
                 $date,
                 $startTime,
                 $endTime,

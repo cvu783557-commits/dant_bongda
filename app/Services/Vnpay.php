@@ -23,8 +23,9 @@ class Vnpay
             ? self::SANDBOX_REFUND_URL
             : self::PRODUCTION_REFUND_URL;
         $this->refundUrl = trim($_ENV['VNPAY_REFUND_URL'] ?? $defaultRefundUrl);
-        $appUrl = rtrim($_ENV['APP_URL'] ?? base_url(), '/');
-        $this->returnUrl = trim($_ENV['VNPAY_RETURN_URL'] ?? ($appUrl . '/bookings/vnpay-return'));
+        $appUrl = !empty($_ENV['APP_URL']) ? rtrim($_ENV['APP_URL'], '/') : rtrim(base_url(), '/');
+        $returnUrl = trim($_ENV['VNPAY_RETURN_URL'] ?? '');
+        $this->returnUrl = $returnUrl !== '' ? $returnUrl : ($appUrl . '/bookings/vnpay-return');
 
         if ($this->tmnCode === '' || $this->hashSecret === '') {
             throw new \RuntimeException('Chưa cấu hình VNPAY_TMN_CODE và VNPAY_HASH_SECRET trong file .env.');

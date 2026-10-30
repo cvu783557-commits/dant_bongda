@@ -49,7 +49,39 @@
             color: #334155;
             font-size: .78rem;
         }
+        .location-sidebar {
+            border-right: 1px solid #e2e8f0;
+            padding-right: 1rem;
+        }
+        .location-link {
+            display: block;
+            padding: .55rem .7rem;
+            border-radius: 4px;
+            color: #475569;
+            text-decoration: none;
+        }
+        .location-link:hover,
+        .location-link.active {
+            color: #146c43;
+            background: #e8f5ee;
+        }
+        .location-link.active { font-weight: 600; }
+        @media (max-width: 991.98px) {
+            .location-sidebar {
+                border-right: 0;
+                border-bottom: 1px solid #e2e8f0;
+                padding: 0 0 1rem;
+            }
+            .location-links {
+                display: flex;
+                gap: .35rem;
+                overflow-x: auto;
+                padding-bottom: .35rem;
+            }
+            .location-link { white-space: nowrap; }
+        }
     </style>
+    <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 
@@ -140,6 +172,7 @@
                         <option value="">Tất cả</option>
                         <option value="5" <?php echo $filters['type'] === '5' ? 'selected' : ''; ?>>Sân 5 người</option>
                         <option value="7" <?php echo $filters['type'] === '7' ? 'selected' : ''; ?>>Sân 7 người</option>
+                        <option value="11" <?php echo $filters['type'] === '11' ? 'selected' : ''; ?>>Sân 11 người</option>
                     </select>
                 </div>
                 <div class="col-sm-6 col-lg-2">
@@ -164,9 +197,42 @@
         </p>
     </div>
 
-    <?php if (count($pitches) === 0): ?>
-        <div class="alert alert-info">Không tìm thấy sân phù hợp với ngày, giờ và bộ lọc đã chọn. Vui lòng đổi khung giờ hoặc loại sân.</div>
-    <?php else: ?>
+    <?php
+        $areaParams = [
+            'date' => $filters['date'],
+            'time' => $filters['time'],
+            'type' => $filters['type'],
+            'availability' => $filters['availability'],
+        ];
+        $areaUrl = static function ($district) use ($areaParams) {
+            $params = $areaParams;
+            if ($district !== '') {
+                $params['district'] = $district;
+            }
+            return route('/') . '?' . http_build_query($params);
+        };
+    ?>
+    <div class="row g-4 align-items-start">
+        <aside class="col-lg-3" aria-label="Lọc sân theo khu vực">
+            <nav class="location-sidebar">
+                <div class="small text-uppercase fw-semibold text-secondary mb-2">Khu vực</div>
+                <div class="location-links">
+                    <a class="location-link <?php echo $filters['district'] === '' ? 'active' : ''; ?>"
+                       href="<?php echo e($areaUrl('')); ?>">Tất cả khu vực</a>
+                    <div class="w-100 small fw-bold text-dark px-2 pt-2">Hà Nội</div>
+                    <?php foreach ($districtOptions as $districtOption): ?>
+                        <a class="location-link <?php echo $filters['district'] === $districtOption ? 'active' : ''; ?>"
+                           href="<?php echo e($areaUrl($districtOption)); ?>"><?php echo e($districtOption); ?></a>
+                    <?php endforeach; ?>
+                    <a class="location-link <?php echo $filters['district'] === '__unassigned' ? 'active' : ''; ?>"
+                       href="<?php echo e($areaUrl('__unassigned')); ?>">Chưa cập nhật khu vực</a>
+                </div>
+            </nav>
+        </aside>
+        <main class="col-lg-9">
+            <?php if (count($pitches) === 0): ?>
+                <div class="alert alert-info">Không tìm thấy sân phù hợp với ngày, giờ và khu vực đã chọn.</div>
+            <?php else: ?>
         <div class="row g-4">
             <?php foreach ($pitches as $p): ?>
                 <?php
@@ -191,6 +257,11 @@
                                 </span>
                                 <span class="badge border <?php echo $availabilityClass; ?>"><?php echo e($availabilityLabel); ?></span>
                             </div>
+                            <?php if ((int)($p['field_count'] ?? 1) > 1 && $p['availability_status'] !== 'outside_hours'): ?>
+                                <div class="small text-success fw-semibold mb-2">
+                                    Còn <?php echo (int)$p['available_court_count']; ?>/<?php echo (int)$p['field_count']; ?> sân con
+                                </div>
+                            <?php endif; ?>
                             <div class="small text-muted mb-1">Mã sân: <?php echo e($p['code']); ?></div>
                             <h5 class="card-title fw-bold mb-2"><?php echo e($p['name']); ?></h5>
                             <div class="text-success fw-bold fs-5 mb-3">
@@ -235,7 +306,9 @@
                 </div>
             <?php endforeach; ?>
         </div>
-    <?php endif; ?>
+            <?php endif; ?>
+        </main>
+    </div>
 
 </div>
 
