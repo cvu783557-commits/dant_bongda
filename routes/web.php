@@ -32,6 +32,10 @@ $router->get('/pitches/(\d+)',  PitchController::class . '@show');
 $router->get('/services',  PitchController::class . '@services');
 
 $router->post('/bookings',           PitchController::class . '@bookingStore');
+$router->get('/bookings/details/(\w+)', PitchController::class . '@bookingDetails');
+$router->post('/bookings/details/(\w+)', PitchController::class . '@bookingStore');
+$router->get('/bookings/payment/(\w+)', PitchController::class . '@bookingPayment');
+$router->post('/bookings/payment/(\w+)', PitchController::class . '@bookingPaymentContinue');
 $router->get('/bookings/success/(\d+)', PitchController::class . '@bookingSuccess');
 $router->get('/bookings/vnpay-return', PitchController::class . '@vnpayReturn');
 $router->get('/bookings/vnpay-ipn', PitchController::class . '@vnpayIpn');
