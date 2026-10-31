@@ -381,43 +381,75 @@ class PitchController extends Controller
         ]);
     }
 
-    public function bookingStore()
+    public function bookingStore($detailsToken = null)
     {
-        $data = $_POST;
-        keepOld($data);
-
         $currentUser = $this->user->getActiveUser();
         if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
             setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng trước khi đặt sân.');
             redirect('login');
             return;
         }
-
-        try {
-            $vnpay = new Vnpay();
-        } catch (\RuntimeException $e) {
-            setFlash('error', $e->getMessage());
-            redirect('pitches/' . ((int)($data['pitch_id'] ?? 0)) . '?date=' . urlencode($data['booking_date'] ?? date('Y-m-d')));
+        if (!isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn. Vui lòng thử lại.');
+            redirect($detailsToken ? 'bookings/details/' . $detailsToken : '/');
             return;
         }
 
+        if ($detailsToken !== null) {
+            $detailsCheckout = $_SESSION['booking_details_checkouts'][$detailsToken] ?? null;
+            if (!is_array($detailsCheckout)
+                || (int)($detailsCheckout['user_id'] ?? 0) !== (int)$currentUser['id']
+                || (int)($detailsCheckout['created_at'] ?? 0) < time() - 3600) {
+                unset($_SESSION['booking_details_checkouts'][$detailsToken]);
+                setFlash('error', 'Phiên đặt sân không hợp lệ hoặc đã hết hạn. Vui lòng chọn khung giờ lại.');
+                redirect('pitches/' . (int)($_POST['pitch_id'] ?? 0));
+                return;
+            }
+
+            $customerData = [
+                'customer_name' => is_string($_POST['customer_name'] ?? null) ? trim($_POST['customer_name']) : '',
+                'customer_phone' => is_string($_POST['customer_phone'] ?? null) ? trim($_POST['customer_phone']) : '',
+                'customer_email' => is_string($_POST['customer_email'] ?? null) ? trim($_POST['customer_email']) : '',
+                'notes' => is_string($_POST['notes'] ?? null) ? trim($_POST['notes']) : '',
+            ];
+            $contactErrors = $this->validate($this->validator, $customerData, [
+                'customer_name' => 'required|min:2|max:100',
+                'customer_phone' => 'required|regex:/^0[0-9]{9,10}$/',
+                'customer_email' => 'nullable|email',
+                'notes' => 'nullable|max:500',
+            ]);
+            if (!empty($contactErrors)) {
+                keepOld($customerData);
+                setFlash('error', reset($contactErrors));
+                redirect('bookings/details/' . $detailsToken);
+                return;
+            }
+
+            $_POST = array_merge(
+                $detailsCheckout['data'],
+                $customerData,
+                ['_csrf_token' => $_POST['_csrf_token']]
+            );
+        }
+
+        $data = $_POST;
+        keepOld($data);
         $bookingMode = $data['booking_mode'] ?? 'single';
         $data['booking_mode'] = $bookingMode;
-        $paymentMethod = $data['payment_method'] ?? 'bank';
-        $data['payment_method'] = $paymentMethod;
         $data['court_number'] = $data['court_number'] ?? '1';
         $rules = [
             'booking_mode'   => 'required|in:single,monthly',
-            'payment_method' => 'required|in:bank,qr',
             'pitch_id'       => 'required|integer',
             'court_number'   => 'required|integer|min:1',
-            'customer_name'  => 'required|min:2|max:100',
-            'customer_phone' => 'required|regex:/^0[0-9]{9,10}$/',
-            'customer_email' => 'nullable|email',
             'start_time'     => 'required|regex:/^\d{2}:\d{2}$/',
             'end_time'       => 'required|regex:/^\d{2}:\d{2}$/',
             'notes'          => 'nullable|max:500',
         ];
+        if ($detailsToken !== null) {
+            $rules['customer_name'] = 'required|min:2|max:100';
+            $rules['customer_phone'] = 'required|regex:/^0[0-9]{9,10}$/';
+            $rules['customer_email'] = 'nullable|email';
+        }
         if ($bookingMode === 'monthly') {
             $rules['booking_month'] = 'required|regex:/^\d{4}-\d{2}$/';
         } else {
@@ -556,12 +588,6 @@ class PitchController extends Controller
             return;
         }
 
-        $customer = $this->customer->findOrCreate(
-            trim($data['customer_name']),
-            trim($data['customer_phone']),
-            isset($data['customer_email']) ? trim($data['customer_email']) : null
-        );
-
         $hours = Booking::calcHoursDiff($startTime, $endTime);
         $serviceTotalPerSession = array_sum(array_map(
             static fn ($item) => $item['quantity'] * $item['unit_price'],
@@ -579,6 +605,49 @@ class PitchController extends Controller
             redirect('pitches/' . (int)$pitch['id'] . '?date=' . urlencode($bookingDate));
             return;
         }
+
+        if ($detailsToken === null) {
+            $data['total_price'] = $total;
+            $data['deposit'] = $deposit;
+            $data['booking_count'] = $bookingMode === 'monthly' ? count($occurrenceDates) : 1;
+            foreach ($_SESSION['booking_details_checkouts'] ?? [] as $existingToken => $existingCheckout) {
+                if (!is_array($existingCheckout)
+                    || (int)($existingCheckout['created_at'] ?? 0) < time() - 3600) {
+                    unset($_SESSION['booking_details_checkouts'][$existingToken]);
+                }
+            }
+            $detailsToken = bin2hex(random_bytes(16));
+            $_SESSION['booking_details_checkouts'][$detailsToken] = [
+                'user_id' => (int)$currentUser['id'],
+                'data' => $data,
+                'created_at' => time(),
+            ];
+
+            return view('bookings.details', [
+                'token' => $detailsToken,
+                'pitch' => $pitch,
+                'bookingMode' => $bookingMode,
+                'bookingDate' => $bookingDate,
+                'bookingMonth' => $bookingMonth,
+                'bookingCount' => $bookingMode === 'monthly' ? count($occurrenceDates) : 1,
+                'courtNumber' => $courtNumber,
+                'startTime' => substr($startTime, 0, 5),
+                'endTime' => substr($endTime, 0, 5),
+                'total' => $total,
+                'deposit' => $deposit,
+                'currentUser' => $currentUser,
+                'success' => getFlash('success'),
+                'error' => getFlash('error'),
+                'notificationCount' => $this->notification->unreadCount((int)$currentUser['id']),
+                'old' => $_SESSION['old'] ?? [],
+            ]);
+        }
+
+        $customer = $this->customer->findOrCreate(
+            trim((string)$data['customer_name']),
+            trim((string)$data['customer_phone']),
+            isset($data['customer_email']) ? trim((string)$data['customer_email']) : null
+        );
 
         if ($bookingMode === 'monthly') {
             $occurrences = [];
@@ -624,7 +693,7 @@ class PitchController extends Controller
             ]);
         }
 
-        unset($_SESSION['old']);
+        unset($_SESSION['old'], $_SESSION['booking_details_checkouts'][$detailsToken]);
 
         if (!$result['success']) {
             setFlash('error', $result['error'] ?? 'Đặt sân không thành công');
@@ -635,45 +704,231 @@ class PitchController extends Controller
         $bookingId = $bookingMode === 'monthly'
             ? (int)$result['first_booking_id']
             : (int)$result['id'];
-        $paymentReference = $bookingMode === 'monthly'
-            ? 'M' . (int)$result['series_id']
-            : (string)$bookingId;
+        foreach ($_SESSION['booking_payment_checkouts'] ?? [] as $existingToken => $existingCheckout) {
+            if (!is_array($existingCheckout)
+                || (int)($existingCheckout['created_at'] ?? 0) < time() - 3600) {
+                unset($_SESSION['booking_payment_checkouts'][$existingToken]);
+            }
+        }
+        $checkoutToken = bin2hex(random_bytes(16));
+        $_SESSION['booking_payment_checkouts'][$checkoutToken] = [
+            'user_id' => (int)$currentUser['id'],
+            'booking_id' => $bookingId,
+            'series_id' => $bookingMode === 'monthly' ? (int)$result['series_id'] : null,
+            'booking_ids' => $bookingMode === 'monthly'
+                ? array_map('intval', $result['booking_ids'])
+                : [$bookingId],
+            'pitch_id' => (int)$pitch['id'],
+            'court_number' => $courtNumber,
+            'booking_date' => $bookingDate,
+            'booking_month' => $bookingMode === 'monthly' ? $bookingMonth : null,
+            'start_time' => substr($startTime, 0, 5),
+            'end_time' => substr($endTime, 0, 5),
+            'booking_count' => $bookingMode === 'monthly' ? count($occurrenceDates) : 1,
+            'total_price' => $total,
+            'deposit' => $deposit,
+            'created_at' => time(),
+        ];
+
+        redirect('bookings/payment/' . $checkoutToken);
+    }
+
+    public function bookingDetails($token)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để nhập thông tin đặt sân.');
+            redirect('login');
+            return;
+        }
+
+        $checkout = $_SESSION['booking_details_checkouts'][$token] ?? null;
+        if (!is_array($checkout)
+            || (int)($checkout['user_id'] ?? 0) !== (int)$currentUser['id']
+            || (int)($checkout['created_at'] ?? 0) < time() - 3600) {
+            unset($_SESSION['booking_details_checkouts'][$token]);
+            setFlash('error', 'Phiên đặt sân không hợp lệ hoặc đã hết hạn. Vui lòng chọn khung giờ lại.');
+            redirect('/');
+            return;
+        }
+
+        $data = $checkout['data'];
+        $pitch = $this->pitch->find((int)$data['pitch_id']);
+        if (!$pitch || $pitch['status'] !== 'active') {
+            unset($_SESSION['booking_details_checkouts'][$token]);
+            setFlash('error', 'Sân không còn nhận đặt. Vui lòng chọn sân khác.');
+            redirect('/');
+            return;
+        }
+
+        $date = $data['booking_mode'] === 'monthly'
+            ? ($data['booking_month'] . '-01')
+            : $data['booking_date'];
+        return view('bookings.details', [
+            'token' => (string)$token,
+            'pitch' => $pitch,
+            'bookingMode' => $data['booking_mode'],
+            'bookingDate' => $date,
+            'bookingMonth' => $data['booking_month'] ?? null,
+            'bookingCount' => (int)($data['booking_count'] ?? 1),
+            'courtNumber' => (int)$data['court_number'],
+            'startTime' => $data['start_time'],
+            'endTime' => $data['end_time'],
+            'total' => $data['total_price'] ?? 0,
+            'deposit' => $data['deposit'] ?? 0,
+            'currentUser' => $currentUser,
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'notificationCount' => $this->notification->unreadCount((int)$currentUser['id']),
+            'old' => $_SESSION['old'] ?? [],
+        ]);
+    }
+
+    public function bookingPayment($token)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để thanh toán.');
+            redirect('login');
+            return;
+        }
+
+        $checkout = $this->getBookingPaymentCheckout((string)$token, (int)$currentUser['id']);
+        if (!$checkout) {
+            setFlash('error', 'Phiên thanh toán không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lịch sử đặt sân.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $booking = $this->booking->find((int)$checkout['booking_id']);
+        return view('bookings.payment', [
+            'token' => (string)$token,
+            'checkout' => $checkout,
+            'booking' => $booking,
+            'currentUser' => $currentUser,
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'notificationCount' => $this->notification->unreadCount((int)$currentUser['id']),
+        ]);
+    }
+
+    public function bookingPaymentContinue($token)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để thanh toán.');
+            redirect('login');
+            return;
+        }
+        if (!isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $checkout = $this->getBookingPaymentCheckout((string)$token, (int)$currentUser['id']);
+        if (!$checkout) {
+            setFlash('error', 'Phiên thanh toán không hợp lệ hoặc đã hết hạn. Vui lòng kiểm tra lịch sử đặt sân.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $paymentMethod = $_POST['payment_method'] ?? '';
+        if (!is_string($paymentMethod) || !in_array($paymentMethod, ['bank', 'qr'], true)) {
+            setFlash('error', 'Vui lòng chọn phương thức thanh toán hợp lệ.');
+            redirect('bookings/payment/' . $token);
+            return;
+        }
+
         try {
+            $vnpay = new Vnpay();
+        } catch (\RuntimeException $e) {
+            setFlash('error', $e->getMessage());
+            redirect('bookings/payment/' . $token);
+            return;
+        }
+
+        $seriesId = $checkout['series_id'] ? (int)$checkout['series_id'] : null;
+        try {
+            $paymentReference = $seriesId ? 'M' . $seriesId : (string)$checkout['booking_id'];
             $paymentRequest = $vnpay->createPaymentRequest(
                 $paymentReference,
-                $deposit,
+                (float)$checkout['deposit'],
                 $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-                $bookingMode === 'monthly'
-                    ? 'Dat coc lich san thang #' . (int)$result['series_id']
-                    : 'Dat coc don san #' . $bookingId,
+                $seriesId
+                    ? 'Dat coc lich san thang #' . $seriesId
+                    : 'Dat coc don san #' . (int)$checkout['booking_id'],
                 $paymentMethod === 'bank' ? 'VNBANK' : 'VNPAYQR'
             );
             $savedReferences = $this->booking->saveVnpayReference(
-                $bookingId,
-                $bookingMode === 'monthly' ? (int)$result['series_id'] : null,
+                (int)$checkout['booking_id'],
+                $seriesId,
                 $paymentRequest['txn_ref'],
                 $paymentRequest['create_date']
             );
             if ($savedReferences < 1) {
                 throw new \RuntimeException('Không lưu được mã giao dịch VNPay cho đơn đặt sân.');
             }
-            $paymentUrl = $paymentRequest['url'];
         } catch (\Throwable $e) {
-            $this->logError('VNPay payment URL error for booking #' . $bookingId . ': ' . $e->getMessage());
-            if ($bookingMode === 'monthly') {
-                foreach ($result['booking_ids'] as $seriesBookingId) {
-                    $this->booking->cancel($seriesBookingId, 'Không khởi tạo được thanh toán VNPay');
-                }
-            } else {
-                $this->booking->cancel($bookingId, 'Không khởi tạo được thanh toán VNPay');
+            $this->logError(
+                'VNPay payment URL error for booking #' . (int)$checkout['booking_id'] . ': ' . $e->getMessage()
+            );
+            foreach ($checkout['booking_ids'] as $seriesBookingId) {
+                $this->booking->cancel((int)$seriesBookingId, 'Không khởi tạo được thanh toán VNPay');
             }
+            unset($_SESSION['booking_payment_checkouts'][$token]);
             setFlash('error', 'Không thể khởi tạo giao dịch VNPay. Vui lòng thử lại hoặc liên hệ quản lý.');
-            redirect('pitches/' . (int)$pitch['id'] . '?date=' . urlencode($bookingDate) . '&court=' . $courtNumber);
+            redirect(
+                'pitches/' . (int)$checkout['pitch_id']
+                . '?date=' . urlencode($checkout['booking_date'])
+                . '&court=' . (int)$checkout['court_number']
+            );
             return;
         }
 
-        header('Location: ' . $paymentUrl);
+        unset($_SESSION['booking_payment_checkouts'][$token]);
+        header('Location: ' . $paymentRequest['url']);
         exit;
+    }
+
+    private function getBookingPaymentCheckout(string $token, int $userId): ?array
+    {
+        $checkout = $_SESSION['booking_payment_checkouts'][$token] ?? null;
+        if (!is_array($checkout)
+            || (int)($checkout['user_id'] ?? 0) !== $userId
+            || (int)($checkout['created_at'] ?? 0) < time() - 3600) {
+            unset($_SESSION['booking_payment_checkouts'][$token]);
+            return null;
+        }
+
+        $booking = $this->booking->find((int)($checkout['booking_id'] ?? 0));
+        if (!$booking
+            || (int)$booking['created_by'] !== $userId
+            || (int)$booking['pitch_id'] !== (int)($checkout['pitch_id'] ?? 0)
+            || $booking['status'] !== Booking::STATUS_PENDING
+            || $booking['payment_status'] !== Booking::PAY_UNPAID) {
+            unset($_SESSION['booking_payment_checkouts'][$token]);
+            return null;
+        }
+
+        $seriesId = (int)($checkout['series_id'] ?? 0);
+        if ($seriesId > 0) {
+            $series = $this->booking->findSeries($seriesId);
+            if (!$series
+                || (int)$booking['series_id'] !== $seriesId
+                || $series['payment_status'] !== Booking::PAY_UNPAID) {
+                unset($_SESSION['booking_payment_checkouts'][$token]);
+                return null;
+            }
+            $checkout['deposit'] = (float)$series['deposit'];
+            $checkout['total_price'] = (float)$series['total_price'];
+        } else {
+            $checkout['deposit'] = (float)$booking['deposit'];
+            $checkout['total_price'] = (float)$booking['total_price'];
+        }
+
+        $checkout['pitch_name'] = $booking['pitch_name'] ?? 'Sân bóng';
+        return $checkout;
     }
 
     public function vnpayReturn()

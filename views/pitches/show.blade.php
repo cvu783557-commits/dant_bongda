@@ -312,6 +312,7 @@
                     </form>
 
                     <form method="post" id="bookingForm" action="<?php echo route('bookings'); ?>" novalidate>
+                        <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
                         <input type="hidden" name="pitch_id" value="<?php echo (int)$pitch['id']; ?>">
                         <input type="hidden" name="court_number" value="<?php echo (int)$courtNumber; ?>">
                         <input type="hidden" name="booking_date" value="<?php echo htmlspecialchars($date); ?>">
@@ -511,57 +512,7 @@
                             <span class="fw-semibold">Thành tiền (ước tính):</span>
                             <span class="fw-bold fs-5" id="totalDisplay"><?php echo formatMoney(0); ?></span>
                         </div>
-                        <div class="alert alert-info mb-4">
-                            Đặt cọc 30% tổng tiền qua VNPay để gửi yêu cầu đặt sân. Phần còn lại thanh toán tại sân.
-                            <div class="small mt-1">Tiền cọc tạm tính: <strong id="depositDisplay"><?php echo formatMoney(0); ?></strong></div>
-                        </div>
-                        <fieldset class="mb-4">
-                            <legend class="form-label fw-semibold">Phương thức thanh toán VNPay</legend>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="payment_method" id="paymentBank"
-                                       value="bank" required
-                                       <?php echo ($old['payment_method'] ?? 'bank') === 'bank' ? 'checked' : ''; ?>>
-                                <label class="form-check-label" for="paymentBank">
-                                    Thẻ ATM / tài khoản ngân hàng (sandbox)
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="payment_method" id="paymentQr"
-                                       value="qr" required
-                                       <?php echo ($old['payment_method'] ?? 'bank') === 'qr' ? 'checked' : ''; ?>>
-                                <label class="form-check-label" for="paymentQr">
-                                    Quét mã QR
-                                </label>
-                            </div>
-                            <div class="form-text">
-                                Tài khoản test chỉ nhập trên trang sandbox VNPay/ngân hàng. Không nhập mật khẩu hoặc OTP tại website này.
-                            </div>
-                        </fieldset>
-                        <div class="mb-3">
-                            <label class="form-label">Họ tên khách hàng <span class="text-danger">*</span></label>
-                            <input type="text" name="customer_name" class="form-control" required
-                                   value="<?php echo htmlspecialchars($old['customer_name'] ?? ''); ?>">
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Số điện thoại <span class="text-danger">*</span></label>
-                            <input type="tel" name="customer_phone" class="form-control" required
-                                   pattern="^0[0-9]{9,10}$"
-                                   value="<?php echo htmlspecialchars($old['customer_phone'] ?? ''); ?>">
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Email (tùy chọn)</label>
-                            <input type="email" name="customer_email" class="form-control"
-                                   value="<?php echo htmlspecialchars($old['customer_email'] ?? ''); ?>">
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Ghi chú (tùy chọn)</label>
-                            <textarea name="notes" rows="2" class="form-control"><?php echo htmlspecialchars($old['notes'] ?? ''); ?></textarea>
-                        </div>
-
-                        <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">Xác nhận đặt sân</button>
+                        <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">Xác nhận khung giờ</button>
                     </form>
                 </div>
             </div>
@@ -592,7 +543,6 @@
     const startEl   = document.getElementById('start_time');
     const endEl     = document.getElementById('end_time');
     const totalEl   = document.getElementById('totalDisplay');
-    const depositEl = document.getElementById('depositDisplay');
     const serviceTotalEl = document.getElementById('serviceTotalDisplay');
     const overlapEl = document.getElementById('overlapBox');
     const form      = document.getElementById('bookingForm');
@@ -712,7 +662,6 @@
         if(s === null || e === null || e <= s){
             quantityEl.value = isMonthly ? sessions + ' ngày' : '0 giờ';
             totalEl.textContent = fmtMoney(0);
-            depositEl.textContent = fmtMoney(0);
             return {hours: null, sessions: sessions};
         }
         const hours = (e - s) / 3600;
@@ -722,8 +671,6 @@
     const sessionTotal = priceForPeriod(startEl.value, endEl.value) + selectedServicesTotal();
         const total = sessionTotal * sessions;
         totalEl.textContent = fmtMoney(total);
-        const deposit = Math.max(1, Math.ceil(total * 0.30));
-        depositEl.textContent = fmtMoney(deposit);
         return {hours: hours, sessions: sessions};
     }
 
