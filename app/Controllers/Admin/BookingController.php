@@ -5,6 +5,7 @@ namespace App\Controllers\Admin;
 use App\Controller;
 use App\Models\Booking;
 use App\Models\BookingService;
+use App\Models\ServiceRequest;
 use App\Models\Customer;
 use App\Models\CancellationRequest;
 use App\Models\Notification;
@@ -27,6 +28,7 @@ class BookingController extends Controller
     protected $pitchLock;
     protected $cancellationRequest;
     protected $notification;
+    protected $serviceRequest;
 
     public function __construct()
     {
@@ -39,6 +41,7 @@ class BookingController extends Controller
         $this->pitchLock = new PitchLock();
         $this->cancellationRequest = new CancellationRequest();
         $this->notification = new Notification();
+        $this->serviceRequest = new ServiceRequest();
         $this->validator = new Validator();
 
         if (session_status() === PHP_SESSION_NONE) session_start();
@@ -75,6 +78,91 @@ class BookingController extends Controller
             'error' => getFlash('error'),
             'currentUser' => $this->currentUser(),
         ]);
+    }
+
+    public function payments()
+    {
+        $filters = [
+            'q' => trim((string)($_GET['q'] ?? '')),
+            'status' => (string)($_GET['status'] ?? ''),
+            'method' => (string)($_GET['method'] ?? ''),
+            'from_date' => (string)($_GET['from_date'] ?? ''),
+            'to_date' => (string)($_GET['to_date'] ?? ''),
+        ];
+        foreach (['from_date', 'to_date'] as $dateField) {
+            if ($filters[$dateField] !== ''
+                && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters[$dateField])) {
+                $filters[$dateField] = '';
+            }
+        }
+
+        return view('admin.bookings.payments', [
+            'transactions' => $this->booking->searchPaymentTransactions($filters),
+            'summary' => $this->booking->summarizePaymentTransactions($filters),
+            'filters' => $filters,
+            'payMethods' => Booking::getPaymentMethods(),
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'currentUser' => $this->currentUser(),
+        ]);
+    }
+
+    public function serviceRequests()
+    {
+        return view('admin.bookings.service_requests', [
+            'requests' => $this->serviceRequest->allForAdmin(),
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'currentUser' => $this->currentUser(),
+        ]);
+    }
+
+    public function handleServiceRequest($id, $decision)
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/service-requests');
+            return;
+        }
+        if (!in_array($decision, ['accept', 'reject'], true)) {
+            setFlash('error', 'Thao tác xử lý không hợp lệ.');
+            redirect('admin/service-requests');
+            return;
+        }
+
+        $admin = $this->currentUser();
+        $status = $decision === 'accept' ? 'accepted' : 'rejected';
+        $result = $this->serviceRequest->updateStatus(
+            (int)$id,
+            (int)$admin['id'],
+            $status,
+            trim((string)($_POST['staff_note'] ?? ''))
+        );
+        if (!$result['success']) {
+            setFlash('error', $result['error']);
+            redirect('admin/service-requests');
+            return;
+        }
+
+        try {
+            $this->notification->createForUser(
+                (int)$result['requested_by'],
+                'service_request',
+                $status === 'accepted' ? 'Yêu cầu dịch vụ đã được xác nhận' : 'Yêu cầu dịch vụ bị từ chối',
+                ($status === 'accepted' ? 'Nhân viên đã xác nhận' : 'Nhân viên đã từ chối')
+                    . ' yêu cầu dịch vụ cho đơn #' . (int)$result['booking_id'] . '.',
+                route('my-bookings'),
+                'service-request:' . (int)$id . ':' . $status
+            );
+        } catch (\Throwable $e) {
+            error_log('Unable to notify customer about service request #' . (int)$id . ': ' . $e->getMessage());
+        }
+
+        setFlash('success', $status === 'accepted'
+            ? 'Đã xác nhận yêu cầu dịch vụ; tổng tiền và tồn kho đã được cập nhật.'
+            : 'Đã từ chối yêu cầu dịch vụ.');
+        redirect('admin/service-requests');
     }
 
     public function approveCancellationRequest($id)
@@ -191,6 +279,35 @@ class BookingController extends Controller
             setFlash('error', $message);
             redirect('admin/cancellation-requests');
             return;
+        }
+
+        if ($refund && (float)$request['refund_amount'] > 0) {
+            try {
+                $this->booking->recordRefundTransaction(
+                    (int)$request['booking_id'],
+                    (float)$request['refund_amount'],
+                    'REFUND-' . $refundRequestId,
+                    (int)$admin['id']
+                );
+            } catch (\Throwable $e) {
+                error_log('Unable to record accepted VNPay refund for booking #' . (int)$request['booking_id'] . ': ' . $e->getMessage());
+                $message = 'VNPay đã tiếp nhận hoàn tiền nhưng không lưu được lịch sử hoàn. Cần đối soát thủ công.';
+                $this->cancellationRequest->setStatus(
+                    (int)$id,
+                    'manual_review',
+                    $refund['response_code'] ?? null,
+                    $message
+                );
+                $this->notifyCancellationStatus(
+                    $request,
+                    'manual_review',
+                    'Yêu cầu hoàn tiền cần được kiểm tra',
+                    $message
+                );
+                setFlash('error', $message);
+                redirect('admin/cancellation-requests');
+                return;
+            }
         }
 
         $status = $refund ? 'refunded' : 'approved';
@@ -354,6 +471,198 @@ class BookingController extends Controller
             'canConfirm'  => $this->user->canConfirm(),
             'canPay'      => $this->user->canUpdatePayment(),
         ]);
+    }
+
+    public function checkInDesk()
+    {
+        if (!$this->user->canAccessAdmin()) {
+            setFlash('error', 'Bạn không có quyền sử dụng chức năng check-in.');
+            redirect('admin/dashboard');
+            return;
+        }
+
+        $date = trim((string)($_GET['date'] ?? date('Y-m-d')));
+        $dateParts = explode('-', $date);
+        $validDate = count($dateParts) === 3
+            && ctype_digit(implode('', $dateParts))
+            && checkdate((int)$dateParts[1], (int)$dateParts[2], (int)$dateParts[0])
+            && $date === sprintf('%04d-%02d-%02d', (int)$dateParts[0], (int)$dateParts[1], (int)$dateParts[2]);
+        if (!$validDate) {
+            $date = date('Y-m-d');
+            setFlash('error', 'Ngày tra cứu không hợp lệ. Đang hiển thị hôm nay.');
+        }
+
+        $query = trim((string)($_GET['q'] ?? ''));
+        $filters = ['booking_date' => $date, 'q' => $query];
+        $confirmedBookings = $this->booking->all($filters + ['status' => Booking::STATUS_CONFIRMED]);
+        $checkedInBookings = $this->booking->all($filters + ['status' => Booking::STATUS_IN_PROGRESS]);
+
+        return view('admin.bookings.checkin', [
+            'date' => $date,
+            'query' => $query,
+            'confirmedBookings' => $confirmedBookings,
+            'checkedInBookings' => $checkedInBookings,
+            'canConfirm' => $this->user->canConfirm(),
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'currentUser' => $this->currentUser(),
+        ]);
+    }
+
+    public function checkIn($id)
+    {
+        if (!$this->user->canConfirm()) {
+            setFlash('error', 'Bạn không có quyền check-in đơn đặt sân.');
+            redirect('admin/check-in');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        $booking = $this->booking->findCheckInDetails((int)$id);
+        if (!$booking) {
+            setFlash('error', 'Không tìm thấy đơn đặt sân.');
+            redirect('admin/check-in');
+            return;
+        }
+        $this->processCheckIn($booking, (int)$this->currentUserId());
+        redirect('admin/check-in?date=' . urlencode(date('Y-m-d')));
+    }
+
+    public function checkInDetails($id)
+    {
+        if (!$this->user->canConfirm()) {
+            setFlash('error', 'Bạn không có quyền xem thông tin check-in.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        $booking = $this->booking->findCheckInDetails((int)$id);
+        if (!$booking) {
+            setFlash('error', 'Không tìm thấy đơn đặt sân.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        return $this->renderCheckInDetails($booking);
+    }
+
+    public function checkInQr()
+    {
+        if (!$this->user->canConfirm()) {
+            setFlash('error', 'Bạn không có quyền check-in đơn đặt sân.');
+            redirect('admin/check-in');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        $token = $_POST['checkin_token'] ?? '';
+        if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/i', $token)) {
+            setFlash('error', 'Mã QR check-in không hợp lệ.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        $token = strtolower($token);
+        $booking = $this->booking->findByCheckInToken($token);
+        if (!$booking) {
+            setFlash('error', 'Không tìm thấy đơn đặt sân tương ứng với mã QR này.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        $details = $this->booking->findCheckInDetails((int)$booking['id']);
+        if (!$details) {
+            setFlash('error', 'Không thể tải thông tin đơn đặt sân.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        return $this->renderCheckInDetails($details);
+    }
+
+    public function confirmCheckIn($id)
+    {
+        if (!$this->user->canConfirm()) {
+            setFlash('error', 'Bạn không có quyền check-in đơn đặt sân.');
+            redirect('admin/check-in');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        $note = is_string($_POST['checkin_note'] ?? null) ? trim($_POST['checkin_note']) : '';
+        if (mb_strlen($note) > 500) {
+            setFlash('error', 'Ghi chú check-in không được vượt quá 500 ký tự.');
+            redirect('admin/check-in/' . (int)$id);
+            return;
+        }
+
+        $booking = $this->booking->findCheckInDetails((int)$id);
+        if (!$booking) {
+            setFlash('error', 'Không tìm thấy đơn đặt sân.');
+            redirect('admin/check-in');
+            return;
+        }
+
+        $this->processCheckIn($booking, (int)$this->currentUserId(), $note);
+        redirect('admin/check-in/' . (int)$id);
+    }
+
+    private function renderCheckInDetails(array $booking)
+    {
+        $canCheckIn = $booking['booking_date'] === date('Y-m-d')
+            && $booking['status'] === Booking::STATUS_CONFIRMED;
+        return view('admin.bookings.checkin_details', [
+            'booking' => $booking,
+            'canCheckIn' => $canCheckIn,
+            'success' => getFlash('success'),
+            'error' => getFlash('error'),
+            'currentUser' => $this->currentUser(),
+        ]);
+    }
+
+    private function processCheckIn(array $booking, int $staffId, string $note = ''): void
+    {
+        $bookingId = (int)$booking['id'];
+        if ($booking['booking_date'] !== date('Y-m-d')) {
+            setFlash('error', 'Chỉ check-in được đơn đặt sân trong ngày hôm nay.');
+            return;
+        }
+        if ($booking['status'] !== Booking::STATUS_CONFIRMED) {
+            setFlash(
+                $booking['status'] === Booking::STATUS_IN_PROGRESS ? 'success' : 'error',
+                $booking['status'] === Booking::STATUS_IN_PROGRESS
+                    ? 'Đơn này đã được check-in trước đó.'
+                    : 'Chỉ đơn đã xác nhận mới được check-in.'
+            );
+            return;
+        }
+
+        if ($this->booking->checkInToday($bookingId, $staffId, $note) === 1) {
+            setFlash('success', 'Check-in thành công cho đơn ' . bookingCode($bookingId) . '.');
+            return;
+        }
+
+        $latestBooking = $this->booking->find($bookingId);
+        if ($latestBooking && $latestBooking['status'] === Booking::STATUS_IN_PROGRESS) {
+            setFlash('success', 'Đơn này đã được check-in trước đó.');
+        } else {
+            setFlash('error', 'Đơn đã thay đổi trạng thái hoặc không còn thuộc ngày hôm nay; vui lòng kiểm tra lại.');
+        }
     }
 
     /* ============================================================
@@ -532,6 +841,7 @@ class BookingController extends Controller
         return view('admin.bookings.show', [
             'booking'         => $booking,
             'bookingServices' => $this->bookingService->allByBooking((int)$booking['id']),
+            'paymentTransactions' => $this->booking->getPaymentTransactions((int)$booking['id']),
             'customer'        => $customer,
             'history'         => array_filter($history, fn($h) => (int)$h['id'] !== (int)$booking['id']),
             'statuses'        => Booking::getBookingStatuses(),
@@ -547,6 +857,43 @@ class BookingController extends Controller
             'canPay'          => $this->user->canUpdatePayment(),
             'remaining'       => Booking::calcRemaining($booking['total_price'], $booking['paid_amount']),
             'hours'           => Booking::calcHoursDiff($booking['start_time'], $booking['end_time']),
+        ]);
+    }
+
+    public function invoice($id)
+    {
+        $booking = $this->booking->find((int)$id);
+        if (!$booking) {
+            redirect404();
+            return;
+        }
+
+        $transactions = $this->booking->getPaymentTransactions((int)$booking['id']);
+        $received = 0.0;
+        $refunded = 0.0;
+        foreach ($transactions as $transaction) {
+            if ($transaction['status'] === 'success') {
+                $received += (float)$transaction['amount'];
+            } elseif ($transaction['status'] === 'refund') {
+                $refunded += (float)$transaction['amount'];
+            }
+        }
+        $netPaid = max(0, $received - $refunded);
+        $services = $this->bookingService->allByBooking((int)$booking['id']);
+        $serviceTotal = array_sum(array_map(
+            static fn ($item) => (float)$item['subtotal'],
+            $services
+        ));
+
+        return view('admin.bookings.invoice', [
+            'booking' => $booking,
+            'services' => $services,
+            'transactions' => $transactions,
+            'received' => $received,
+            'refunded' => $refunded,
+            'netPaid' => $netPaid,
+            'remaining' => max(0, (float)$booking['total_price'] - $netPaid),
+            'pitchTotal' => max(0, (float)$booking['total_price'] - $serviceTotal),
         ]);
     }
 
@@ -737,7 +1084,7 @@ class BookingController extends Controller
     }
     public function start($id)
     {
-        return $this->quickChangeStatus($id, Booking::STATUS_IN_PROGRESS, 'Đánh dấu đang sử dụng thành công');
+        return $this->checkIn($id);
     }
     public function complete($id)
     {
@@ -787,17 +1134,29 @@ class BookingController extends Controller
             redirect('admin/bookings/' . $id);
             return;
         }
-
-        $amount = (float)($_POST['payment_amount'] ?? 0);
-        $method = $_POST['payment_method'] ?? 'cash';
-
-        if ($amount <= 0) {
-            setFlash('error', 'Số tiền thanh toán phải lớn hơn 0');
+        if (!isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
             redirect('admin/bookings/' . $id);
             return;
         }
 
-        $res = $this->booking->addPayment((int)$id, $amount, $method);
+        $rawAmount = $_POST['payment_amount'] ?? null;
+        $amount = filter_var($rawAmount, FILTER_VALIDATE_FLOAT);
+        $method = (string)($_POST['payment_method'] ?? 'cash');
+
+        if ($amount === false || $amount <= 0 || !array_key_exists($method, Booking::getPaymentMethods())) {
+            setFlash('error', 'Số tiền hoặc phương thức thanh toán không hợp lệ.');
+            redirect('admin/bookings/' . $id);
+            return;
+        }
+
+        $currentUser = $this->currentUser();
+        $res = $this->booking->addPayment(
+            (int)$id,
+            (float)$amount,
+            $method,
+            isset($currentUser['id']) ? (int)$currentUser['id'] : null
+        );
         if (!$res['success']) {
             setFlash('error', $res['error']);
         } else {

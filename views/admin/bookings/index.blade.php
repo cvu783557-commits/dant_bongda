@@ -2,6 +2,58 @@
 @section('title', 'Danh sách đặt sân')
 @section('content')
 
+<style>
+    .booking-list-table {
+        min-width: 1120px;
+        table-layout: fixed;
+        font-size: .88rem;
+    }
+    .booking-list-table th,
+    .booking-list-table td {
+        padding: .65rem .55rem;
+        vertical-align: middle;
+    }
+    .booking-list-table th { white-space: nowrap; }
+    .booking-list-table .booking-customer { width: 185px; }
+    .booking-list-table .booking-pitch { width: 155px; }
+    .booking-list-table .booking-date { width: 105px; }
+    .booking-list-table .booking-time { width: 125px; }
+    .booking-list-table .booking-money { width: 120px; }
+    .booking-list-table .booking-status { width: 125px; }
+    .booking-list-table .booking-actions { width: 210px; }
+    .booking-list-table .booking-customer-name,
+    .booking-list-table .booking-pitch-name {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .booking-list-table .booking-customer small,
+    .booking-list-table .booking-pitch small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .booking-list-table .booking-actions-group {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: .3rem;
+    }
+    .booking-list-table .booking-actions-group .btn {
+        padding: .25rem .45rem;
+        white-space: nowrap;
+    }
+    @media (max-width: 767.98px) {
+        .booking-list-table { min-width: 1050px; }
+    }
+    @media print {
+        .booking-list-table { min-width: 0; font-size: 9px; }
+        .booking-list-table .booking-actions { display: none; }
+    }
+</style>
+
 <?php
 $uri_query = $_SERVER['QUERY_STRING'] ?? '';
 $reset_url = route('admin/bookings');
@@ -97,21 +149,21 @@ $reset_url = route('admin/bookings');
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" style="font-size: 0.92rem;">
+            <table class="table table-hover align-middle mb-0 booking-list-table">
                 <thead class="table-light">
                     <tr>
-                        <th class="text-nowrap">STT</th>
-                        <th class="text-nowrap">Mã lịch</th>
-                        <th class="text-nowrap">Khách hàng</th>
-                        <th class="text-nowrap">Sân</th>
-                        <th class="text-nowrap">Ngày</th>
-                        <th class="text-nowrap">Giờ</th>
-                        <th class="text-end text-nowrap">Tổng tiền</th>
-                        <th class="text-end text-nowrap">Đã thanh toán</th>
-                        <th class="text-end text-nowrap">Còn lại</th>
-                        <th class="text-nowrap">Thanh toán</th>
-                        <th class="text-nowrap">Lịch</th>
-                        <th class="text-end text-nowrap">Thao tác</th>
+                        <th class="text-nowrap" style="width:48px">STT</th>
+                        <th class="text-nowrap" style="width:95px">Mã lịch</th>
+                        <th class="text-nowrap booking-customer">Khách hàng</th>
+                        <th class="text-nowrap booking-pitch">Sân</th>
+                        <th class="text-nowrap booking-date">Ngày</th>
+                        <th class="text-nowrap booking-time">Giờ</th>
+                        <th class="text-end text-nowrap booking-money">Tổng tiền</th>
+                        <th class="text-end text-nowrap booking-money">Đã thanh toán</th>
+                        <th class="text-end text-nowrap booking-money">Còn lại</th>
+                        <th class="text-nowrap booking-status">Thanh toán</th>
+                        <th class="text-nowrap booking-status">Lịch</th>
+                        <th class="text-end text-nowrap booking-actions">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -127,24 +179,24 @@ $reset_url = route('admin/bookings');
                         <tr>
                             <td><?php echo $stt; ?></td>
                             <td class="fw-semibold text-nowrap"><?php echo bookingCode($b['id']); ?></td>
-                            <td>
-                                <div class="fw-semibold"><?php echo e($b['customer_name']); ?></div>
+                            <td class="booking-customer">
+                                <div class="fw-semibold booking-customer-name" title="<?php echo e($b['customer_name']); ?>"><?php echo e($b['customer_name']); ?></div>
                                 <small class="text-muted">📞 <?php echo e($b['customer_phone']); ?></small>
                                 <?php if (!empty($b['customer_email'])): ?>
-                                    <div><small class="text-muted">✉️ <?php echo e($b['customer_email']); ?></small></div>
+                                    <small class="text-muted" title="<?php echo e($b['customer_email']); ?>">✉️ <?php echo e($b['customer_email']); ?></small>
                                 <?php endif; ?>
                             </td>
-                            <td>
-                                <div class="fw-semibold"><?php echo e($b['pitch_name']); ?></div>
+                            <td class="booking-pitch">
+                                <div class="fw-semibold booking-pitch-name" title="<?php echo e($b['pitch_name']); ?>"><?php echo e($b['pitch_name']); ?></div>
                                 <small class="text-muted">Sân con <?php echo (int)($b['court_number'] ?? 1); ?> · <?php echo (int)$b['pitch_type']; ?> người</small>
                             </td>
                             <td class="text-nowrap"><?php echo formatDate($b['booking_date']); ?></td>
                             <td class="text-nowrap fw-semibold">
                                 <?php echo formatTime($b['start_time']).' → '.formatTime($b['end_time']); ?>
                             </td>
-                            <td class="text-end fw-semibold"><?php echo formatMoney($b['total_price']); ?></td>
-                            <td class="text-end text-success"><?php echo formatMoney($b['paid_amount']); ?></td>
-                            <td class="text-end text-<?php echo $r > 0 ? 'danger' : 'success'; ?>">
+                            <td class="text-end text-nowrap fw-semibold booking-money"><?php echo formatMoney($b['total_price']); ?></td>
+                            <td class="text-end text-nowrap text-success booking-money"><?php echo formatMoney($b['paid_amount']); ?></td>
+                            <td class="text-end text-nowrap text-<?php echo $r > 0 ? 'danger' : 'success'; ?> booking-money">
                                 <?php echo formatMoney($r); ?>
                             </td>
                             <td class="text-nowrap"><?php echo paymentStatusBadge($b['payment_status']); ?></td>
@@ -153,7 +205,8 @@ $reset_url = route('admin/bookings');
                                     <div><small class="text-muted" title="<?php echo e($b['note']); ?>">📝 Ghi chú</small></div>
                                 <?php endif; ?>
                             </td>
-                            <td class="text-end text-nowrap">
+                            <td class="text-end booking-actions">
+                                <div class="booking-actions-group">
                                 <a href="<?php echo route('admin/bookings/' . $b['id']); ?>" class="btn btn-sm btn-outline-primary">Xem</a>
 
                                 <?php if (!empty($canEdit)): ?>
@@ -166,9 +219,8 @@ $reset_url = route('admin/bookings');
                                     </form>
                                 <?php endif; ?>
                                 <?php if (!empty($canConfirm) && $b['status'] === 'confirmed'): ?>
-                                    <form method="post" action="<?php echo route('admin/bookings/' . $b['id'] . '/start'); ?>" class="d-inline">
-                                        <button type="submit" class="btn btn-sm btn-info text-white">Bắt đầu</button>
-                                    </form>
+                                    <a href="<?php echo route('admin/check-in/' . (int)$b['id']); ?>"
+                                       class="btn btn-sm btn-info text-white">Check-in</a>
                                 <?php endif; ?>
                                 <?php if (!empty($canConfirm) && $b['status'] === 'in_progress'): ?>
                                     <form method="post" action="<?php echo route('admin/bookings/' . $b['id'] . '/complete'); ?>" class="d-inline">
@@ -183,6 +235,7 @@ $reset_url = route('admin/bookings');
                                 <?php if (!empty($canDelete)): ?>
                                     <a href="<?php echo route('admin/bookings/' . $b['id'] . '/delete'); ?>" class="btn btn-sm btn-outline-dark">Xóa</a>
                                 <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

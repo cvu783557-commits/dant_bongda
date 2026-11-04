@@ -29,6 +29,7 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
     <div class="d-flex gap-2 flex-wrap">
         <a href="<?php echo route('admin/bookings'); ?>" class="btn btn-outline-secondary">← Danh sách</a>
         <a href="<?php echo route('admin/bookings/calendar') . '?date=' . $booking['booking_date']; ?>" class="btn btn-outline-success">📅 Xem lịch</a>
+        <a href="<?php echo route('admin/bookings/' . $id . '/invoice'); ?>" class="btn btn-outline-primary">🧾 Hóa đơn / In</a>
         <?php if (!empty($canEdit) && $stt !== 'cancelled'): ?>
             <a href="<?php echo route('admin/bookings/' . $id . '/edit'); ?>" class="btn btn-primary">✏️ Sửa lịch</a>
         <?php endif; ?>
@@ -53,9 +54,9 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
                 </form>
             <?php endif; ?>
             <?php if (!empty($canConfirm) && $stt === 'confirmed'): ?>
-                <form method="post" action="<?php echo route('admin/bookings/' . $id . '/start'); ?>" class="d-inline">
-                    <button class="btn btn-info text-white" type="submit">▶ Bắt đầu sử dụng</button>
-                </form>
+                <a href="<?php echo route('admin/check-in/' . $id); ?>" class="btn btn-info text-white">
+                    ✅ Đối chiếu / Check-in
+                </a>
             <?php endif; ?>
             <?php if (!empty($canConfirm) && $stt === 'in_progress'): ?>
                 <form method="post" action="<?php echo route('admin/bookings/' . $id . '/complete'); ?>" class="d-inline">
@@ -250,6 +251,7 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
             </div>
             <div class="card-body">
                 <form method="post" action="<?php echo route('admin/bookings/' . $id . '/payment'); ?>">
+                    <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Số tiền (VNĐ)</label>
                         <div class="input-group">
@@ -280,6 +282,59 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
             </div>
         </div>
         <?php endif; ?>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-transparent">
+                <h5 class="fw-bold mb-0">📜 Lịch sử giao dịch</h5>
+            </div>
+            <div class="card-body p-0">
+                <?php if (empty($paymentTransactions)): ?>
+                    <p class="text-muted p-3 mb-0">Chưa có giao dịch được ghi nhận.</p>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Thời gian</th>
+                                    <th>Loại</th>
+                                    <th>Phương thức</th>
+                                    <th class="text-end">Số tiền</th>
+                                    <th>Ghi chú / Người ghi nhận</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($paymentTransactions as $transaction): ?>
+                                    <?php
+                                    $transactionStatusLabels = [
+                                        'success' => ['Đã thu', 'text-success'],
+                                        'failed' => ['Thất bại', 'text-danger'],
+                                        'refund' => ['Hoàn tiền', 'text-primary'],
+                                    ];
+                                    [$transactionLabel, $transactionClass] =
+                                        $transactionStatusLabels[$transaction['status']] ?? ['Không rõ', 'text-muted'];
+                                    ?>
+                                    <tr>
+                                        <td class="text-nowrap"><?php echo formatDateTime($transaction['created_at']); ?></td>
+                                        <td class="fw-semibold <?php echo $transactionClass; ?>"><?php echo $transactionLabel; ?></td>
+                                        <td><?php echo e($payMethods[$transaction['payment_method']] ?? $transaction['payment_method']); ?></td>
+                                        <td class="text-end text-nowrap"><?php echo formatMoney($transaction['amount']); ?></td>
+                                        <td>
+                                            <?php echo e($transaction['note'] ?? ''); ?>
+                                            <?php if (!empty($transaction['recorder_name'])): ?>
+                                                <span class="text-muted small"> · <?php echo e($transaction['recorder_name']); ?></span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($transaction['reference_code'])): ?>
+                                                <div class="text-muted small">Mã: <?php echo e($transaction['reference_code']); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
 
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-transparent"><h5 class="fw-bold mb-0">📋 Quy trình trạng thái</h5></div>

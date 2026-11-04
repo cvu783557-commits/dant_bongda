@@ -224,6 +224,63 @@ class Booking extends Model
         )->fetchAllAssociative();
     }
 
+    public function getOrCreateCheckInToken(int $bookingId, int $userId): ?string
+    {
+        $booking = $this->connection->executeQuery(
+            "SELECT checkin_token, booking_date, status
+             FROM {$this->table}
+             WHERE id = ? AND created_by = ?
+             LIMIT 1",
+            [$bookingId, $userId]
+        )->fetchAssociative();
+
+        if (!$booking
+            || $booking['status'] !== self::STATUS_CONFIRMED
+            || $booking['booking_date'] < date('Y-m-d')) {
+            return null;
+        }
+
+        if (empty($booking['checkin_token'])) {
+            $token = bin2hex(random_bytes(32));
+            $this->connection->executeStatement(
+                "UPDATE {$this->table}
+                 SET checkin_token = ?
+                 WHERE id = ? AND created_by = ? AND status = ? AND checkin_token IS NULL",
+                [$token, $bookingId, $userId, self::STATUS_CONFIRMED]
+            );
+            $booking = $this->connection->executeQuery(
+                "SELECT checkin_token FROM {$this->table} WHERE id = ? AND created_by = ? LIMIT 1",
+                [$bookingId, $userId]
+            )->fetchAssociative();
+        }
+
+        return !empty($booking['checkin_token']) ? (string)$booking['checkin_token'] : null;
+    }
+
+    public function findByCheckInToken(string $token): ?array
+    {
+        return $this->connection->executeQuery(
+            $this->buildBaseQuery() . " AND b.checkin_token = ? LIMIT 1",
+            [$token]
+        )->fetchAssociative() ?: null;
+    }
+
+    public function findCheckInDetails(int $id): ?array
+    {
+        return $this->connection->executeQuery(
+            "SELECT b.*, c.name AS customer_name, c.phone AS customer_phone,
+                    c.email AS customer_email, p.name AS pitch_name, p.type AS pitch_type,
+                    staff.full_name AS checkin_staff_name
+             FROM {$this->table} b
+             LEFT JOIN customers c ON c.id = b.customer_id
+             LEFT JOIN pitches p ON p.id = b.pitch_id
+             LEFT JOIN users staff ON staff.id = b.checked_in_by
+             WHERE b.id = ?
+             LIMIT 1",
+            [$id]
+        )->fetchAssociative() ?: null;
+    }
+
     public function saveVnpayReference(int $bookingId, ?int $seriesId, string $transactionRef, string $createDate): int
     {
         $sql = "UPDATE {$this->table}
@@ -610,6 +667,11 @@ class Booking extends Model
                          WHERE id = ?",
                             [$paymentStatus, $transactionNo, (int)$booking['id']]
                         );
+                    $this->recordVnpayDepositTransaction(
+                        (int)$booking['id'],
+                        (float)$booking['deposit'],
+                        'M' . $seriesId . '_' . (string)($transactionNo ?? 'unknown')
+                    );
                 }
                 $this->connection->executeStatement(
                     "UPDATE booking_series
@@ -813,62 +875,246 @@ class Booking extends Model
         }
     }
 
-    public function addPayment($id, $amount, $method = 'cash')
+    public function addPayment(int $id, float $amount, string $method = 'cash', ?int $recordedBy = null): array
     {
-        $booking = $this->find($id);
-        if (!$booking) return ['success' => false, 'error' => 'Lịch đặt không tồn tại'];
-        if ($booking['status'] === self::STATUS_CANCELLED) return ['success' => false, 'error' => 'Lịch đã bị hủy, không thể thanh toán'];
-
-        $added   = (float)$amount;
-        $paid    = (float)$booking['paid_amount'] + $added;
-        $total   = (float)$booking['total_price'];
-        $deposit = (float)$booking['deposit'];
-
-        if ($paid > $total + 0.0001) {
-            return ['success' => false, 'error' => 'Số tiền thanh toán vượt quá tổng tiền'];
-        }
-        if ($added < 0) {
-            return ['success' => false, 'error' => 'Số tiền thanh toán không hợp lệ'];
-        }
-
-        $payStatus = self::calcPaymentStatus($total, $deposit, $paid);
-
-        $sql = "UPDATE {$this->table} SET
-                    paid_amount = ?,
-                    payment_method = ?,
-                    payment_status = ?,
-                    updated_at = NOW()
-                WHERE id = ?";
-
-        $this->connection->executeStatement($sql, [$paid, $method, $payStatus, (int)$id]);
-
-        if (!empty($booking['series_id'])) {
-            $seriesId = (int)$booking['series_id'];
-            $series = $this->findSeries($seriesId);
-            if ($series) {
-                $seriesPaid = (float)$this->connection->executeQuery(
-                    "SELECT COALESCE(SUM(paid_amount), 0)
-                     FROM {$this->table} WHERE series_id = ?",
-                    [$seriesId]
-                )->fetchOne();
-                $seriesPaymentStatus = self::calcPaymentStatus(
-                    (float)$series['total_price'],
-                    (float)$series['deposit'],
-                    $seriesPaid
-                );
-                $this->connection->executeStatement(
-                    "UPDATE booking_series
-                     SET paid_amount = ?, payment_status = ?, updated_at = NOW()
-                     WHERE id = ?",
-                    [$seriesPaid, $seriesPaymentStatus, $seriesId]
-                );
+        $this->connection->beginTransaction();
+        try {
+            $booking = $this->connection->executeQuery(
+                "SELECT id, total_price, deposit, paid_amount, payment_method, payment_status, status, series_id
+                 FROM {$this->table} WHERE id = ? FOR UPDATE",
+                [$id]
+            )->fetchAssociative();
+            if (!$booking) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Lịch đặt không tồn tại'];
             }
-        }
+            if ($booking['status'] === self::STATUS_CANCELLED) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Lịch đã bị hủy, không thể thanh toán'];
+            }
+            if ($amount <= 0) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Số tiền thanh toán phải lớn hơn 0'];
+            }
 
-        return ['success' => true];
+            $paid = (float)$booking['paid_amount'] + $amount;
+            $total = (float)$booking['total_price'];
+            if ($paid > $total + 0.0001) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Số tiền thanh toán vượt quá số còn phải trả'];
+            }
+
+            $paymentStatus = self::calcPaymentStatus($total, (float)$booking['deposit'], $paid);
+            $this->connection->executeStatement(
+                "UPDATE {$this->table}
+                 SET paid_amount = ?, payment_method = ?, payment_status = ?, updated_at = NOW()
+                 WHERE id = ?",
+                [$paid, $method, $paymentStatus, $id]
+            );
+            $this->connection->insert('booking_payment_transactions', [
+                'booking_id' => $id,
+                'amount' => $amount,
+                'payment_method' => $method,
+                'status' => 'success',
+                'note' => 'Thu tiền tại quầy',
+                'recorded_by' => $recordedBy,
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+
+            if (!empty($booking['series_id'])) {
+                $seriesId = (int)$booking['series_id'];
+                $series = $this->connection->executeQuery(
+                    'SELECT total_price, deposit FROM booking_series WHERE id = ? FOR UPDATE',
+                    [$seriesId]
+                )->fetchAssociative();
+                if ($series) {
+                    $seriesPaid = (float)$this->connection->executeQuery(
+                        "SELECT COALESCE(SUM(paid_amount), 0) FROM {$this->table} WHERE series_id = ?",
+                        [$seriesId]
+                    )->fetchOne();
+                    $this->connection->executeStatement(
+                        "UPDATE booking_series SET paid_amount = ?, payment_status = ?, updated_at = NOW() WHERE id = ?",
+                        [
+                            $seriesPaid,
+                            self::calcPaymentStatus(
+                                (float)$series['total_price'],
+                                (float)$series['deposit'],
+                                $seriesPaid
+                            ),
+                            $seriesId,
+                        ]
+                    );
+                }
+            }
+
+            $this->connection->commit();
+            return ['success' => true, 'payment_status' => $paymentStatus];
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('Payment recording failed for booking #' . $id . ': ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Không thể ghi nhận thanh toán. Vui lòng thử lại.'];
+        }
     }
 
-    public function recordVnpayDeposit(int $id, ?string $transactionNo = null): array
+    public function getPaymentTransactions(int $bookingId): array
+    {
+        return $this->connection->executeQuery(
+            "SELECT pt.*, u.full_name AS recorder_name
+             FROM booking_payment_transactions pt
+             LEFT JOIN users u ON u.id = pt.recorded_by
+             WHERE pt.booking_id = ?
+             ORDER BY pt.created_at ASC, pt.id ASC",
+            [$bookingId]
+        )->fetchAllAssociative();
+    }
+
+    public function searchPaymentTransactions(array $filters = []): array
+    {
+        $where = [];
+        $params = [];
+
+        if (!empty($filters['q'])) {
+            $query = '%' . trim((string)$filters['q']) . '%';
+            $where[] = '(CAST(b.id AS CHAR) LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR pt.reference_code LIKE ?)';
+            array_push($params, $query, $query, $query, $query);
+        }
+        if (!empty($filters['status']) && in_array($filters['status'], ['success', 'failed', 'refund'], true)) {
+            $where[] = 'pt.status = ?';
+            $params[] = $filters['status'];
+        }
+        if (!empty($filters['method']) && array_key_exists($filters['method'], self::getPaymentMethods())) {
+            $where[] = 'pt.payment_method = ?';
+            $params[] = $filters['method'];
+        }
+        if (!empty($filters['from_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters['from_date'])) {
+            $where[] = 'pt.created_at >= ?';
+            $params[] = $filters['from_date'] . ' 00:00:00';
+        }
+        if (!empty($filters['to_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters['to_date'])) {
+            $where[] = 'pt.created_at <= ?';
+            $params[] = $filters['to_date'] . ' 23:59:59';
+        }
+
+        $sql = "SELECT pt.*, b.total_price, b.paid_amount, b.payment_status,
+                       b.booking_date, c.name AS customer_name, c.phone AS customer_phone,
+                       p.name AS pitch_name, u.full_name AS recorder_name
+                FROM booking_payment_transactions pt
+                JOIN bookings b ON b.id = pt.booking_id
+                LEFT JOIN customers c ON c.id = b.customer_id
+                LEFT JOIN pitches p ON p.id = b.pitch_id
+                LEFT JOIN users u ON u.id = pt.recorded_by";
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        $sql .= ' ORDER BY pt.created_at DESC, pt.id DESC LIMIT 1000';
+
+        return $this->connection->executeQuery($sql, $params)->fetchAllAssociative();
+    }
+
+    public function summarizePaymentTransactions(array $filters = []): array
+    {
+        $where = [];
+        $params = [];
+        if (!empty($filters['from_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters['from_date'])) {
+            $where[] = 'created_at >= ?';
+            $params[] = $filters['from_date'] . ' 00:00:00';
+        }
+        if (!empty($filters['to_date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $filters['to_date'])) {
+            $where[] = 'created_at <= ?';
+            $params[] = $filters['to_date'] . ' 23:59:59';
+        }
+        $sql = "SELECT
+                    COALESCE(SUM(CASE WHEN status = 'success' THEN amount ELSE 0 END), 0) AS total_received,
+                    COALESCE(SUM(CASE WHEN status = 'refund' THEN amount ELSE 0 END), 0) AS total_refunded,
+                    COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_count,
+                    COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) AS success_count,
+                    COALESCE(SUM(CASE WHEN status = 'refund' THEN 1 ELSE 0 END), 0) AS refund_count
+                FROM booking_payment_transactions";
+        if ($where) {
+            $sql .= ' WHERE ' . implode(' AND ', $where);
+        }
+        return $this->connection->executeQuery($sql, $params)->fetchAssociative() ?: [];
+    }
+
+    public function recordFailedVnpayPayment(
+        int $bookingId,
+        float $amount,
+        string $reference,
+        string $reason
+    ): void {
+        $this->connection->executeStatement(
+            "INSERT INTO booking_payment_transactions
+                (booking_id, amount, payment_method, status, reference_code, note, created_at)
+             VALUES (?, ?, 'vnpay', 'failed', ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE note = VALUES(note)",
+            [$bookingId, $amount, $reference, mb_substr($reason, 0, 500)]
+        );
+    }
+
+    public function recordVnpayDepositTransaction(
+        int $bookingId,
+        float $amount,
+        string $reference,
+        ?int $recordedBy = null
+    ): void {
+        $this->connection->executeStatement(
+            "INSERT INTO booking_payment_transactions
+                (booking_id, amount, payment_method, status, reference_code, note, recorded_by, created_at)
+             VALUES (?, ?, 'vnpay', 'success', ?, 'VNPay xác nhận tiền đặt cọc', ?, NOW())
+             ON DUPLICATE KEY UPDATE amount = VALUES(amount), status = VALUES(status)",
+            [$bookingId, $amount, $reference, $recordedBy]
+        );
+    }
+
+    public function recordRefundTransaction(
+        int $bookingId,
+        float $amount,
+        string $reference,
+        ?int $recordedBy = null
+    ): void {
+        $this->connection->executeStatement(
+            "INSERT INTO booking_payment_transactions
+                (booking_id, amount, payment_method, status, reference_code, note, recorded_by, created_at)
+             VALUES (?, ?, 'vnpay', 'refund', ?, 'VNPay tiếp nhận yêu cầu hoàn tiền', ?, NOW())
+             ON DUPLICATE KEY UPDATE amount = VALUES(amount), status = VALUES(status)",
+            [$bookingId, $amount, $reference, $recordedBy]
+        );
+    }
+
+    public function recordFailedVnpaySeriesPayment(
+        int $seriesId,
+        float $totalAmount,
+        string $reference,
+        string $reason
+    ): void {
+        $bookings = $this->connection->executeQuery(
+            "SELECT id, deposit FROM {$this->table} WHERE series_id = ? ORDER BY booking_date ASC, id ASC",
+            [$seriesId]
+        )->fetchAllAssociative();
+        $depositTotal = array_sum(array_map(
+            static fn ($booking) => (float)$booking['deposit'],
+            $bookings
+        ));
+        if (!$bookings || abs($depositTotal - $totalAmount) > 0.0001) {
+            throw new \RuntimeException('Không thể đối chiếu tiền đặt cọc của lịch tháng.');
+        }
+        foreach ($bookings as $booking) {
+            $this->recordFailedVnpayPayment(
+                (int)$booking['id'],
+                (float)$booking['deposit'],
+                $reference,
+                $reason . ' (giao dịch lịch tháng #' . $seriesId . ')'
+            );
+        }
+    }
+
+    public function recordVnpayDeposit(
+        int $id,
+        ?string $transactionNo = null,
+        ?string $reference = null
+    ): array
     {
         $this->connection->beginTransaction();
         try {
@@ -898,6 +1144,11 @@ class Booking extends Model
                          vnpay_transaction_no = COALESCE(?, vnpay_transaction_no), updated_at = NOW()
                      WHERE id = ?",
                     [$paid, $paymentStatus, $transactionNo, $id]
+                );
+                $this->recordVnpayDepositTransaction(
+                    $id,
+                    $deposit,
+                    'B' . $id . '_' . (string)($reference ?? $transactionNo ?? 'unknown')
                 );
             } elseif ($transactionNo !== null) {
                 $this->connection->executeStatement(
@@ -930,6 +1181,16 @@ class Booking extends Model
         $sql = "UPDATE {$this->table} SET status = ?, updated_at = NOW() WHERE id = ?";
         $this->connection->executeStatement($sql, [$newStatus, (int)$id]);
         return ['success' => true];
+    }
+
+    public function checkInToday(int $id, int $staffId, string $note): int
+    {
+        return $this->connection->executeStatement(
+            "UPDATE {$this->table}
+             SET status = ?, checked_in_at = NOW(), checked_in_by = ?, checkin_note = ?, updated_at = NOW()
+             WHERE id = ? AND status = ? AND booking_date = ?",
+            [self::STATUS_IN_PROGRESS, $staffId, $note !== '' ? $note : null, $id, self::STATUS_CONFIRMED, date('Y-m-d')]
+        );
     }
 
     /**

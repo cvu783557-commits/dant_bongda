@@ -21,6 +21,12 @@
             </a>
         </li>
         <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/check-in') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/check-in'); ?>">
+                ✅ Check-in khách
+            </a>
+        </li>
+        <li class="nav-item mb-1">
             <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/bookings/calendar') !== false) ? 'bg-success text-white' : ''; ?>"
                href="<?php echo route('admin/bookings/calendar'); ?>">
                 📅 Lịch sân bóng
@@ -30,6 +36,18 @@
             <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/cancellation-requests') !== false) ? 'bg-success text-white' : ''; ?>"
                href="<?php echo route('admin/cancellation-requests'); ?>">
                 ↩ Yêu cầu hủy / hoàn cọc
+            </a>
+        </li>
+        <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/service-requests') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/service-requests'); ?>">
+                🧾 Yêu cầu dịch vụ
+            </a>
+        </li>
+        <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/payments') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/payments'); ?>">
+                💳 Quản lý thanh toán
             </a>
         </li>
         <li class="nav-item mb-1">
