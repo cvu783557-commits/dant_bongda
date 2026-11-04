@@ -1,11 +1,7 @@
 -- Database schema for the football pitch booking application.
+-- Canonical schema for fresh installs. Select the target database before importing.
 -- Safe to re-run: this script does not drop tables or existing records.
--- Existing databases: run database/run_upgrade.php, then the customer portal and
--- ratings/notifications migration scripts with PHP.
-
-CREATE DATABASE IF NOT EXISTS db_football_field_booking
-    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE db_football_field_booking;
+-- Existing databases: use database/run_upgrade.php and the relevant migration scripts.
 
 -- Public sign-ups create active USER accounts immediately; ADMIN access remains restricted.
 CREATE TABLE IF NOT EXISTS users (
@@ -120,6 +116,10 @@ CREATE TABLE IF NOT EXISTS bookings (
     customer_id         INT NOT NULL,
     pitch_id            INT NOT NULL,
     court_number        INT UNSIGNED NOT NULL DEFAULT 1,
+    checkin_token       CHAR(64) NULL,
+    checked_in_at       DATETIME NULL,
+    checked_in_by       INT NULL,
+    checkin_note        VARCHAR(500) NULL,
     series_id           INT NULL,
     booking_date        DATE NOT NULL,
     start_time          TIME NOT NULL,
@@ -143,6 +143,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     INDEX idx_payment_status (payment_status),
     INDEX idx_pitch_date (pitch_id, booking_date),
     INDEX idx_booking_pitch_court_date (pitch_id, court_number, booking_date),
+    UNIQUE INDEX uq_bookings_checkin_token (checkin_token),
     INDEX idx_customer_id (customer_id),
     INDEX idx_created_by (created_by),
     INDEX idx_booking_series (series_id),
@@ -159,6 +160,25 @@ CREATE TABLE IF NOT EXISTS bookings (
     CONSTRAINT chk_bookings_v2_total_price_nonneg CHECK (total_price >= 0),
     CONSTRAINT chk_bookings_v2_deposit_nonneg CHECK (deposit >= 0),
     CONSTRAINT chk_bookings_v2_paid_nonneg CHECK (paid_amount >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS booking_payment_transactions (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    booking_id INT NOT NULL,
+    amount DECIMAL(12,0) NOT NULL,
+    payment_method ENUM('cash','banking','momo','zalo','vnpay','other') NOT NULL,
+    status ENUM('success','failed','refund') NOT NULL,
+    reference_code VARCHAR(100) NULL,
+    note VARCHAR(500) NULL,
+    recorded_by INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_payment_tx_booking_created (booking_id, created_at),
+    UNIQUE INDEX uq_payment_tx_booking_reference (booking_id, reference_code),
+    CONSTRAINT fk_payment_tx_booking FOREIGN KEY (booking_id)
+        REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_payment_tx_user FOREIGN KEY (recorded_by)
+        REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT chk_payment_tx_amount CHECK (amount > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS booking_cancellation_requests (
@@ -259,6 +279,44 @@ CREATE TABLE IF NOT EXISTS booking_services (
     CONSTRAINT chk_bs_subtotal_nonneg CHECK (subtotal >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS service_requests (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    booking_id INT NOT NULL,
+    requested_by INT NOT NULL,
+    status ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+    customer_note VARCHAR(500) NULL,
+    staff_note VARCHAR(500) NULL,
+    handled_by INT NULL,
+    handled_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_service_requests_status_created (status, created_at),
+    INDEX idx_service_requests_booking (booking_id, created_at),
+    CONSTRAINT fk_service_request_booking FOREIGN KEY (booking_id)
+        REFERENCES bookings(id) ON DELETE CASCADE,
+    CONSTRAINT fk_service_request_user FOREIGN KEY (requested_by)
+        REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_service_request_handler FOREIGN KEY (handled_by)
+        REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS service_request_items (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    request_id BIGINT UNSIGNED NOT NULL,
+    service_id INT NOT NULL,
+    service_name VARCHAR(150) NOT NULL,
+    unit VARCHAR(30) NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(12,0) NOT NULL,
+    subtotal DECIMAL(12,0) NOT NULL,
+    INDEX idx_service_request_items_request (request_id),
+    CONSTRAINT fk_service_request_item_request FOREIGN KEY (request_id)
+        REFERENCES service_requests(id) ON DELETE CASCADE,
+    CONSTRAINT fk_service_request_item_service FOREIGN KEY (service_id)
+        REFERENCES services(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_service_request_item_quantity CHECK (quantity > 0),
+    CONSTRAINT chk_service_request_item_price CHECK (unit_price >= 0 AND subtotal >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Add sample services only when a service with the same name is absent.
 INSERT INTO services (name, category, price, unit, stock, description, status)
 SELECT samples.name, samples.category, samples.price, samples.unit, samples.stock, samples.description, 'active'
@@ -276,21 +334,6 @@ FROM (
 WHERE NOT EXISTS (SELECT 1 FROM services s WHERE s.name = samples.name);
 
 -- Add default pitches only when a pitch with the same name is absent.
--- Keep existing default pitch records in sync without changing their IDs or bookings.
-UPDATE pitches SET name = CASE name
-    WHEN 'Sân A1 - Sân 5 người cỏ nhân tạo' THEN 'Sân A1 - Sân 5 người cỏ nhân tạo - Sân bóng Phòng không - Không quân'
-    WHEN 'Sân A2 - Sân 5 người cỏ tự nhiên' THEN 'Sân A2 - Sân 5 người cỏ tự nhiên - Sân bóng Cao đẳng Múa'
-    WHEN 'Sân B1 - Sân 7 người cao cấp' THEN 'Sân B1 - Sân 7 người cao cấp - Sân bóng Đại học Thủy Lợi'
-    WHEN 'Sân B2 - Sân 7 người cỏ nhân tạo' THEN 'Sân B2 - Sân 7 người cỏ nhân tạo - Sân bóng Học viện An Ninh'
-    ELSE name
-END
-WHERE name IN (
-    'Sân A1 - Sân 5 người cỏ nhân tạo',
-    'Sân A2 - Sân 5 người cỏ tự nhiên',
-    'Sân B1 - Sân 7 người cao cấp',
-    'Sân B2 - Sân 7 người cỏ nhân tạo'
-);
-
 INSERT INTO pitches (name, type, price_per_hour, description, status)
 SELECT samples.name, samples.type, samples.price_per_hour, samples.description, 'active'
 FROM (
@@ -301,14 +344,6 @@ FROM (
     UNION ALL SELECT 'Sân B2 - Sân 7 người cỏ nhân tạo - Sân bóng Học viện An Ninh', 7, 480000, 'Sân 7 người cỏ nhân tạo.'
 ) AS samples
 WHERE NOT EXISTS (SELECT 1 FROM pitches p WHERE p.name = samples.name);
-
--- Keep historical pitches with linked records, but remove unused 11-a-side pitches.
-DELETE FROM pitches
-WHERE type = 11
-  AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.pitch_id = pitches.id)
-  AND NOT EXISTS (SELECT 1 FROM pitch_locks pl WHERE pl.pitch_id = pitches.id);
-
-UPDATE pitches SET status = 'inactive' WHERE type = 11 AND status <> 'inactive';
 
 -- Add any missing hourly slots between 06:00 and 23:00.
 INSERT INTO time_slots (start_time, end_time)

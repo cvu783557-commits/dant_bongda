@@ -12,6 +12,7 @@ use App\Models\Notification;
 use App\Models\PitchRating;
 use App\Models\PitchLock;
 use App\Models\Service;
+use App\Models\ServiceRequest;
 use App\Models\User;
 use App\Services\Vnpay;
 use Rakit\Validation\Validator;
@@ -23,6 +24,7 @@ class PitchController extends Controller
     protected $bookingService;
     protected $pitchLock;
     protected $service;
+    protected $serviceRequest;
     protected $customer;
     protected $cancellationRequest;
     protected $notification;
@@ -37,6 +39,7 @@ class PitchController extends Controller
         $this->bookingService = new BookingService();
         $this->pitchLock = new PitchLock();
         $this->service   = new Service();
+        $this->serviceRequest = new ServiceRequest();
         $this->customer  = new Customer();
         $this->cancellationRequest = new CancellationRequest();
         $this->notification = new Notification();
@@ -981,7 +984,7 @@ class PitchController extends Controller
                 : null;
             $payment = $isMonthly
                 ? $this->booking->recordSeriesVnpayDeposit($referenceId, $transactionNo)
-                : $this->booking->recordVnpayDeposit($bookingId, $transactionNo);
+                : $this->booking->recordVnpayDeposit($bookingId, $transactionNo, $transactionRef);
             if (!$payment['success']) {
                 setFlash('error', $payment['error']);
             } else {
@@ -995,7 +998,29 @@ class PitchController extends Controller
                 );
             }
         } else {
-            setFlash('error', 'Giao dịch VNPay chưa thành công. Đơn đặt sân đang chờ thanh toán.');
+            try {
+                $reason = 'VNPay từ chối thanh toán (mã phản hồi '
+                    . (string)($_GET['vnp_ResponseCode'] ?? 'không rõ') . ').';
+                if ($isMonthly) {
+                    $this->booking->recordFailedVnpaySeriesPayment(
+                        $referenceId,
+                        (float)$series['deposit'],
+                        $transactionRef,
+                        $reason
+                    );
+                } else {
+                    $this->booking->recordFailedVnpayPayment(
+                        (int)$bookingId,
+                        (float)$booking['deposit'],
+                        $transactionRef,
+                        $reason
+                    );
+                }
+                setFlash('error', 'Giao dịch VNPay chưa thành công. Đơn đặt sân đang chờ thanh toán.');
+            } catch (\Throwable $e) {
+                error_log('Unable to record failed VNPay payment: ' . $e->getMessage());
+                setFlash('error', 'Giao dịch VNPay chưa thành công; không thể ghi lịch sử giao dịch. Vui lòng báo quản trị viên.');
+            }
         }
 
         redirect('bookings/success/' . $bookingId);
@@ -1041,6 +1066,33 @@ class PitchController extends Controller
             echo json_encode(['RspCode' => '04', 'Message' => 'Invalid amount']);
             return;
         }
+        if (($_GET['vnp_ResponseCode'] ?? '') !== '00' || ($_GET['vnp_TransactionStatus'] ?? '') !== '00') {
+            try {
+                $reason = 'VNPay từ chối thanh toán (mã phản hồi '
+                    . (string)($_GET['vnp_ResponseCode'] ?? 'không rõ') . ').';
+                if ($isMonthly) {
+                    $this->booking->recordFailedVnpaySeriesPayment(
+                        $referenceId,
+                        (float)$series['deposit'],
+                        $transactionRef,
+                        $reason
+                    );
+                } else {
+                    $this->booking->recordFailedVnpayPayment(
+                        (int)$bookingId,
+                        (float)$booking['deposit'],
+                        $transactionRef,
+                        $reason
+                    );
+                }
+            } catch (\Throwable $e) {
+                error_log('Unable to record failed VNPay IPN: ' . $e->getMessage());
+                echo json_encode(['RspCode' => '99', 'Message' => 'Could not record payment attempt']);
+                return;
+            }
+            echo json_encode(['RspCode' => '00', 'Message' => 'Payment failed recorded']);
+            return;
+        }
         $paymentStatus = $isMonthly ? $series['payment_status'] : $booking['payment_status'];
         if ($paymentStatus === Booking::PAY_DEPOSIT
             || $paymentStatus === Booking::PAY_PARTIAL
@@ -1048,17 +1100,12 @@ class PitchController extends Controller
             echo json_encode(['RspCode' => '02', 'Message' => 'Order already confirmed']);
             return;
         }
-        if (($_GET['vnp_ResponseCode'] ?? '') !== '00' || ($_GET['vnp_TransactionStatus'] ?? '') !== '00') {
-            echo json_encode(['RspCode' => '00', 'Message' => 'Payment not successful']);
-            return;
-        }
-
         $transactionNo = isset($_GET['vnp_TransactionNo']) && ctype_digit((string)$_GET['vnp_TransactionNo'])
             ? (string)$_GET['vnp_TransactionNo']
             : null;
         $payment = $isMonthly
             ? $this->booking->recordSeriesVnpayDeposit($referenceId, $transactionNo)
-            : $this->booking->recordVnpayDeposit($bookingId, $transactionNo);
+            : $this->booking->recordVnpayDeposit($bookingId, $transactionNo, $transactionRef);
         if (!$payment['success']) {
             echo json_encode(['RspCode' => '99', 'Message' => 'Could not update payment']);
             return;
@@ -1082,14 +1129,62 @@ class PitchController extends Controller
             return;
         }
 
+        $bookings = $this->booking->getForUser((int)$currentUser['id']);
+        $serviceRequests = $this->serviceRequest->forCustomer((int)$currentUser['id']);
+        foreach ($bookings as &$booking) {
+            $booking['checkin_token'] = $booking['status'] === Booking::STATUS_CONFIRMED
+                && $booking['booking_date'] >= date('Y-m-d')
+                ? $this->booking->getOrCreateCheckInToken(
+                    (int)$booking['id'],
+                    (int)$currentUser['id']
+                )
+                : null;
+        }
+        unset($booking);
+
         return view('bookings.index', [
-            'bookings' => $this->booking->getForUser((int)$currentUser['id']),
+            'bookings' => $bookings,
+            'availableServices' => $this->service->getAvailableForBooking(),
+            'serviceRequests' => $serviceRequests,
             'cancellationRequests' => $this->cancellationRequest->forCustomer((int)$currentUser['id']),
             'success' => getFlash('success'),
             'error' => getFlash('error'),
             'currentUser' => $currentUser,
             'notificationCount' => $this->notification->unreadCount((int)$currentUser['id']),
         ]);
+    }
+
+    public function requestServices($id)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để yêu cầu dịch vụ.');
+            redirect('login');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $items = $_POST['quantity'] ?? [];
+        if (!is_array($items)) {
+            $items = [];
+        }
+        $result = $this->serviceRequest->createForCustomer(
+            (int)$id,
+            (int)$currentUser['id'],
+            $items,
+            trim((string)($_POST['customer_note'] ?? ''))
+        );
+        if ($result['success']) {
+            setFlash('success', 'Đã gửi yêu cầu dịch vụ đến nhân viên. Vui lòng đợi xác nhận trước khi sử dụng.');
+        } else {
+            setFlash('error', $result['error']);
+        }
+        redirect('my-bookings');
     }
 
     public function rateBooking($id)

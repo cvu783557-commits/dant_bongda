@@ -44,6 +44,10 @@
                 $requestByBooking[$request['booking_id']] = $request;
             }
         }
+        $serviceRequestsByBooking = [];
+        foreach (($serviceRequests ?? []) as $serviceRequest) {
+            $serviceRequestsByBooking[$serviceRequest['booking_id']][] = $serviceRequest;
+        }
         $bookingStatuses = \App\Models\Booking::getBookingStatuses();
         $paymentStatuses = \App\Models\Booking::getPaymentStatuses();
     ?>
@@ -104,6 +108,103 @@
                                 </div>
                             <?php endif; ?>
                         </div>
+                        <?php if ($booking['status'] === \App\Models\Booking::STATUS_CONFIRMED
+                            && $booking['booking_date'] >= date('Y-m-d')): ?>
+                            <?php if (!empty($booking['checkin_token'])): ?>
+                                <div class="alert alert-success mb-3">
+                                    <div class="fw-bold mb-2">Mã QR check-in — đưa nhân viên quét khi đến sân</div>
+                                    <div class="p-3 border rounded bg-white d-flex flex-column align-items-center">
+                                        <div class="booking-checkin-qr"
+                                             data-checkin-token="<?php echo e($booking['checkin_token']); ?>"></div>
+                                        <div class="small text-secondary mt-2 text-center">
+                                            Đơn #<?php echo (int)$booking['id']; ?> ·
+                                            <?php echo e(formatDate($booking['booking_date'])); ?> ·
+                                            Sân <?php echo (int)($booking['court_number'] ?? 1); ?>
+                                        </div>
+                                        <p class="small text-secondary mt-1 mb-0 text-center">
+                                            Bạn có thể đưa màn hình này cho nhân viên hoặc gửi mã QR cho người đến sân thay bạn.
+                                        </p>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div class="alert alert-warning mb-3">
+                                    Không tạo được mã QR check-in cho đơn này. Vui lòng tải lại trang hoặc liên hệ nhân viên.
+                                </div>
+                            <?php endif; ?>
+                        <?php elseif ($booking['status'] === \App\Models\Booking::STATUS_PENDING): ?>
+                            <div class="alert alert-info mb-3">
+                                Mã QR check-in sẽ hiển thị tại đây sau khi đơn được xác nhận.
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($serviceRequestsByBooking[$booking['id']])): ?>
+                            <div class="border rounded p-3 mb-3 bg-light">
+                                <div class="fw-semibold mb-2">Yêu cầu dịch vụ đã gửi</div>
+                                <?php foreach ($serviceRequestsByBooking[$booking['id']] as $serviceRequest): ?>
+                                    <?php
+                                    $serviceRequestStatus = [
+                                        'pending' => ['Đang chờ nhân viên', 'warning'],
+                                        'accepted' => ['Đã xác nhận', 'success'],
+                                        'rejected' => ['Bị từ chối', 'danger'],
+                                    ];
+                                    [$serviceRequestLabel, $serviceRequestColor] =
+                                        $serviceRequestStatus[$serviceRequest['status']] ?? ['Không rõ', 'secondary'];
+                                    ?>
+                                    <div class="small <?php echo $serviceRequest['status'] === 'pending' ? 'mb-2' : ''; ?>">
+                                        <span class="badge text-bg-<?php echo $serviceRequestColor; ?>"><?php echo $serviceRequestLabel; ?></span>
+                                        <?php echo e($serviceRequest['item_summary'] ?? ''); ?>
+                                        <span class="text-secondary">· <?php echo e(formatDateTime($serviceRequest['created_at'])); ?></span>
+                                        <?php if (!empty($serviceRequest['staff_note'])): ?>
+                                            <div class="text-secondary">Ghi chú nhân viên: <?php echo e($serviceRequest['staff_note']); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($booking['status'] === \App\Models\Booking::STATUS_IN_PROGRESS
+                            && $booking['booking_date'] === date('Y-m-d')): ?>
+                            <details class="border rounded p-3 mb-3">
+                                <summary class="fw-semibold text-success" style="cursor:pointer;">
+                                    🛒 Gọi thêm dịch vụ — gửi yêu cầu cho nhân viên
+                                </summary>
+                                <?php if (empty($availableServices)): ?>
+                                    <p class="text-secondary small mt-3 mb-0">Hiện chưa có dịch vụ còn hàng.</p>
+                                <?php else: ?>
+                                    <form method="post" action="<?php echo route('my-bookings/' . (int)$booking['id'] . '/service-requests'); ?>" class="mt-3">
+                                        <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
+                                        <div class="row g-2">
+                                            <?php foreach ($availableServices as $service): ?>
+                                                <div class="col-md-6">
+                                                    <label class="form-label border rounded p-2 w-100 h-100">
+                                                        <span class="d-flex justify-content-between gap-2">
+                                                            <span class="fw-semibold"><?php echo e($service['name']); ?></span>
+                                                            <span class="text-success text-nowrap"><?php echo formatMoney($service['price']); ?></span>
+                                                        </span>
+                                                        <span class="small text-secondary d-block">
+                                                            Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                        </span>
+                                                        <span class="d-flex align-items-center gap-2 mt-2">
+                                                            <span class="small">Số lượng</span>
+                                                            <input type="number" class="form-control form-control-sm"
+                                                                   name="quantity[<?php echo (int)$service['id']; ?>]"
+                                                                   value="0" min="0" max="<?php echo min(20, (int)$service['stock']); ?>">
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <label class="form-label mt-2" for="service-note-<?php echo (int)$booking['id']; ?>">
+                                            Ghi chú cho nhân viên (không bắt buộc)
+                                        </label>
+                                        <textarea class="form-control mb-2"
+                                                  id="service-note-<?php echo (int)$booking['id']; ?>"
+                                                  name="customer_note" maxlength="500" rows="2"
+                                                  placeholder="Ví dụ: mang ra sân số 2"></textarea>
+                                        <p class="form-text">Yêu cầu chưa được phục vụ cho đến khi nhân viên xác nhận. Tiền dịch vụ sẽ được cộng vào đơn sau khi xác nhận.</p>
+                                        <button type="submit" class="btn btn-success">Gửi yêu cầu dịch vụ</button>
+                                    </form>
+                                <?php endif; ?>
+                            </details>
+                        <?php endif; ?>
                         <?php
                             $hasActiveRequest = $request && in_array(
                                 $request['status'],
@@ -168,5 +269,20 @@
         </div>
     <?php endif; ?>
 </main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+document.querySelectorAll('.booking-checkin-qr').forEach(function (element) {
+    if (typeof QRCode === 'undefined') {
+        element.textContent = 'Không tải được bộ tạo mã QR. Vui lòng tải lại trang.';
+        return;
+    }
+    new QRCode(element, {
+        text: element.dataset.checkinToken,
+        width: 180,
+        height: 180,
+        correctLevel: QRCode.CorrectLevel.M
+    });
+});
+</script>
 </body>
 </html>
