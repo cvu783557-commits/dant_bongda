@@ -33,12 +33,6 @@
             </a>
         </li>
         <li class="nav-item mb-1">
-            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/cancellation-requests') !== false) ? 'bg-success text-white' : ''; ?>"
-               href="<?php echo route('admin/cancellation-requests'); ?>">
-                ↩ Yêu cầu hủy / hoàn cọc
-            </a>
-        </li>
-        <li class="nav-item mb-1">
             <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/service-requests') !== false) ? 'bg-success text-white' : ''; ?>"
                href="<?php echo route('admin/service-requests'); ?>">
                 🧾 Yêu cầu dịch vụ
