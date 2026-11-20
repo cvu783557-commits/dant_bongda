@@ -47,14 +47,10 @@ class CancellationRequest extends Model
                 return ['success' => false, 'error' => 'Đơn này đã có yêu cầu hủy đang xử lý hoặc đã được duyệt.'];
             }
 
-            $refundAmount = 0;
+            $depositAmount = 0;
             if (in_array($booking['payment_status'], ['deposit', 'partial', 'paid'], true)
                 && (float)$booking['paid_amount'] > 0) {
-                if ($booking['payment_method'] !== 'vnpay') {
-                    $this->connection->rollBack();
-                    return ['success' => false, 'error' => 'Đơn không thanh toán qua VNPay; vui lòng liên hệ quản lý để xử lý hoàn tiền.'];
-                }
-                $refundAmount = min((float)$booking['paid_amount'], (float)$booking['deposit']);
+                $depositAmount = min((float)$booking['paid_amount'], (float)$booking['deposit']);
             }
 
             $this->connection->insert($this->table, [
@@ -62,7 +58,7 @@ class CancellationRequest extends Model
                 'customer_user_id' => $userId,
                 'request_reason' => $reason,
                 'status' => 'pending',
-                'refund_amount' => $refundAmount,
+                'refund_amount' => $depositAmount,
                 'created_at' => date('Y-m-d H:i:s'),
             ]);
             $id = (int)$this->connection->lastInsertId();

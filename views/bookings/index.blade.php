@@ -104,7 +104,7 @@
                                         ];
                                     ?>
                                     <?php echo e($requestLabels[$request['status']] ?? $request['status']); ?>
-                                    <?php if (!empty($request['refund_message'])): ?>
+                                    <?php if ($request['status'] !== 'approved' && !empty($request['refund_message'])): ?>
                                         <span class="text-secondary"><?php echo e($request['refund_message']); ?></span>
                                     <?php endif; ?>
                                 </div>

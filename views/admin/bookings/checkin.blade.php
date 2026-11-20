@@ -2,12 +2,166 @@
 @section('title', 'Check-in khách')
 @section('content')
 
+<style>
+.checkin-page {
+    --checkin-green: #176b43;
+    --checkin-green-dark: #105735;
+    --checkin-mint: #eef7f1;
+    --checkin-border: #dfe7e2;
+}
+.checkin-page .checkin-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.checkin-page .checkin-heading-icon {
+    width: 48px;
+    height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 48px;
+    border-radius: 14px;
+    color: #fff;
+    background: linear-gradient(145deg, #4ac782, #176b43);
+    box-shadow: 0 8px 18px rgba(23,107,67,.18);
+    font-size: 1.35rem;
+}
+.checkin-page .checkin-heading h3 {
+    font-size: 1.75rem;
+    letter-spacing: -.02em;
+}
+.checkin-page .checkin-heading p {
+    color: #718078;
+}
+.checkin-page .checkin-calendar-btn {
+    min-height: 44px;
+    border-radius: 8px;
+    padding: .65rem 1rem;
+    background: #fff;
+    border-width: 1.5px;
+}
+.checkin-page .checkin-info {
+    border: 0;
+    border-left: 4px solid #72b4db;
+    border-radius: 8px;
+    background: #edf7fc;
+    color: #31566e;
+    box-shadow: 0 5px 16px rgba(50,92,118,.05);
+}
+.checkin-page .checkin-card {
+    border: 1px solid var(--checkin-border) !important;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(31,50,40,.07) !important;
+}
+.checkin-page .checkin-card .card-header {
+    border-bottom: 1px solid var(--checkin-border);
+}
+.checkin-page .checkin-card .card-header h4 {
+    color: #1d3327;
+}
+.checkin-page .checkin-search .form-control,
+.checkin-page .checkin-search .btn {
+    min-height: 46px;
+}
+.checkin-page .checkin-search .form-control {
+    border-radius: 8px;
+}
+.checkin-page .checkin-search .btn {
+    border-radius: 8px;
+    padding-inline: 1.1rem;
+}
+.checkin-page .qr-card {
+    overflow: hidden;
+}
+.checkin-page .qr-card .card-body {
+    background:
+        radial-gradient(circle at 100% 0, rgba(216,241,225,.7), transparent 220px),
+        #fff;
+}
+.checkin-page .qr-actions .btn {
+    min-height: 44px;
+    border-radius: 8px;
+    font-weight: 700;
+}
+.checkin-page .qr-actions label {
+    margin-bottom: 0;
+    cursor: pointer;
+}
+.checkin-page #qrScannerReader {
+    min-height: 240px;
+    overflow: hidden;
+    background: #eff4f1;
+    border: 2px solid #a4cbb2 !important;
+    border-radius: 12px !important;
+}
+.checkin-page .qr-submit-row .form-control {
+    min-height: 48px;
+    border-radius: 8px;
+    font-family: Consolas, "Courier New", monospace;
+    letter-spacing: .03em;
+}
+.checkin-page .qr-submit-row .btn {
+    min-height: 48px;
+    border-radius: 8px;
+    padding-inline: 1.1rem;
+}
+.checkin-page .checkin-table {
+    border-radius: 0 0 12px 12px;
+}
+.checkin-page .checkin-table thead th {
+    border-bottom-width: 1px;
+    color: #53635a;
+    font-size: .78rem;
+    letter-spacing: .025em;
+    text-transform: uppercase;
+    background: #f6f8f7;
+}
+.checkin-page .checkin-table tbody tr {
+    transition: background .15s ease;
+}
+.checkin-page .checkin-table tbody tr:hover {
+    background: #f7faf8;
+}
+.checkin-page .checkin-table td {
+    padding-top: .9rem;
+    padding-bottom: .9rem;
+}
+.checkin-page .checkin-table .btn {
+    border-radius: 7px;
+}
+.checkin-page .checkin-table .badge {
+    border-radius: 999px;
+    padding: .45rem .65rem;
+}
+@media (max-width: 767.98px) {
+    .checkin-page .checkin-heading-icon {
+        width: 42px;
+        height: 42px;
+        flex-basis: 42px;
+    }
+    .checkin-page .checkin-heading h3 {
+        font-size: 1.45rem;
+    }
+    .checkin-page .checkin-calendar-btn {
+        width: 100%;
+    }
+    .checkin-page .checkin-search .btn {
+        flex: 1;
+    }
+}
+</style>
+
+<main class="checkin-page">
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-    <div>
-        <h3 class="fw-bold mb-1">✅ Check-in khách</h3>
-        <p class="text-muted mb-0">Tra cứu đơn đã xác nhận và đánh dấu khách đã đến sân.</p>
+    <div class="checkin-heading">
+        <span class="checkin-heading-icon" aria-hidden="true">✓</span>
+        <div>
+            <h3 class="fw-bold mb-1">Check-in khách</h3>
+            <p class="mb-0">Tra cứu đơn đã xác nhận và đánh dấu khách đã đến sân.</p>
+        </div>
     </div>
-    <a href="<?php echo route('admin/bookings/calendar') . '?date=' . urlencode($date); ?>" class="btn btn-outline-success">
+    <a href="<?php echo route('admin/bookings/calendar') . '?date=' . urlencode($date); ?>" class="btn btn-outline-success checkin-calendar-btn">
         📅 Xem lịch sân
     </a>
 </div>
@@ -15,12 +169,12 @@
 <?php if ($success): ?><div class="alert alert-success" role="alert"><?php echo e($success); ?></div><?php endif; ?>
 <?php if ($error): ?><div class="alert alert-danger" role="alert"><?php echo e($error); ?></div><?php endif; ?>
 
-<div class="alert alert-info">
+<div class="alert alert-info checkin-info">
     Check-in chỉ áp dụng cho đơn đã xác nhận trong ngày hôm nay. Khi check-in thành công, trạng thái đơn chuyển sang
     <strong>Đang sử dụng</strong>.
 </div>
 
-<div class="card border-0 shadow-sm mb-4">
+<div class="card border-0 shadow-sm mb-4 checkin-card checkin-search">
     <div class="card-body">
         <form method="get" action="<?php echo route('admin/check-in'); ?>" class="row g-3 align-items-end">
             <div class="col-md-3">
@@ -41,13 +195,13 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-sm mb-4">
+<div class="card border-0 shadow-sm mb-4 checkin-card qr-card">
     <div class="card-header bg-white py-3">
         <h4 class="h5 fw-bold mb-0">Quét mã QR của khách</h4>
     </div>
     <div class="card-body">
         <p class="text-muted">Cho phép camera truy cập, hướng vào mã QR khách đưa. Nếu thiết bị quét QR như bàn phím, có thể quét vào ô nhập mã.</p>
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-3 qr-actions">
             <button type="button" class="btn btn-outline-success" id="startQrScanner">Bật camera quét QR</button>
             <button type="button" class="btn btn-outline-secondary d-none" id="stopQrScanner">Tắt camera</button>
             <label class="btn btn-outline-primary" for="qrImageInput">Chọn ảnh QR</label>
@@ -58,7 +212,7 @@
             <select id="cameraPicker" class="form-select" style="max-width:480px;"></select>
         </div>
         <div id="qrScannerReader" class="d-none mx-auto mb-3 rounded border" style="max-width:480px;"></div>
-        <form method="post" action="<?php echo route('admin/check-in/scan'); ?>" class="row g-2">
+        <form method="post" action="<?php echo route('admin/check-in/scan'); ?>" class="row g-2 qr-submit-row">
             <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
             <div class="col-md-8">
                 <label for="checkinTokenInput" class="form-label">Mã QR</label>
@@ -78,7 +232,7 @@
     <div class="alert alert-warning">Chỉ xem được danh sách cho ngày khác; thao tác check-in chỉ mở cho đơn của hôm nay.</div>
 <?php endif; ?>
 
-<section class="card border-0 shadow-sm mb-4">
+<section class="card border-0 shadow-sm mb-4 checkin-card">
     <div class="card-header bg-white py-3">
         <h4 class="h5 fw-bold mb-0">Chờ check-in <span class="badge bg-primary"><?php echo count($confirmedBookings); ?></span></h4>
     </div>
@@ -86,7 +240,7 @@
         <div class="card-body text-muted">Không có đơn đã xác nhận phù hợp trong ngày này.</div>
     <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table table-hover align-middle mb-0 checkin-table">
                 <thead class="table-light">
                     <tr>
                         <th>Mã đơn</th>
@@ -138,7 +292,7 @@
     <?php endif; ?>
 </section>
 
-<section class="card border-0 shadow-sm">
+<section class="card border-0 shadow-sm checkin-card">
     <div class="card-header bg-white py-3">
         <h4 class="h5 fw-bold mb-0">Đã check-in <span class="badge bg-info text-dark"><?php echo count($checkedInBookings); ?></span></h4>
     </div>
@@ -146,7 +300,7 @@
         <div class="card-body text-muted">Chưa có đơn nào được check-in trong ngày này.</div>
     <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table table-hover align-middle mb-0 checkin-table">
                 <thead class="table-light">
                     <tr>
                         <th>Mã đơn</th>
@@ -326,4 +480,5 @@
     window.addEventListener('pagehide', stopScanner);
 })();
 </script>
+</main>
 @endsection
