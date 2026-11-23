@@ -894,6 +894,110 @@ class PitchController extends Controller
         exit;
     }
 
+    public function cancelBookingPayment($token)
+    {
+        $currentUser = $this->user->getActiveUser();
+        if (!$currentUser || ($currentUser['role'] ?? '') !== 'USER') {
+            setFlash('error', 'Vui lòng đăng nhập tài khoản khách hàng để hủy đặt cọc.');
+            redirect('login');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $checkout = $_SESSION['booking_payment_checkouts'][$token] ?? null;
+        if (!is_array($checkout)
+            || (int)($checkout['user_id'] ?? 0) !== (int)$currentUser['id']) {
+            setFlash('error', 'Phiên đặt cọc không hợp lệ. Vui lòng kiểm tra lịch sử đặt sân.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $bookingIds = array_values(array_unique(array_map(
+            'intval',
+            is_array($checkout['booking_ids'] ?? null) ? $checkout['booking_ids'] : []
+        )));
+        if (!$bookingIds) {
+            setFlash('error', 'Không tìm thấy đơn đặt sân cần hủy.');
+            redirect('my-bookings');
+            return;
+        }
+
+        $seriesId = (int)($checkout['series_id'] ?? 0);
+        foreach ($bookingIds as $bookingId) {
+            $booking = $this->booking->find($bookingId);
+            if (!$booking
+                || (int)$booking['created_by'] !== (int)$currentUser['id']
+                || (int)$booking['pitch_id'] !== (int)($checkout['pitch_id'] ?? 0)
+                || !in_array($booking['status'], [Booking::STATUS_PENDING, Booking::STATUS_CANCELLED], true)
+                || ($seriesId > 0 && (int)($booking['series_id'] ?? 0) !== $seriesId)
+                || $booking['payment_status'] !== Booking::PAY_UNPAID) {
+                setFlash('error', 'Đơn đã được thanh toán hoặc không còn ở trạng thái có thể hủy.');
+                redirect('my-bookings');
+                return;
+            }
+        }
+
+        if ($seriesId > 0) {
+            $series = $this->booking->findSeries($seriesId);
+            if (!$series
+                || (int)$series['pitch_id'] !== (int)($checkout['pitch_id'] ?? 0)
+                || $series['payment_status'] !== Booking::PAY_UNPAID) {
+                setFlash('error', 'Lịch đặt tháng đã được thanh toán hoặc không còn ở trạng thái có thể hủy.');
+                redirect('my-bookings');
+                return;
+            }
+        }
+
+        if (!$this->cancelUnpaidBookings($bookingIds, 'Khách hủy trước khi đặt cọc VNPay')) {
+            setFlash('error', 'Không thể hủy đơn đặt sân. Vui lòng thử lại hoặc liên hệ quản lý.');
+            redirect('bookings/payment/' . $token);
+            return;
+        }
+
+        unset($_SESSION['booking_payment_checkouts'][$token]);
+        setFlash('success', 'Đã hủy đặt cọc; khung giờ đã được mở lại.');
+        redirect(
+            'pitches/' . (int)$checkout['pitch_id']
+            . '?date=' . urlencode((string)$checkout['booking_date'])
+            . '&court=' . (int)$checkout['court_number']
+        );
+    }
+
+    private function cancelUnpaidBookings(array $bookingIds, string $reason): bool
+    {
+        foreach ($bookingIds as $bookingId) {
+            $booking = $this->booking->find((int)$bookingId);
+            if (!$booking) {
+                $this->logError('Unable to cancel missing unpaid booking #' . (int)$bookingId);
+                return false;
+            }
+            if ($booking['status'] === Booking::STATUS_CANCELLED
+                && $booking['payment_status'] === Booking::PAY_UNPAID) {
+                continue;
+            }
+            if ($booking['status'] !== Booking::STATUS_PENDING
+                || $booking['payment_status'] !== Booking::PAY_UNPAID) {
+                return false;
+            }
+
+            $result = $this->booking->cancel((int)$bookingId, $reason, false, true);
+            if (!$result['success']) {
+                $this->logError(
+                    'Unable to cancel unpaid booking #' . (int)$bookingId . ': '
+                    . ($result['error'] ?? 'Unknown cancellation error')
+                );
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function getBookingPaymentCheckout(string $token, int $userId): ?array
     {
         $checkout = $_SESSION['booking_payment_checkouts'][$token] ?? null;
@@ -998,9 +1102,10 @@ class PitchController extends Controller
                 );
             }
         } else {
+            $reason = 'VNPay từ chối thanh toán (mã phản hồi '
+                . (string)($_GET['vnp_ResponseCode'] ?? 'không rõ') . ').';
+            $failureRecorded = true;
             try {
-                $reason = 'VNPay từ chối thanh toán (mã phản hồi '
-                    . (string)($_GET['vnp_ResponseCode'] ?? 'không rõ') . ').';
                 if ($isMonthly) {
                     $this->booking->recordFailedVnpaySeriesPayment(
                         $referenceId,
@@ -1016,13 +1121,32 @@ class PitchController extends Controller
                         $reason
                     );
                 }
-                setFlash('error', 'Giao dịch VNPay chưa thành công. Đơn đặt sân đang chờ thanh toán.');
             } catch (\Throwable $e) {
                 error_log('Unable to record failed VNPay payment: ' . $e->getMessage());
-                setFlash('error', 'Giao dịch VNPay chưa thành công; không thể ghi lịch sử giao dịch. Vui lòng báo quản trị viên.');
+                $failureRecorded = false;
             }
+
+            $bookingIds = $isMonthly
+                ? $this->booking->getSeriesBookingIds($referenceId)
+                : [(int)$bookingId];
+            if (!$this->cancelUnpaidBookings($bookingIds, $reason)) {
+                setFlash('error', 'Giao dịch VNPay chưa thành công; không thể hủy an toàn đơn đặt sân. Vui lòng liên hệ quản lý.');
+                redirect('bookings/success/' . $bookingId);
+                return;
+            }
+            setFlash('error', $failureRecorded
+                ? 'Giao dịch VNPay chưa thành công. Đơn đặt sân đã được hủy và khung giờ được mở lại.'
+                : 'Đơn đặt sân đã được hủy và khung giờ được mở lại, nhưng không ghi được lịch sử giao dịch. Vui lòng báo quản trị viên.');
         }
 
+        if (($_GET['vnp_ResponseCode'] ?? '') !== '00' || ($_GET['vnp_TransactionStatus'] ?? '') !== '00') {
+            redirect(
+                'pitches/' . (int)$booking['pitch_id']
+                . '?date=' . urlencode((string)$booking['booking_date'])
+                . '&court=' . (int)$booking['court_number']
+            );
+            return;
+        }
         redirect('bookings/success/' . $bookingId);
     }
 
@@ -1067,9 +1191,10 @@ class PitchController extends Controller
             return;
         }
         if (($_GET['vnp_ResponseCode'] ?? '') !== '00' || ($_GET['vnp_TransactionStatus'] ?? '') !== '00') {
+            $reason = 'VNPay từ chối thanh toán (mã phản hồi '
+                . (string)($_GET['vnp_ResponseCode'] ?? 'không rõ') . ').';
+            $failureRecorded = true;
             try {
-                $reason = 'VNPay từ chối thanh toán (mã phản hồi '
-                    . (string)($_GET['vnp_ResponseCode'] ?? 'không rõ') . ').';
                 if ($isMonthly) {
                     $this->booking->recordFailedVnpaySeriesPayment(
                         $referenceId,
@@ -1087,10 +1212,21 @@ class PitchController extends Controller
                 }
             } catch (\Throwable $e) {
                 error_log('Unable to record failed VNPay IPN: ' . $e->getMessage());
-                echo json_encode(['RspCode' => '99', 'Message' => 'Could not record payment attempt']);
+                $failureRecorded = false;
+            }
+
+            $bookingIds = $isMonthly
+                ? $this->booking->getSeriesBookingIds($referenceId)
+                : [(int)$bookingId];
+            if (!$this->cancelUnpaidBookings($bookingIds, $reason)) {
+                echo json_encode(['RspCode' => '99', 'Message' => 'Could not release unpaid booking']);
                 return;
             }
-            echo json_encode(['RspCode' => '00', 'Message' => 'Payment failed recorded']);
+            if (!$failureRecorded) {
+                echo json_encode(['RspCode' => '99', 'Message' => 'Booking released but payment attempt was not recorded']);
+                return;
+            }
+            echo json_encode(['RspCode' => '00', 'Message' => 'Payment failed recorded and booking released']);
             return;
         }
         $paymentStatus = $isMonthly ? $series['payment_status'] : $booking['payment_status'];

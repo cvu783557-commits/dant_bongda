@@ -25,10 +25,12 @@
 
 <main class="container py-4 py-md-5" style="max-width: 760px;">
     <div class="mb-4">
-        <a class="text-decoration-none"
-           href="<?php echo route('pitches/' . (int)$checkout['pitch_id'] . '?date=' . urlencode($checkout['booking_date']) . '&court=' . (int)$checkout['court_number']); ?>">
-            &larr; Quay lại trang sân
-        </a>
+        <form method="post" action="<?php echo route('bookings/payment/' . $token . '/cancel'); ?>">
+            <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
+            <button type="submit" class="btn btn-link p-0 text-decoration-none">
+                &larr; Hủy đặt cọc và quay lại trang sân
+            </button>
+        </form>
         <h1 class="h2 fw-bold mt-3 mb-1">Thanh toán đặt sân</h1>
         <p class="text-secondary mb-0">Kiểm tra thông tin và chọn cách thanh toán tiền đặt cọc.</p>
     </div>
