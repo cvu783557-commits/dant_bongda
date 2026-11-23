@@ -427,6 +427,10 @@ class PitchController extends Controller
                 redirect('bookings/details/' . $detailsToken);
                 return;
             }
+            if ($customerData['customer_email'] !== '') {
+                $this->user->updateEmail((int)$currentUser['id'], $customerData['customer_email']);
+                $currentUser['email'] = $customerData['customer_email'];
+            }
 
             $_POST = array_merge(
                 $detailsCheckout['data'],

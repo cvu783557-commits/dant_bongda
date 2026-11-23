@@ -43,7 +43,7 @@ h3 { font-size: 1.9rem; }
 h4 { font-size: 1.6rem; }
 
 .navbar.bg-success {
-    min-height: 68px;
+    min-height: 84px;
     background: var(--site-green) !important;
     border-bottom: 3px solid var(--site-lime);
     box-shadow: 0 4px 16px rgba(23, 37, 30, .12);
@@ -51,7 +51,16 @@ h4 { font-size: 1.6rem; }
 
 .navbar-brand {
     color: #fff !important;
-    font-size: 1.6rem;
+    font-size: 1rem;
+}
+
+.site-brand-logo {
+    display: block;
+    width: 112px;
+    height: 78px;
+    object-fit: contain;
+    padding: 0;
+    background: transparent;
 }
 
 .navbar-dark .navbar-nav .nav-link {

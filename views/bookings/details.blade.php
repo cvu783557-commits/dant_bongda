@@ -10,7 +10,9 @@
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="<?php echo route('/'); ?>">⚽ SânBóng.Pro</a>
+        <a class="navbar-brand fw-bold" href="<?php echo route('/'); ?>">
+            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
+        </a>
         <div class="navbar-nav flex-row gap-3">
             <a class="nav-link" href="<?php echo route('/'); ?>">Trang chủ</a>
             <a class="nav-link" href="<?php echo route('schedule'); ?>">Lịch sân</a>
@@ -68,18 +70,18 @@
                 <div class="mb-3">
                     <label class="form-label fw-semibold" for="customer_name">Họ tên người đặt <span class="text-danger">*</span></label>
                     <input type="text" id="customer_name" name="customer_name" class="form-control" required
-                           minlength="2" maxlength="100"
+                           minlength="2" maxlength="100" autocomplete="name"
                            value="<?php echo e($old['customer_name'] ?? $currentUser['full_name']); ?>">
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold" for="customer_phone">Số điện thoại <span class="text-danger">*</span></label>
                     <input type="tel" id="customer_phone" name="customer_phone" class="form-control" required
-                           pattern="^0[0-9]{9,10}$"
-                           value="<?php echo e($old['customer_phone'] ?? ''); ?>">
+                           pattern="^0[0-9]{9,10}$" autocomplete="tel"
+                           value="<?php echo e($old['customer_phone'] ?? ($currentUser['phone'] ?? '')); ?>">
                 </div>
                 <div class="mb-3">
                     <label class="form-label fw-semibold" for="customer_email">Email (tùy chọn)</label>
-                    <input type="email" id="customer_email" name="customer_email" class="form-control"
+                    <input type="email" id="customer_email" name="customer_email" class="form-control" autocomplete="email"
                            value="<?php echo e($old['customer_email'] ?? $currentUser['email'] ?? ''); ?>">
                 </div>
                 <div class="mb-4">

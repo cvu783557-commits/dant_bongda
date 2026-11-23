@@ -70,11 +70,13 @@ class AuthController extends Controller
             'username' => trim($data['username'] ?? ''),
             'full_name' => trim($data['full_name'] ?? ''),
             'phone' => trim($data['phone'] ?? ''),
+            'email' => trim($data['email'] ?? ''),
         ]);
 
         $username = trim($data['username'] ?? '');
         $fullName = trim($data['full_name'] ?? '');
         $phone = trim($data['phone'] ?? '');
+        $email = trim($data['email'] ?? '');
         $password = $data['password'] ?? '';
         $passwordConfirm = $data['password_confirmation'] ?? '';
 
@@ -90,6 +92,11 @@ class AuthController extends Controller
         }
         if ($phone !== '' && mb_strlen($phone) > 20) {
             setFlash('error', 'Số điện thoại không được vượt quá 20 ký tự.');
+            redirect('admin/register');
+            return;
+        }
+        if ($email !== '' && (mb_strlen($email) > 100 || !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+            setFlash('error', 'Vui lòng nhập email hợp lệ không quá 100 ký tự.');
             redirect('admin/register');
             return;
         }
@@ -110,7 +117,7 @@ class AuthController extends Controller
         }
 
         try {
-            $this->user->register($username, $password, $fullName, $phone);
+            $this->user->register($username, $password, $fullName, $phone, $email);
         } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException $e) {
             setFlash('error', 'Tên đăng nhập đã được sử dụng.');
             redirect('admin/register');

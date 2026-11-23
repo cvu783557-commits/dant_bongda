@@ -10,7 +10,9 @@
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="<?php echo route('/'); ?>">⚽ SânBóng.Pro</a>
+        <a class="navbar-brand fw-bold" href="<?php echo route('/'); ?>">
+            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
+        </a>
         <div class="navbar-nav flex-row gap-3">
             <a class="nav-link" href="<?php echo route('my-bookings'); ?>">Lịch sử đặt sân</a>
             <a class="nav-link active" href="<?php echo route('notifications'); ?>">Thông báo</a>

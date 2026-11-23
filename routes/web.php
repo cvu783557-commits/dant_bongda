@@ -15,6 +15,11 @@ $router->get('/site-theme', static function () {
 	header('Content-Type: text/css; charset=utf-8');
 	readfile(__DIR__ . '/../assets/site-theme.css');
 });
+$router->get('/site-logo', static function () {
+	header('Content-Type: image/png');
+	header('Cache-Control: public, max-age=86400');
+	readfile(__DIR__ . '/../assets/site-logo.png');
+});
 
 // ====================== FRONTEND ======================
 $router->get('/',  PitchController::class . '@index');
