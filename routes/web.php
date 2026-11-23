@@ -15,6 +15,11 @@ $router->get('/site-theme', static function () {
 	header('Content-Type: text/css; charset=utf-8');
 	readfile(__DIR__ . '/../assets/site-theme.css');
 });
+$router->get('/site-logo', static function () {
+	header('Content-Type: image/png');
+	header('Cache-Control: public, max-age=86400');
+	readfile(__DIR__ . '/../assets/site-logo.png');
+});
 
 // ====================== FRONTEND ======================
 $router->get('/',  PitchController::class . '@index');
@@ -37,6 +42,7 @@ $router->get('/bookings/details/(\w+)', PitchController::class . '@bookingDetail
 $router->post('/bookings/details/(\w+)', PitchController::class . '@bookingStore');
 $router->get('/bookings/payment/(\w+)', PitchController::class . '@bookingPayment');
 $router->post('/bookings/payment/(\w+)', PitchController::class . '@bookingPaymentContinue');
+$router->post('/bookings/payment/(\w+)/cancel', PitchController::class . '@cancelBookingPayment');
 $router->get('/bookings/success/(\d+)', PitchController::class . '@bookingSuccess');
 $router->get('/bookings/vnpay-return', PitchController::class . '@vnpayReturn');
 $router->get('/bookings/vnpay-ipn', PitchController::class . '@vnpayIpn');

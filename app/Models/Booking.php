@@ -620,12 +620,23 @@ class Booking extends Model
     {
         $id = $this->connection->executeQuery(
             "SELECT id FROM {$this->table}
-             WHERE series_id = ? AND status <> ?
+             WHERE series_id = ?
              ORDER BY booking_date ASC, id ASC LIMIT 1",
-            [(int)$seriesId, self::STATUS_CANCELLED]
+            [(int)$seriesId]
         )->fetchOne();
 
         return $id ? (int)$id : null;
+    }
+
+    public function getSeriesBookingIds(int $seriesId): array
+    {
+        return array_map(
+            'intval',
+            $this->connection->executeQuery(
+                "SELECT id FROM {$this->table} WHERE series_id = ? ORDER BY booking_date ASC, id ASC",
+                [$seriesId]
+            )->fetchFirstColumn()
+        );
     }
 
     public function recordSeriesVnpayDeposit(int $seriesId, ?string $transactionNo = null): array
@@ -794,17 +805,29 @@ class Booking extends Model
         }
     }
 
-    public function cancel($id, $reason, bool $refunded = false)
+    public function cancel($id, $reason, bool $refunded = false, bool $onlyIfUnpaidPending = false)
     {
         $this->connection->beginTransaction();
         try {
             $booking = $this->connection->executeQuery(
-                "SELECT id, status, series_id FROM {$this->table} WHERE id = ? FOR UPDATE",
+                "SELECT id, status, payment_status, series_id FROM {$this->table} WHERE id = ? FOR UPDATE",
                 [(int)$id]
             )->fetchAssociative();
             if (!$booking) {
                 $this->connection->rollBack();
                 return ['success' => false, 'error' => 'Lịch đặt không tồn tại'];
+            }
+            if ($onlyIfUnpaidPending) {
+                if ($booking['status'] === self::STATUS_CANCELLED
+                    && $booking['payment_status'] === self::PAY_UNPAID) {
+                    $this->connection->commit();
+                    return ['success' => true];
+                }
+                if ($booking['status'] !== self::STATUS_PENDING
+                    || $booking['payment_status'] !== self::PAY_UNPAID) {
+                    $this->connection->rollBack();
+                    return ['success' => false, 'error' => 'Đơn không còn ở trạng thái chờ cọc'];
+                }
             }
 
             if ($booking['status'] !== self::STATUS_CANCELLED) {

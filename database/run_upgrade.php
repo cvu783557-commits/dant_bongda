@@ -240,6 +240,27 @@ function ensurePendingUserStatus($pdo) {
         stepOK("Kích hoạt {$activated} tài khoản USER cũ đang chờ duyệt");
     }
 }
+function ensureUserEmail($pdo) {
+    if (!columnExists($pdo, 'users', 'email')) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN email VARCHAR(100) NULL AFTER phone");
+        stepOK("Thêm email vào hồ sơ tài khoản");
+    } else {
+        stepSkip("Cột email hồ sơ tài khoản đã sẵn sàng");
+    }
+
+    if (tableExists($pdo, 'customers') && columnExists($pdo, 'customers', 'email')) {
+        $updated = $pdo->exec(
+            "UPDATE users u
+             JOIN customers c ON c.phone = u.phone
+             SET u.email = c.email
+             WHERE (u.email IS NULL OR u.email = '')
+               AND c.email IS NOT NULL AND c.email <> ''"
+        );
+        if ($updated > 0) {
+            stepOK("Khôi phục email hồ sơ từ {$updated} khách hàng đã có cùng số điện thoại");
+        }
+    }
+}
 function ensureUserAdminRoles($pdo) {
     $roleColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'role'")->fetch(PDO::FETCH_ASSOC);
     if (!$roleColumn) {
@@ -578,6 +599,7 @@ try {
         ensureAutoIncrementId($pdo, $table);
     }
     ensurePendingUserStatus($pdo);
+    ensureUserEmail($pdo);
     ensureUniqueUsernames($pdo);
     ensureUserAdminRoles($pdo);
 

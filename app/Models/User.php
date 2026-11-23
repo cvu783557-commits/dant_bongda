@@ -40,18 +40,27 @@ class User extends Model
         );
     }
 
-    public function register($username, $password, $fullName, $phone = null)
+    public function register($username, $password, $fullName, $phone = null, $email = null)
     {
         $this->connection->insert($this->table, [
             'username' => $username,
             'password_hash' => password_hash($password, PASSWORD_DEFAULT),
             'full_name' => $fullName,
             'phone' => $phone ?: null,
+            'email' => $email ?: null,
             'role' => 'USER',
             'status' => 'active',
         ]);
 
         return (int)$this->connection->lastInsertId();
+    }
+
+    public function updateEmail(int $id, string $email): void
+    {
+        $this->connection->executeStatement(
+            "UPDATE {$this->table} SET email = ?, updated_at = NOW() WHERE id = ?",
+            [trim($email) ?: null, $id]
+        );
     }
 
     public function updateAccess($id, $role, $status)
