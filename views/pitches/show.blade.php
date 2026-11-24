@@ -345,7 +345,7 @@
                             <div class="col-6">
                                 <label class="form-label fw-semibold">Giờ bắt đầu <span class="text-danger">*</span></label>
                                 <input type="time" id="start_time" name="start_time"
-                                       value="<?php echo htmlspecialchars($old['start_time'] ?? ''); ?>"
+                                       value="<?php echo htmlspecialchars($old['start_time'] ?? '00:00'); ?>"
                                        min="<?php echo htmlspecialchars($minStart); ?>"
                                        max="<?php echo htmlspecialchars($maxStart); ?>"
                                        class="form-control" required>
@@ -353,7 +353,7 @@
                             <div class="col-6">
                                 <label class="form-label fw-semibold">Giờ kết thúc <span class="text-danger">*</span></label>
                                 <input type="time" id="end_time" name="end_time"
-                                       value="<?php echo htmlspecialchars($old['end_time'] ?? ''); ?>"
+                                       value="<?php echo htmlspecialchars($old['end_time'] ?? '00:00'); ?>"
                                        min="<?php echo htmlspecialchars($minEnd); ?>"
                                        max="<?php echo htmlspecialchars($maxEnd); ?>"
                                        class="form-control" required>
@@ -377,7 +377,8 @@
                                         <?php
                                             $locked = isset($lockedSlots[$idx]);
                                             $taken = isset($takenSlots[$idx]);
-                                            $unavailable = $locked || $taken;
+                                            $past = isset($pastSlots[$idx]);
+                                            $unavailable = $locked || $taken || $past;
                                             $slotRate = (float)$pitch['price_per_hour'];
                                             foreach ($statusPriceTable as $priceBlock) {
                                                 if ($s['start'] >= $priceBlock['from'] && $s['start'] < $priceBlock['to']) {
@@ -388,14 +389,14 @@
                                         ?>
                                         <div class="col-4">
                                             <button type="button"
-                                                    class="slot-badge slot-select text-center <?php echo $locked ? 'bg-warning-subtle text-warning-emphasis' : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis'); ?>"
+                                                    class="slot-badge slot-select text-center <?php echo $past ? 'bg-secondary-subtle text-secondary' : ($locked ? 'bg-warning-subtle text-warning-emphasis' : ($taken ? 'bg-danger-subtle text-danger-emphasis' : 'bg-success-subtle text-success-emphasis')); ?>"
                                                     data-slot-index="<?php echo (int)$idx; ?>"
                                                     data-slot-start="<?php echo htmlspecialchars($s['start']); ?>"
                                                     data-slot-end="<?php echo htmlspecialchars($s['end']); ?>"
                                                     aria-pressed="false"
                                                     <?php echo $unavailable ? 'disabled' : ''; ?>>
                                                 <span class="d-block"><?php echo htmlspecialchars($s['label']); ?></span>
-                                                <small><?php echo $locked ? 'Bảo trì / tạm khóa' : ($taken ? 'Đã đặt' : formatMoney($slotRate) . ' / giờ'); ?></small>
+                                                <small><?php echo $past ? 'Đã qua' : ($locked ? 'Bảo trì / tạm khóa' : ($taken ? 'Đã đặt' : formatMoney($slotRate) . ' / giờ')); ?></small>
                                             </button>
                                         </div>
                                     <?php endforeach; ?>
@@ -531,6 +532,25 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
+    const TODAY = "<?php echo htmlspecialchars($date); ?>";
+    const now = new Date();
+    const isToday = TODAY === [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0')
+    ].join('-');
+    const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60;
+
+    document.querySelectorAll('.slot-select').forEach(button => {
+        const startSeconds = timeToSec(button.dataset.slotStart);
+        if (isToday && startSeconds !== null && startSeconds <= currentSeconds) {
+            button.disabled = true;
+            button.className = 'slot-badge slot-select text-center bg-secondary-subtle text-secondary';
+            button.innerHTML = '<span class="d-block">' + button.dataset.slotStart + ' - ' + button.dataset.slotEnd + '</span><small>Đã qua</small>';
+            button.setAttribute('aria-pressed', 'false');
+        }
+    });
+
     const PRICE_TABLE = [
         { start: 6 * 3600, end: 8 * 3600, rate: 250000 },
         { start: 8 * 3600, end: 12 * 3600, rate: 250000 },
