@@ -19,6 +19,8 @@ use Rakit\Validation\Validator;
 
 class PitchController extends Controller
 {
+    private const CHECKOUT_TTL_SECONDS = 300;
+
     protected $pitch;
     protected $booking;
     protected $bookingService;
@@ -238,7 +240,7 @@ class PitchController extends Controller
 
                     if ($slot['status'] === 'available'
                         && $date === date('Y-m-d')
-                        && $slotStart < $currentTime) {
+                        && $slotStart <= $currentTime) {
                         $slot['status'] = 'past';
                     }
                 }
@@ -286,6 +288,15 @@ class PitchController extends Controller
         $hourSlots = $this->publicTimeSlots($openingTime, $closingTime);
         $bookings  = $this->booking->getByPitchAndDate($id, $date, false, $courtNumber);
         $locks = $this->pitchLock->getByPitchAndDate($id, $date, $courtNumber);
+        $nowSec = (int)date('G') * 3600 + (int)date('i') * 60;
+        $pastSlots = [];
+        if ($date === date('Y-m-d')) {
+            foreach ($hourSlots as $idx => $slot) {
+                if ($slot['start_sec'] <= $nowSec) {
+                    $pastSlots[$idx] = true;
+                }
+            }
+        }
 
         $takenSlots = [];
         $lockedSlots = [];
@@ -331,6 +342,7 @@ class PitchController extends Controller
             'fieldCount'    => $fieldCount,
             'takenSlots'    => $takenSlots,
             'lockedSlots'   => $lockedSlots,
+            'pastSlots'     => $pastSlots,
             'bookingsToday' => $bookings,
             'minStart'      => formatTime($openingTime),
             'maxStart'      => date('H:i', strtotime($closingTime . ' -1 minute')),
@@ -402,7 +414,7 @@ class PitchController extends Controller
             $detailsCheckout = $_SESSION['booking_details_checkouts'][$detailsToken] ?? null;
             if (!is_array($detailsCheckout)
                 || (int)($detailsCheckout['user_id'] ?? 0) !== (int)$currentUser['id']
-                || (int)($detailsCheckout['created_at'] ?? 0) < time() - 3600) {
+                || (int)($detailsCheckout['created_at'] ?? 0) < time() - self::CHECKOUT_TTL_SECONDS) {
                 unset($_SESSION['booking_details_checkouts'][$detailsToken]);
                 setFlash('error', 'Phiên đặt sân không hợp lệ hoặc đã hết hạn. Vui lòng chọn khung giờ lại.');
                 redirect('pitches/' . (int)($_POST['pitch_id'] ?? 0));
@@ -619,7 +631,7 @@ class PitchController extends Controller
             $data['booking_count'] = $bookingMode === 'monthly' ? count($occurrenceDates) : 1;
             foreach ($_SESSION['booking_details_checkouts'] ?? [] as $existingToken => $existingCheckout) {
                 if (!is_array($existingCheckout)
-                    || (int)($existingCheckout['created_at'] ?? 0) < time() - 3600) {
+                    || (int)($existingCheckout['created_at'] ?? 0) < time() - self::CHECKOUT_TTL_SECONDS) {
                     unset($_SESSION['booking_details_checkouts'][$existingToken]);
                 }
             }
@@ -713,7 +725,7 @@ class PitchController extends Controller
             : (int)$result['id'];
         foreach ($_SESSION['booking_payment_checkouts'] ?? [] as $existingToken => $existingCheckout) {
             if (!is_array($existingCheckout)
-                || (int)($existingCheckout['created_at'] ?? 0) < time() - 3600) {
+                || (int)($existingCheckout['created_at'] ?? 0) < time() - self::CHECKOUT_TTL_SECONDS) {
                 unset($_SESSION['booking_payment_checkouts'][$existingToken]);
             }
         }
@@ -752,7 +764,7 @@ class PitchController extends Controller
         $checkout = $_SESSION['booking_details_checkouts'][$token] ?? null;
         if (!is_array($checkout)
             || (int)($checkout['user_id'] ?? 0) !== (int)$currentUser['id']
-            || (int)($checkout['created_at'] ?? 0) < time() - 3600) {
+            || (int)($checkout['created_at'] ?? 0) < time() - self::CHECKOUT_TTL_SECONDS) {
             unset($_SESSION['booking_details_checkouts'][$token]);
             setFlash('error', 'Phiên đặt sân không hợp lệ hoặc đã hết hạn. Vui lòng chọn khung giờ lại.');
             redirect('/');
@@ -773,6 +785,7 @@ class PitchController extends Controller
             : $data['booking_date'];
         return view('bookings.details', [
             'token' => (string)$token,
+            'expiresAt' => (int)$checkout['created_at'] + self::CHECKOUT_TTL_SECONDS,
             'pitch' => $pitch,
             'bookingMode' => $data['booking_mode'],
             'bookingDate' => $date,
@@ -810,6 +823,7 @@ class PitchController extends Controller
         $booking = $this->booking->find((int)$checkout['booking_id']);
         return view('bookings.payment', [
             'token' => (string)$token,
+            'expiresAt' => (int)$checkout['created_at'] + self::CHECKOUT_TTL_SECONDS,
             'checkout' => $checkout,
             'booking' => $booking,
             'currentUser' => $currentUser,
@@ -1005,9 +1019,17 @@ class PitchController extends Controller
     private function getBookingPaymentCheckout(string $token, int $userId): ?array
     {
         $checkout = $_SESSION['booking_payment_checkouts'][$token] ?? null;
-        if (!is_array($checkout)
-            || (int)($checkout['user_id'] ?? 0) !== $userId
-            || (int)($checkout['created_at'] ?? 0) < time() - 3600) {
+        if (!is_array($checkout) || (int)($checkout['user_id'] ?? 0) !== $userId) {
+            unset($_SESSION['booking_payment_checkouts'][$token]);
+            return null;
+        }
+        $expiresAt = (int)($checkout['created_at'] ?? 0) + self::CHECKOUT_TTL_SECONDS;
+        if ($expiresAt < time()) {
+            $bookingIds = array_values(array_unique(array_map(
+                'intval',
+                is_array($checkout['booking_ids'] ?? null) ? $checkout['booking_ids'] : []
+            )));
+            $this->cancelUnpaidBookings($bookingIds, 'Phiên thanh toán đặt cọc đã hết 5 phút');
             unset($_SESSION['booking_payment_checkouts'][$token]);
             return null;
         }

@@ -26,6 +26,21 @@
 </nav>
 
 <main class="container py-4 py-md-5" style="max-width: 760px;">
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body py-3">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <ol class="d-flex flex-wrap gap-2 mb-0 ps-0 list-unstyled small">
+                    <li><span class="badge bg-success">1</span> Chọn sân</li>
+                    <li><span class="badge bg-success">2</span> Kiểm tra sân</li>
+                    <li><span class="badge bg-success">3</span> Gửi yêu cầu</li>
+                    <li><span class="badge bg-warning text-dark">4</span> Thanh toán cọc</li>
+                    <li><span class="badge bg-secondary">5</span> Admin xác nhận</li>
+                    <li><span class="badge bg-secondary">6</span> Hoàn tất đặt sân</li>
+                </ol>
+                <span class="badge bg-warning text-dark" id="paymentCountdown">Còn 05:00</span>
+            </div>
+        </div>
+    </div>
     <div class="mb-4">
         <form method="post" action="<?php echo route('bookings/payment/' . $token . '/cancel'); ?>">
             <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
@@ -98,5 +113,20 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+    const expiresAt = <?php echo (int)$expiresAt; ?> * 1000;
+    const countdown = document.getElementById('paymentCountdown');
+    function update() {
+        const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+        countdown.textContent = 'Còn ' + String(Math.floor(remaining / 60)).padStart(2, '0') + ':' + String(remaining % 60).padStart(2, '0');
+        if (remaining === 0) {
+            countdown.className = 'badge bg-danger';
+        }
+    }
+    update();
+    setInterval(update, 1000);
+})();
+</script>
 </body>
 </html>
