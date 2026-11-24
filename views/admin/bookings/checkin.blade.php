@@ -50,8 +50,14 @@
         <div class="d-flex flex-wrap gap-2 mb-3">
             <button type="button" class="btn btn-outline-success" id="startQrScanner">Bật camera quét QR</button>
             <button type="button" class="btn btn-outline-secondary d-none" id="stopQrScanner">Tắt camera</button>
+            <label class="btn btn-outline-primary" for="qrImageInput">Chọn ảnh QR</label>
+            <input type="file" id="qrImageInput" accept="image/*" capture="environment" class="d-none">
         </div>
-        <video id="qrScannerVideo" class="d-none w-100 rounded border mb-3" style="max-width:480px;" playsinline></video>
+        <div class="mb-3 d-none" id="cameraPickerWrap">
+            <label for="cameraPicker" class="form-label">Chọn camera</label>
+            <select id="cameraPicker" class="form-select" style="max-width:480px;"></select>
+        </div>
+        <div id="qrScannerReader" class="d-none mx-auto mb-3 rounded border" style="max-width:480px;"></div>
         <form method="post" action="<?php echo route('admin/check-in/scan'); ?>" class="row g-2">
             <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
             <div class="col-md-8">
@@ -172,75 +178,147 @@
         </div>
     <?php endif; ?>
 </section>
+<script src="<?php echo route('assets/vendor/html5-qrcode.min.js'); ?>"></script>
 <script>
 (function () {
-    const startButton = document.getElementById('startQrScanner');
-    const stopButton = document.getElementById('stopQrScanner');
-    const video = document.getElementById('qrScannerVideo');
-    const input = document.getElementById('checkinTokenInput');
-    const message = document.getElementById('qrScannerMessage');
-    let stream = null;
-    let scanning = false;
-    let detector = null;
-
-    async function scanFrame() {
-        if (!scanning) return;
-        try {
-            const codes = await detector.detect(video);
-            const token = codes.length ? String(codes[0].rawValue).trim() : '';
-            if (/^[a-fA-F0-9]{64}$/.test(token)) {
-                input.value = token;
-                message.textContent = 'Đã quét mã. Đang gửi yêu cầu check-in…';
-                stopScanner();
-                input.form.requestSubmit();
-                return;
-            }
-        } catch (error) {
-            message.textContent = 'Không đọc được hình ảnh từ camera. Vui lòng thử lại hoặc nhập mã thủ công.';
-            stopScanner();
-            return;
-        }
-        requestAnimationFrame(scanFrame);
+    if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
+        window.location.replace('https://' + window.location.host + window.location.pathname + window.location.search + window.location.hash);
+        return;
     }
 
-    function stopScanner() {
-        scanning = false;
-        if (stream) {
-            stream.getTracks().forEach(function (track) { track.stop(); });
-            stream = null;
+    const startButton = document.getElementById('startQrScanner');
+    const stopButton = document.getElementById('stopQrScanner');
+    const reader = document.getElementById('qrScannerReader');
+    const cameraPickerWrap = document.getElementById('cameraPickerWrap');
+    const cameraPicker = document.getElementById('cameraPicker');
+    const imageInput = document.getElementById('qrImageInput');
+    const input = document.getElementById('checkinTokenInput');
+    const message = document.getElementById('qrScannerMessage');
+    let qrScanner = null;
+    let submitted = false;
+
+    function setRunning(isRunning) {
+        stopButton.classList.toggle('d-none', !isRunning);
+        startButton.classList.toggle('d-none', isRunning);
+    }
+
+    function extractToken(rawText) {
+        const match = String(rawText || '').trim().match(/[a-fA-F0-9]{64}/);
+        return match ? match[0].toLowerCase() : '';
+    }
+
+    async function stopScanner() {
+        if (qrScanner) {
+            try {
+                if (qrScanner.isScanning) await qrScanner.stop();
+            } catch (error) {}
+            try { qrScanner.clear(); } catch (error) {}
+            qrScanner = null;
         }
-        video.srcObject = null;
-        video.classList.add('d-none');
-        stopButton.classList.add('d-none');
-        startButton.classList.remove('d-none');
+        reader.classList.add('d-none');
+        setRunning(false);
+    }
+
+    function onQrSuccess(rawText) {
+        if (submitted) return;
+        const token = extractToken(rawText);
+        if (!token) {
+            message.textContent = 'Mã QR không hợp lệ. QR cần chứa mã check-in 64 ký tự.';
+            return;
+        }
+        submitted = true;
+        input.value = token;
+        message.textContent = 'Đã quét mã. Đang gửi yêu cầu check-in…';
+        stopScanner();
+        input.form.requestSubmit();
+    }
+
+    async function startWithCamera(cameraId) {
+        if (!window.Html5Qrcode) {
+            message.textContent = 'Không tải được thư viện quét QR. Kiểm tra kết nối mạng rồi thử lại.';
+            return;
+        }
+
+        await stopScanner();
+        submitted = false;
+        qrScanner = new Html5Qrcode('qrScannerReader');
+        reader.classList.remove('d-none');
+        setRunning(true);
+        message.textContent = 'Đưa mã QR vào khung hình camera.';
+
+        const cameraConfig = cameraId
+            ? { deviceId: { exact: cameraId } }
+            : { facingMode: 'environment' };
+
+        try {
+            await qrScanner.start(
+                cameraConfig,
+                { fps: 10, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0 },
+                onQrSuccess,
+                function () {}
+            );
+        } catch (error) {
+            await stopScanner();
+            message.textContent = window.isSecureContext
+                ? 'Không thể bật camera. Hãy cấp quyền truy cập camera và chọn đúng camera.'
+                : 'Camera chỉ hoạt động trên HTTPS hoặc localhost. Hãy truy cập bằng HTTPS/localhost.';
+        }
     }
 
     startButton.addEventListener('click', async function () {
-        if (!('BarcodeDetector' in window)) {
-            message.textContent = 'Trình duyệt chưa hỗ trợ quét QR bằng camera. Hãy dùng ứng dụng quét QR hoặc máy quét để nhập mã vào ô bên dưới.';
-            return;
-        }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            message.textContent = 'Không truy cập được camera. Hãy dùng HTTPS/localhost hoặc nhập mã QR thủ công.';
+            message.textContent = 'Trình duyệt không hỗ trợ truy cập camera. Hãy mở trang bằng HTTPS, dùng Chrome/Safari mới nhất hoặc quét ảnh QR.';
             return;
         }
+
         try {
-            detector = new BarcodeDetector({formats: ['qr_code']});
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: {facingMode: {ideal: 'environment'}},
-                audio: false
+            const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            permissionStream.getTracks().forEach(function (track) { track.stop(); });
+            const devices = await Html5Qrcode.getCameras();
+            if (!devices || !devices.length) {
+                message.textContent = 'Không tìm thấy camera trên thiết bị này.';
+                return;
+            }
+
+            cameraPicker.innerHTML = '';
+            devices.forEach(function (device, index) {
+                const option = document.createElement('option');
+                option.value = device.id;
+                option.textContent = device.label || ('Camera ' + (index + 1));
+                cameraPicker.appendChild(option);
             });
-            video.srcObject = stream;
-            await video.play();
-            scanning = true;
-            video.classList.remove('d-none');
-            startButton.classList.add('d-none');
-            stopButton.classList.remove('d-none');
-            message.textContent = 'Đưa mã QR vào khung hình camera.';
-            requestAnimationFrame(scanFrame);
+
+            cameraPickerWrap.classList.remove('d-none');
+            const backCamera = devices.find(function (device) {
+                return /back|rear|sau|environment|camera 2/i.test(device.label);
+            });
+            cameraPicker.value = backCamera ? backCamera.id : devices[0].id;
+            await startWithCamera(cameraPicker.value);
         } catch (error) {
-            stopScanner();
-            message.textContent = 'Không thể bật camera. Hãy cấp quyền truy cập camera hoặc nhập mã QR thủ công.';
+            await stopScanner();
+            message.textContent = 'Không thể truy cập camera. Hãy cấp quyền trong trình duyệt, bấm “Chọn ảnh QR”, hoặc nhập mã thủ công.';
+        }
+    });
+
+    cameraPicker.addEventListener('change', function () {
+        if (cameraPicker.value) startWithCamera(cameraPicker.value);
+    });
+
+    imageInput.addEventListener('change', async function () {
+        if (!imageInput.files || !imageInput.files[0]) return;
+        if (!window.Html5Qrcode) {
+            message.textContent = 'Không tải được thư viện quét QR.';
+            return;
+        }
+
+        const scanner = new Html5Qrcode('qrScannerReader');
+        try {
+            const result = await scanner.scanFile(imageInput.files[0], true);
+            onQrSuccess(result);
+        } catch (error) {
+            message.textContent = 'Không tìm thấy mã QR trong ảnh. Hãy chọn ảnh rõ hơn.';
+        } finally {
+            try { scanner.clear(); } catch (error) {}
         }
     });
 
