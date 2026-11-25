@@ -29,6 +29,7 @@
                         <th class="py-3">Nhóm</th>
                         <th class="py-3">Đơn giá</th>
                         <th class="py-3">ĐVT</th>
+                        <th class="py-3">Tồn kho</th>
                         <th class="py-3">Trạng thái</th>
                         <th class="py-3 text-end pe-4">Thao tác</th>
                     </tr>
@@ -45,7 +46,7 @@
                                 $lastCat = $catKey;
                     ?>
                                 <tr>
-                                    <td colspan="8" class="py-2 px-4" style="background-color: #e5e7eb; font-weight: 700; letter-spacing: 0.3px;">
+                                    <td colspan="9" class="py-2 px-4" style="background-color: #e5e7eb; font-weight: 700; letter-spacing: 0.3px;">
                                         <?php echo mb_strtoupper($catName, 'UTF-8'); ?>
                                     </td>
                                 </tr>
@@ -79,6 +80,18 @@
                             </td>
                             <td class="py-3 fw-bold fs-6" style="color: #0f766e;"><?php echo formatMoney($s['price']); ?></td>
                             <td class="py-3 text-muted"><?php echo htmlspecialchars($s['unit']); ?></td>
+                            <td class="py-3">
+                                <?php $stock = (int)$s['stock']; ?>
+                                <?php if ($stock > 0): ?>
+                                    <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">
+                                        Còn <?php echo $stock; ?> <?php echo htmlspecialchars($s['unit']); ?>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle">
+                                        Hết hàng
+                                    </span>
+                                <?php endif; ?>
+                            </td>
                             <td class="py-3">
                                 <?php if ($s['status'] === 'active'): ?>
                                     <span class="badge rounded-pill px-3 py-2"

@@ -285,6 +285,7 @@ CREATE TABLE IF NOT EXISTS service_requests (
     booking_id INT NOT NULL,
     requested_by INT NOT NULL,
     status ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+    stock_reserved TINYINT(1) NOT NULL DEFAULT 0,
     customer_note VARCHAR(500) NULL,
     staff_note VARCHAR(500) NULL,
     handled_by INT NULL,

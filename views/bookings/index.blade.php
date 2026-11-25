@@ -168,8 +168,17 @@
                                 <summary class="fw-semibold text-success" style="cursor:pointer;">
                                     🛒 Gọi thêm dịch vụ — gửi yêu cầu cho nhân viên
                                 </summary>
+                                <?php
+                                    $hasAvailableService = false;
+                                    foreach ($availableServices as $serviceOption) {
+                                        if ((int)$serviceOption['stock'] > 0) {
+                                            $hasAvailableService = true;
+                                            break;
+                                        }
+                                    }
+                                ?>
                                 <?php if (empty($availableServices)): ?>
-                                    <p class="text-secondary small mt-3 mb-0">Hiện chưa có dịch vụ còn hàng.</p>
+                                    <p class="text-secondary small mt-3 mb-0">Hiện chưa có dịch vụ đang hoạt động.</p>
                                 <?php else: ?>
                                     <form method="post" action="<?php echo route('my-bookings/' . (int)$booking['id'] . '/service-requests'); ?>" class="mt-3">
                                         <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
@@ -181,14 +190,19 @@
                                                             <span class="fw-semibold"><?php echo e($service['name']); ?></span>
                                                             <span class="text-success text-nowrap"><?php echo formatMoney($service['price']); ?></span>
                                                         </span>
-                                                        <span class="small text-secondary d-block">
-                                                            Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                        <span class="small <?php echo (int)$service['stock'] > 0 ? 'text-secondary' : 'text-danger'; ?> d-block">
+                                                            <?php if ((int)$service['stock'] > 0): ?>
+                                                                Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                            <?php else: ?>
+                                                                Hết hàng
+                                                            <?php endif; ?>
                                                         </span>
                                                         <span class="d-flex align-items-center gap-2 mt-2">
                                                             <span class="small">Số lượng</span>
                                                             <input type="number" class="form-control form-control-sm"
                                                                    name="quantity[<?php echo (int)$service['id']; ?>]"
-                                                                   value="0" min="0" max="<?php echo min(20, (int)$service['stock']); ?>">
+                                                                   value="0" min="0" max="<?php echo min(20, (int)$service['stock']); ?>"
+                                                                   <?php echo (int)$service['stock'] > 0 ? '' : 'disabled'; ?>>
                                                         </span>
                                                     </label>
                                                 </div>
@@ -202,7 +216,10 @@
                                                   name="customer_note" maxlength="500" rows="2"
                                                   placeholder="Ví dụ: mang ra sân số 2"></textarea>
                                         <p class="form-text">Yêu cầu chưa được phục vụ cho đến khi nhân viên xác nhận. Tiền dịch vụ sẽ được cộng vào đơn sau khi xác nhận.</p>
-                                        <button type="submit" class="btn btn-success">Gửi yêu cầu dịch vụ</button>
+                                        <button type="submit" class="btn btn-success"
+                                                <?php echo $hasAvailableService ? '' : 'disabled'; ?>>
+                                            <?php echo $hasAvailableService ? 'Gửi yêu cầu dịch vụ' : 'Hết hàng'; ?>
+                                        </button>
                                     </form>
                                 <?php endif; ?>
                             </details>

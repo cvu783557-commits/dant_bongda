@@ -29,6 +29,7 @@ try {
             booking_id INT NOT NULL,
             requested_by INT NOT NULL,
             status ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+            stock_reserved TINYINT(1) NOT NULL DEFAULT 0,
             customer_note VARCHAR(500) NULL,
             staff_note VARCHAR(500) NULL,
             handled_by INT NULL,
@@ -44,6 +45,13 @@ try {
                 REFERENCES users(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $stockReservedColumn = $pdo->query("SHOW COLUMNS FROM service_requests LIKE 'stock_reserved'")->fetch(PDO::FETCH_ASSOC);
+    if (!$stockReservedColumn) {
+        $pdo->exec(
+            'ALTER TABLE service_requests
+             ADD COLUMN stock_reserved TINYINT(1) NOT NULL DEFAULT 0 AFTER status'
+        );
+    }
     $pdo->exec(
         "CREATE TABLE IF NOT EXISTS service_request_items (
             id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,

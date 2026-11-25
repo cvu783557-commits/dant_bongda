@@ -41,6 +41,7 @@ class ServiceRequest extends Model
                 return ['success' => false, 'error' => 'Chỉ có thể yêu cầu dịch vụ khi lịch sân đang diễn ra hôm nay.'];
             }
 
+            $servicesById = [];
             foreach ($normalized as $serviceId => $quantity) {
                 $service = $this->connection->executeQuery(
                     "SELECT id, name, unit, price, stock
@@ -55,22 +56,33 @@ class ServiceRequest extends Model
                     $this->connection->rollBack();
                     return ['success' => false, 'error' => 'Số lượng dịch vụ "' . $service['name'] . '" hiện không đủ.'];
                 }
+                $servicesById[$serviceId] = $service;
             }
 
             $this->connection->insert('service_requests', [
                 'booking_id' => $bookingId,
                 'requested_by' => $userId,
                 'status' => 'pending',
+                'stock_reserved' => 1,
                 'customer_note' => trim($note) ?: null,
                 'created_at' => date('Y-m-d H:i:s'),
             ]);
             $requestId = (int)$this->connection->lastInsertId();
 
             foreach ($normalized as $serviceId => $quantity) {
-                $service = $this->connection->executeQuery(
-                    'SELECT name, unit, price FROM services WHERE id = ?',
-                    [$serviceId]
-                )->fetchAssociative();
+                $service = $servicesById[$serviceId];
+                $changed = $this->connection->executeStatement(
+                    "UPDATE services SET stock = stock - ?, updated_at = NOW()
+                     WHERE id = ? AND status = 'active' AND stock >= ?",
+                    [$quantity, $serviceId, $quantity]
+                );
+                if ($changed !== 1) {
+                    $this->connection->rollBack();
+                    return [
+                        'success' => false,
+                        'error' => 'Dịch vụ "' . $service['name'] . '" vừa hết hàng; vui lòng tải lại.',
+                    ];
+                }
                 $this->connection->insert('service_request_items', [
                     'request_id' => $requestId,
                     'service_id' => $serviceId,
@@ -176,17 +188,19 @@ class ServiceRequest extends Model
             if ($status === 'accepted') {
                 $addedTotal = 0.0;
                 foreach ($items as $item) {
-                    $changed = $this->connection->executeStatement(
-                        "UPDATE services SET stock = stock - ?, updated_at = NOW()
-                         WHERE id = ? AND status = 'active' AND stock >= ?",
-                        [(int)$item['quantity'], (int)$item['service_id'], (int)$item['quantity']]
-                    );
-                    if ($changed !== 1) {
-                        $this->connection->rollBack();
-                        return [
-                            'success' => false,
-                            'error' => 'Dịch vụ "' . $item['service_name'] . '" không còn đủ tồn kho; chưa xác nhận yêu cầu.',
-                        ];
+                    if (empty($request['stock_reserved'])) {
+                        $changed = $this->connection->executeStatement(
+                            "UPDATE services SET stock = stock - ?, updated_at = NOW()
+                             WHERE id = ? AND status = 'active' AND stock >= ?",
+                            [(int)$item['quantity'], (int)$item['service_id'], (int)$item['quantity']]
+                        );
+                        if ($changed !== 1) {
+                            $this->connection->rollBack();
+                            return [
+                                'success' => false,
+                                'error' => 'Dịch vụ "' . $item['service_name'] . '" không còn đủ tồn kho; chưa xác nhận yêu cầu.',
+                            ];
+                        }
                     }
                     $this->connection->insert('booking_services', [
                         'booking_id' => (int)$booking['id'],
@@ -231,11 +245,18 @@ class ServiceRequest extends Model
                         );
                     }
                 }
+            } elseif (!empty($request['stock_reserved'])) {
+                foreach ($items as $item) {
+                    $this->connection->executeStatement(
+                        'UPDATE services SET stock = stock + ?, updated_at = NOW() WHERE id = ?',
+                        [(int)$item['quantity'], (int)$item['service_id']]
+                    );
+                }
             }
 
             $this->connection->executeStatement(
                 'UPDATE service_requests
-                 SET status = ?, staff_note = ?, handled_by = ?, handled_at = NOW()
+                 SET status = ?, stock_reserved = 0, staff_note = ?, handled_by = ?, handled_at = NOW()
                  WHERE id = ?',
                 [$status, trim($staffNote) ?: null, $adminId, $requestId]
             );

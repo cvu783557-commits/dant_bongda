@@ -50,9 +50,13 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3 mt-3">
-                                <label class="form-label fw-semibold">Số lượng tồn kho</label>
-                                <input type="number" name="stock" class="form-control" min="0"
-                                       value="<?php echo htmlspecialchars($old['stock'] ?? $service['stock']); ?>">
+                                <label class="form-label fw-semibold">Tồn kho hiện tại</label>
+                                <div class="form-control bg-light">
+                                    <?php echo (int)$service['stock']; ?> <?php echo htmlspecialchars($service['unit']); ?>
+                                </div>
+                                <a class="form-text d-inline-block" href="<?php echo route('admin/services/' . $service['id']); ?>#stockManagement">
+                                    Quản lý nhập / xuất kho
+                                </a>
                             </div>
                         </div>
                     </div>
