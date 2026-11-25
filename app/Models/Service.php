@@ -110,13 +110,12 @@ class Service extends Model
     {
         $sql = "UPDATE {$this->table} SET
                     name = ?, category = ?, price = ?, unit = ?,
-                    stock = ?, description = ?, status = ?";
+                    description = ?, status = ?";
         $params = [
             trim($data['name']),
             $data['category']  ?? 'other',
             (float)($data['price'] ?? 0),
             trim($data['unit'] ?? 'cái'),
-            (int)($data['stock'] ?? 0),
             $data['description'] ?? null,
             $data['status']      ?? 'active',
         ];
@@ -144,6 +143,16 @@ class Service extends Model
                 SET stock = GREATEST(0, stock + ?), updated_at = NOW()
                 WHERE id = ?";
         return $this->connection->executeStatement($sql, [(int)$delta, (int)$id]);
+    }
+
+    public function adjustStock(int $id, int $delta): bool
+    {
+        return $this->connection->executeStatement(
+            "UPDATE {$this->table}
+             SET stock = stock + ?, updated_at = NOW()
+             WHERE id = ? AND stock + ? >= 0",
+            [$delta, $id, $delta]
+        ) === 1;
     }
 
     public function count($status = null)

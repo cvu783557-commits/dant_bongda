@@ -195,6 +195,11 @@ class PitchController extends Controller
             $error = 'Ngày xem không hợp lệ hoặc đã qua. Đang hiển thị lịch từ hôm nay.';
         }
 
+        $nowTimestamp = time();
+        $earliestStartTimestamp = intdiv($nowTimestamp + 59, 60) * 60;
+        $earliestStartTime = date('H:i', $earliestStartTimestamp);
+        $earliestStartSeconds = ((int)date('G', $earliestStartTimestamp) * 3600)
+            + ((int)date('i', $earliestStartTimestamp) * 60);
         $pitches = [];
         foreach ($this->pitch->all('active') as $pitch) {
             $baseSlots = $this->publicTimeSlots(
@@ -207,12 +212,11 @@ class PitchController extends Controller
                 $slots = $baseSlots;
                 $bookings = $this->booking->getByPitchAndDate((int)$pitch['id'], $date, false, $courtNumber);
                 $locks = $this->pitchLock->getByPitchAndDate((int)$pitch['id'], $date, $courtNumber);
-                $currentTime = (int)date('G') * 3600 + (int)date('i') * 60;
-
                 foreach ($slots as &$slot) {
                     $slotStart = $slot['start_sec'];
                     $slotEnd = $slotStart + 3600;
                     $slot['status'] = 'available';
+                    $slot['late_booking'] = false;
 
                     foreach ($locks as $lock) {
                         $lockStart = ((int)substr($lock['start_time'], 0, 2) * 3600)
@@ -238,10 +242,12 @@ class PitchController extends Controller
                         }
                     }
 
-                    if ($slot['status'] === 'available'
-                        && $date === date('Y-m-d')
-                        && $slotStart <= $currentTime) {
-                        $slot['status'] = 'past';
+                    if ($slot['status'] === 'available' && $date === date('Y-m-d')) {
+                        if ($slotEnd <= $earliestStartSeconds) {
+                            $slot['status'] = 'past';
+                        } elseif ($slotStart < $earliestStartSeconds) {
+                            $slot['late_booking'] = true;
+                        }
                     }
                 }
                 unset($slot);
@@ -288,11 +294,15 @@ class PitchController extends Controller
         $hourSlots = $this->publicTimeSlots($openingTime, $closingTime);
         $bookings  = $this->booking->getByPitchAndDate($id, $date, false, $courtNumber);
         $locks = $this->pitchLock->getByPitchAndDate($id, $date, $courtNumber);
-        $nowSec = (int)date('G') * 3600 + (int)date('i') * 60;
+        $nowTimestamp = time();
+        $earliestStartTimestamp = intdiv($nowTimestamp + 59, 60) * 60;
+        $earliestStartTime = date('H:i', $earliestStartTimestamp);
+        $earliestStartSeconds = ((int)date('G', $earliestStartTimestamp) * 3600)
+            + ((int)date('i', $earliestStartTimestamp) * 60);
         $pastSlots = [];
         if ($date === date('Y-m-d')) {
             foreach ($hourSlots as $idx => $slot) {
-                if ($slot['start_sec'] <= $nowSec) {
+                if ($slot['start_sec'] + 3600 <= $earliestStartSeconds) {
                     $pastSlots[$idx] = true;
                 }
             }
@@ -335,7 +345,7 @@ class PitchController extends Controller
             'pitch'         => $pitch,
             'ratings'       => $this->pitchRating->forPitch((int)$id),
             'ratingSummary' => $this->pitchRating->summaryForPitch((int)$id),
-            'services'      => $this->service->getAvailableForBooking(),
+            'services'      => $this->service->getActive(),
             'hourSlots'     => $hourSlots,
             'date'          => $date,
             'courtNumber'   => $courtNumber,
@@ -344,7 +354,10 @@ class PitchController extends Controller
             'lockedSlots'   => $lockedSlots,
             'pastSlots'     => $pastSlots,
             'bookingsToday' => $bookings,
-            'minStart'      => formatTime($openingTime),
+            'minStart'      => $date === date('Y-m-d') && $earliestStartTime > formatTime($openingTime)
+                ? $earliestStartTime
+                : formatTime($openingTime),
+            'openingTime'   => formatTime($openingTime),
             'maxStart'      => date('H:i', strtotime($closingTime . ' -1 minute')),
             'minEnd'        => date('H:i', strtotime($openingTime . ' +1 minute')),
             'maxEnd'        => formatTime($closingTime),
@@ -542,10 +555,20 @@ class PitchController extends Controller
         }
 
         if (empty($errors) && $bookingMode === 'single' && $bookingDate === date('Y-m-d')) {
-            $nowSec = time();
+            $nowTimestamp = time();
             $todayStart = strtotime($bookingDate . ' ' . $startTime);
-            if ($todayStart < $nowSec) {
-                $errors['start_time'] = 'Không thể đặt khung giờ đã qua trong ngày hôm nay';
+            if ($todayStart < $nowTimestamp) {
+                $currentHourStart = strtotime(date('Y-m-d H:00:00', $nowTimestamp));
+                $todayEnd = strtotime($bookingDate . ' ' . $endTime);
+                $earliestStartTimestamp = intdiv($nowTimestamp + 59, 60) * 60;
+                if ($todayStart < $currentHourStart || $todayEnd <= $nowTimestamp) {
+                    $errors['start_time'] = 'Chỉ có thể đặt phần thời gian còn lại của khung giờ đang diễn ra';
+                } elseif ($earliestStartTimestamp >= $todayEnd) {
+                    $errors['start_time'] = 'Khung giờ còn lại quá ngắn để đặt';
+                } else {
+                    $startTime = date('H:i:s', $earliestStartTimestamp);
+                    $data['start_time'] = date('H:i', $earliestStartTimestamp);
+                }
             }
         }
 
@@ -1306,7 +1329,7 @@ class PitchController extends Controller
 
         return view('bookings.index', [
             'bookings' => $bookings,
-            'availableServices' => $this->service->getAvailableForBooking(),
+            'availableServices' => $this->service->getActive(),
             'serviceRequests' => $serviceRequests,
             'cancellationRequests' => $this->cancellationRequest->forCustomer((int)$currentUser['id']),
             'success' => getFlash('success'),

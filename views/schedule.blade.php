@@ -102,7 +102,7 @@
                                             <a href="<?php echo $slotUrl; ?>#bookingForm"
                                                class="schedule-slot d-flex flex-column justify-content-center align-items-center text-center text-decoration-none border rounded p-2 <?php echo $slotClasses[$slot['status']]; ?>">
                                                 <span class="fw-semibold"><?php echo e($slot['label']); ?></span>
-                                                <small><?php echo e($statusLabels[$slot['status']]); ?></small>
+                                                <small><?php echo !empty($slot['late_booking']) ? 'Đang diễn ra · đặt phần còn lại' : e($statusLabels[$slot['status']]); ?></small>
                                             </a>
                                         <?php else: ?>
                                             <div class="schedule-slot d-flex flex-column justify-content-center align-items-center text-center border rounded p-2 <?php echo $slotClasses[$slot['status']]; ?>">

@@ -76,7 +76,11 @@ $checkInStatus = match ($booking['status']) {
         <h5 class="fw-semibold mb-3">Thông tin check-in</h5>
         <ul class="mb-4">
             <li class="mb-2">
-                Thời gian check-in:
+                Thời gian check-in dự kiến:
+                <strong><?php echo e(formatDate($booking['booking_date'])); ?>, <?php echo e(formatTime($booking['start_time'])); ?> – <?php echo e(formatTime($booking['end_time'])); ?></strong>
+            </li>
+            <li class="mb-2">
+                Thời gian xác nhận check-in:
                 <strong><?php echo !empty($booking['checked_in_at']) ? e(formatDateTime($booking['checked_in_at'])) : 'Chưa xác nhận'; ?></strong>
             </li>
             <li class="mb-2">

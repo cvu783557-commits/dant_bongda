@@ -3,7 +3,7 @@
 @section('content')
 
 <!-- HEADER TIÊU ĐỀ LỚN - Gradient nhẹ -->
-<div class="mb-4">
+<div class="service-detail-header mb-4">
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
         <div>
             <h3 class="fw-bold mb-1 text-dark">
@@ -32,10 +32,17 @@
     </div>
 </div>
 
-<div class="row g-4">
+<?php if (!empty($success)): ?>
+    <div class="alert alert-success" role="alert"><?php echo e($success); ?></div>
+<?php endif; ?>
+<?php if (!empty($error)): ?>
+    <div class="alert alert-danger" role="alert"><?php echo e($error); ?></div>
+<?php endif; ?>
+
+<div class="row g-4 service-detail-grid">
     <!-- ===================================== CỘT TRÁI: Thông tin chính ===================================== -->
     <div class="col-lg-4">
-        <div class="card border-0 shadow-sm h-100 overflow-hidden">
+        <div class="card service-detail-card border-0 shadow-sm h-100 overflow-hidden">
             <!-- ẢNH DỊCH VỤ -->
             <?php
                 $imgSrc = $service['image']
@@ -89,11 +96,15 @@
                         }
                     ?>
                     <div class="col-6">
-                        <div class="rounded-3 <?php echo $stockBg; ?> p-3 h-100">
-                            <div class="small text-muted mb-1">Tồn kho hiện tại</div>
-                            <div class="fw-bold fs-5 <?php echo $stockTx; ?> d-flex align-items-center gap-1">
-                                <span><?php echo $stockIcon; ?></span>
-                                <span><?php echo $stock; ?> <?php echo htmlspecialchars($service['unit']); ?></span>
+                        <div class="stock-summary rounded-3 <?php echo $stockBg; ?> p-3 h-100">
+                            <div class="small text-muted mb-2">Tồn kho hiện tại</div>
+                            <div class="stock-summary__value-row <?php echo $stockTx; ?>">
+                                <span class="stock-summary__icon"><?php echo $stockIcon; ?></span>
+                                <span class="stock-summary__value"><?php echo $stock; ?></span>
+                                <span class="stock-summary__unit"><?php echo htmlspecialchars($service['unit']); ?></span>
+                                <?php if ($stock === 0): ?>
+                                    <span class="badge rounded-pill text-bg-danger">Hết hàng</span>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -129,66 +140,60 @@
     <div class="col-lg-8">
 
         <!-- 1. ĐIỀU CHỈNH TỒN KHO (đẹp lại) -->
-        <div class="card border-0 shadow-sm mb-4 overflow-hidden">
+        <div id="stockManagement" class="card stock-management-card border-0 shadow-sm mb-4 overflow-hidden">
             <div class="card-body p-0">
-                <!-- Header xanh nhạt -->
-                <div class="p-4 border-bottom bg-gradient"
-                     style="background:linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="stock-management-header p-4 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                         <div>
-                            <h5 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
-                                📦 Điều chỉnh tồn kho
-                            </h5>
-                            <div class="small text-muted mt-1">Nhập / Xuất hàng thủ công (ghi chú lý do để quản lý kho chặt chẽ)</div>
+                            <h5 class="fw-bold mb-1 text-dark">📦 Điều chỉnh tồn kho</h5>
+                            <div class="small text-muted">Nhập hoặc xuất hàng, số lượng không được vượt quá tồn kho.</div>
                         </div>
-                        <div class="rounded-pill px-4 py-2 border bg-white shadow-sm">
-                            <span class="small text-muted me-1">Hiện có:</span>
-                            <span class="fw-bold <?php echo $stockTx; ?> fs-6"><?php echo $stock; ?> <?php echo htmlspecialchars($service['unit']); ?></span>
+                        <div class="stock-current rounded-pill px-3 py-2 border bg-white">
+                            <span class="small text-muted me-1">Đang có</span>
+                            <strong class="<?php echo $stockTx; ?>"><?php echo $stock; ?> <?php echo htmlspecialchars($service['unit']); ?></strong>
                         </div>
                     </div>
                 </div>
 
                 <form method="post" action="<?php echo route('admin/services/' . $service['id'] . '/adjust-stock'); ?>"
-                      class="p-4">
+                      class="stock-adjustment-form p-4">
+                    <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
                     <div class="row g-3 align-items-end">
-                        <!-- Nhập số dương (shortcut) -->
-                        <div class="col-md-3">
-                            <label class="form-label small fw-semibold text-success mb-1">＋ Nhập kho nhanh</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-success-subtle border-success border-opacity-25 text-success fw-bold">+</span>
-                                <input type="number" id="quickPlus" class="form-control form-control-lg border-start-0" min="0"
-                                       placeholder="VD: 50" onchange="syncDelta(this.value)">
-                                <span class="input-group-text bg-transparent text-muted border-start-0"><?php echo htmlspecialchars($service['unit']); ?></span>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-success mb-2" for="quickPlus">＋ Nhập kho</label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-success-subtle text-success fw-bold">+</span>
+                                <input type="number" id="quickPlus" class="form-control" min="1" step="1"
+                                       placeholder="Số lượng nhập" onchange="syncDelta(this.value)">
+                                <span class="input-group-text bg-light text-muted"><?php echo htmlspecialchars($service['unit']); ?></span>
                             </div>
                         </div>
-                        <!-- Xuất số dương (shortcut) -->
-                        <div class="col-md-3">
-                            <label class="form-label small fw-semibold text-danger mb-1">－ Xuất kho nhanh</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-danger-subtle border-danger border-opacity-25 text-danger fw-bold">−</span>
-                                <input type="number" id="quickMinus" class="form-control form-control-lg border-start-0" min="0"
-                                       placeholder="VD: 10" onchange="syncDelta('-' + this.value)">
-                                <span class="input-group-text bg-transparent text-muted border-start-0"><?php echo htmlspecialchars($service['unit']); ?></span>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold text-danger mb-2" for="quickMinus">－ Xuất kho</label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-danger-subtle text-danger fw-bold">−</span>
+                                <input type="number" id="quickMinus" class="form-control" min="1" step="1"
+                                       placeholder="Số lượng xuất" onchange="syncDelta('-' + this.value)">
+                                <span class="input-group-text bg-light text-muted"><?php echo htmlspecialchars($service['unit']); ?></span>
                             </div>
                         </div>
-                        <!-- Delta thật (ẩn đi nhưng vẫn gửi, hoặc cho người dùng edit trực tiếp) -->
-                        <div class="col-md-3">
-                            <label class="form-label small fw-semibold mb-1">🔢 Giá trị cuối (delta)</label>
+
+                        <div class="col-lg-8">
+                            <label class="form-label fw-semibold mb-2" for="deltaReal">🔢 Điều chỉnh trực tiếp</label>
                             <div class="input-group">
-                                <input type="number" name="delta" id="deltaReal" class="form-control form-control-lg fw-bold"
-                                       required placeholder="Dương=Nhập, Âm=Xuất">
-                                <span class="input-group-text bg-transparent text-muted"><?php echo htmlspecialchars($service['unit']); ?></span>
+                                <input type="number" name="delta" id="deltaReal" class="form-control form-control-lg fw-semibold"
+                                       step="1" required placeholder="Ví dụ: +5 nhập hoặc -5 xuất">
+                                <span class="input-group-text bg-light text-muted"><?php echo htmlspecialchars($service['unit']); ?></span>
                             </div>
-                            <small class="text-muted d-block mt-1">Sửa trực tiếp nếu cần giá trị chính xác</small>
+                            <small class="text-muted d-block mt-2">Số dương để nhập kho, số âm để xuất kho.</small>
                         </div>
-                        <!-- Ghi chú -->
-                        <div class="col-md-3 d-grid gap-1">
-                            <button type="submit" class="btn btn-success btn-lg px-4 fw-medium shadow-sm">✓ Xác nhận</button>
+                        <div class="col-lg-4 d-grid">
+                            <button type="submit" class="btn btn-success btn-lg fw-semibold">✓ Cập nhật tồn kho</button>
                         </div>
-                        <div class="col-md-12">
-                            <label class="form-label small fw-semibold mb-1">📝 Ghi chú lý do điều chỉnh</label>
-                            <input type="text" name="note" class="form-control" maxlength="250"
-                                   placeholder="VD: Nhập lô 1/10 từ NCC A / Hết hạn / Quà tặng khách VIP / Bể bể mất...">
+                        <div class="col-12">
+                            <label class="form-label fw-semibold mb-2" for="stock-note">📝 Ghi chú</label>
+                            <input type="text" id="stock-note" name="note" class="form-control" maxlength="250"
+                                   placeholder="Ví dụ: Nhập hàng từ nhà cung cấp, hàng hỏng, điều chỉnh kiểm kê...">
                         </div>
                     </div>
                 </form>
@@ -196,7 +201,7 @@
         </div>
 
         <!-- 2. 📊 THỐNG KÊ BÁN HÀNG (THAY CHO PHẦN SƠ ĐỒ LUỒNG CŨ) -->
-        <div class="card border-0 shadow-sm mb-4 overflow-hidden">
+        <div class="card service-detail-card border-0 shadow-sm mb-4 overflow-hidden">
             <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0">📊 Thống kê bán hàng</h5>
                 <span class="badge bg-light text-dark border small">Tính trên toàn bộ đơn đặt sân</span>
@@ -204,11 +209,10 @@
             <div class="card-body pt-0 px-4 pb-4">
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <div class="rounded-4 border p-4 h-100 bg-white position-relative overflow-hidden">
-                            <div class="position-absolute top-0 end-0 w-25 h-100 bg-primary bg-opacity-5"></div>
-                            <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:0.5px;">Số đơn</div>
-                            <div class="d-flex align-items-baseline gap-2">
-                                <div class="fw-bold text-primary" style="font-size:2rem;line-height:1;">
+                        <div class="service-stat-card service-stat-card--orders h-100">
+                            <div class="service-stat-card__label">Số đơn</div>
+                            <div class="d-flex align-items-baseline flex-wrap gap-2">
+                                <div class="service-stat-card__value text-primary">
                                     <?php echo (int)($stats['total_orders'] ?? 0); ?>
                                 </div>
                                 <div class="small text-muted">lần xuất hiện</div>
@@ -216,11 +220,10 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="rounded-4 border p-4 h-100 bg-white position-relative overflow-hidden">
-                            <div class="position-absolute top-0 end-0 w-25 h-100 bg-warning bg-opacity-10"></div>
-                            <div class="small text-muted fw-semibold mb-2 text-uppercase" style="letter-spacing:0.5px;">Tổng SL đã bán</div>
-                            <div class="d-flex align-items-baseline gap-2">
-                                <div class="fw-bold text-warning-emphasis" style="font-size:2rem;line-height:1;">
+                        <div class="service-stat-card service-stat-card--quantity h-100">
+                            <div class="service-stat-card__label">Tổng số lượng đã bán</div>
+                            <div class="d-flex align-items-baseline flex-wrap gap-2">
+                                <div class="service-stat-card__value text-warning-emphasis">
                                     <?php echo (int)($stats['total_qty_sold'] ?? 0); ?>
                                 </div>
                                 <div class="small text-muted"><?php echo htmlspecialchars($service['unit']); ?></div>
@@ -228,13 +231,12 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="rounded-4 p-4 h-100 bg-gradient text-white shadow-sm position-relative overflow-hidden"
-                             style="background:linear-gradient(135deg, #10b981 0%, #059669 100%);">
-                            <div class="small opacity-75 fw-semibold mb-2 text-uppercase" style="letter-spacing:0.5px;">Doanh thu</div>
-                            <div class="fw-bold" style="font-size:1.65rem;line-height:1.1;">
+                        <div class="service-stat-card service-stat-card--revenue h-100">
+                            <div class="service-stat-card__label">Doanh thu</div>
+                            <div class="service-stat-card__revenue">
                                 <?php echo formatMoney($stats['total_revenue'] ?? 0); ?>
                             </div>
-                            <div class="small opacity-75 mt-2">Từ dịch vụ này</div>
+                            <div class="small mt-2">Từ dịch vụ này</div>
                         </div>
                     </div>
                 </div>
@@ -242,7 +244,7 @@
         </div>
 
         <!-- 3. 🔗 DỊCH VỤ CÙNG PHÂN LOẠI (THAY CHO BOX LƯU Ý XANH CŨ) -->
-        <div class="card border-0 shadow-sm overflow-hidden">
+        <div class="card service-detail-card border-0 shadow-sm overflow-hidden">
             <div class="card-header bg-white border-0 pt-4 pb-2 px-4 d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0">🔗 Dịch vụ cùng nhóm "<?php echo htmlspecialchars($categoryName); ?>"</h5>
                 <span class="badge bg-<?php echo $categoryColor; ?> bg-opacity-10 text-<?php echo $categoryColor; ?> border">
@@ -299,10 +301,148 @@
 </div>
 
 <style>
+    .service-detail-header {
+        padding: 1.15rem 1.35rem;
+        border: 1px solid #e8edf2;
+        border-radius: 1rem;
+        background: linear-gradient(135deg, #fff 0%, #f6fbf8 100%);
+    }
+
+    .service-detail-card,
+    .stock-management-card {
+        border-radius: 1rem;
+    }
+
+    .stock-summary__value-row {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        column-gap: 0.35rem;
+        row-gap: 0.4rem;
+        line-height: 1.2;
+    }
+
+    .stock-summary__icon {
+        font-size: 1rem;
+    }
+
+    .stock-summary__value {
+        font-size: clamp(1.2rem, 2vw, 1.55rem);
+        font-weight: 750;
+        overflow-wrap: anywhere;
+    }
+
+    .stock-summary__unit {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .stock-management-header {
+        background: linear-gradient(135deg, #ecfdf5 0%, #f5fbf7 100%);
+    }
+
+    .stock-current {
+        white-space: nowrap;
+    }
+
+    .stock-adjustment-form .form-control,
+    .stock-adjustment-form .input-group-text,
+    .stock-adjustment-form .btn {
+        min-height: 48px;
+    }
+
+    .stock-adjustment-form .input-group-text {
+        white-space: nowrap;
+    }
+
+    .stock-adjustment-form .btn {
+        box-shadow: 0 0.25rem 0.75rem rgba(25, 135, 84, 0.16);
+    }
+
+    .stock-adjustment-form .btn:hover {
+        box-shadow: 0 0.35rem 1rem rgba(25, 135, 84, 0.22);
+        transform: translateY(-1px);
+    }
+
+    .service-stat-card {
+        min-height: 132px;
+        padding: 1.25rem;
+        border: 1px solid #e6ebf0;
+        border-radius: 1rem;
+        background: #fff;
+    }
+
+    .service-stat-card--orders {
+        background: linear-gradient(135deg, #f3f8ff 0%, #fff 100%);
+    }
+
+    .service-stat-card--quantity {
+        background: linear-gradient(135deg, #fff9e8 0%, #fff 100%);
+    }
+
+    .service-stat-card--revenue {
+        color: #fff;
+        border-color: #059669;
+        background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+        box-shadow: 0 0.4rem 1rem rgba(5, 150, 105, 0.16);
+    }
+
+    .service-stat-card__label {
+        margin-bottom: 0.65rem;
+        color: #64748b;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+    }
+
+    .service-stat-card__value {
+        font-size: 2rem;
+        font-weight: 750;
+        line-height: 1;
+    }
+
+    .service-stat-card__revenue {
+        font-size: clamp(1.25rem, 2vw, 1.65rem);
+        font-weight: 750;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .service-stat-card--revenue .service-stat-card__label,
+    .service-stat-card--revenue .small {
+        color: rgba(255, 255, 255, 0.82);
+    }
+
     .hover-lift { transition: all 0.18s ease; }
     .hover-lift:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.35); }
     .border-dashed { border-style: dashed !important; }
     .top-3 { top: 0.75rem; } .end-3 { right: 0.75rem; }
+
+    @media (max-width: 575.98px) {
+        .service-detail-header {
+            padding: 1rem;
+        }
+
+        .service-detail-header > .d-flex {
+            align-items: stretch !important;
+        }
+
+        .service-detail-header .btn {
+            flex: 1 1 auto;
+            justify-content: center;
+        }
+
+        .stock-management-header,
+        .stock-adjustment-form {
+            padding: 1rem !important;
+        }
+
+        .stock-current {
+            width: 100%;
+            text-align: center;
+        }
+    }
 </style>
 
 <script>

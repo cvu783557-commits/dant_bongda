@@ -402,7 +402,7 @@
                                     <?php endforeach; ?>
                                 </div>
                                 <div class="mt-3 small text-muted">
-                                    Bấm một khung giờ để chọn 1 tiếng; bấm khung liền kề để nối thêm giờ. Khung đã đặt không thể chọn.
+                                    Bấm một khung giờ để chọn; bấm khung liền kề để nối thêm giờ. Khung đang diễn ra chỉ đặt được thời gian còn lại; khung đã đặt không thể chọn.
                                 </div>
                             </div>
                         </div>
@@ -443,7 +443,9 @@
                                             <?php foreach ($services as $service): ?>
                                                 <?php
                                                     $serviceId = (int)$service['id'];
-                                                    $serviceSelected = in_array((string)$serviceId, $oldSelectedServices, true);
+                                                    $serviceInStock = (int)$service['stock'] > 0;
+                                                    $serviceSelected = $serviceInStock
+                                                        && in_array((string)$serviceId, $oldSelectedServices, true);
                                                     $serviceQuantity = max(
                                                         1,
                                                         min((int)$service['stock'], (int)($oldServiceQuantities[$serviceId] ?? 1))
@@ -459,14 +461,22 @@
                                                                    value="<?php echo $serviceId; ?>"
                                                                    data-price="<?php echo (float)$service['price']; ?>"
                                                                    data-stock="<?php echo (int)$service['stock']; ?>"
+                                                                   <?php echo $serviceInStock ? '' : 'disabled'; ?>
                                                                    <?php echo $serviceSelected ? 'checked' : ''; ?>>
                                                             <label class="form-check-label" for="service-<?php echo $serviceId; ?>">
                                                                 <span class="fw-semibold"><?php echo e($service['name']); ?></span>
+                                                                <?php if (!$serviceInStock): ?>
+                                                                    <span class="badge text-bg-danger ms-1">Hết hàng</span>
+                                                                <?php endif; ?>
                                                                 <span class="text-success fw-semibold ms-1">
                                                                     <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?>
                                                                 </span>
                                                                 <span class="d-block small text-muted">
-                                                                    Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                                    <?php if ($serviceInStock): ?>
+                                                                        Còn <?php echo (int)$service['stock']; ?> <?php echo e($service['unit']); ?>
+                                                                    <?php else: ?>
+                                                                        Hết hàng
+                                                                    <?php endif; ?>
                                                                     <?php if (!empty($service['description'])): ?>
                                                                         · <?php echo e($service['description']); ?>
                                                                     <?php endif; ?>
@@ -539,27 +549,30 @@
         String(now.getMonth() + 1).padStart(2, '0'),
         String(now.getDate()).padStart(2, '0')
     ].join('-');
-    const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60;
+    const earliestStart = new Date(now.getTime());
+    earliestStart.setSeconds(0, 0);
+    if (now.getTime() > earliestStart.getTime()) earliestStart.setMinutes(earliestStart.getMinutes() + 1);
+    const earliestStartSeconds = earliestStart.getHours() * 3600 + earliestStart.getMinutes() * 60;
 
     document.querySelectorAll('.slot-select').forEach(button => {
         const startSeconds = timeToSec(button.dataset.slotStart);
-        if (isToday && startSeconds !== null && startSeconds <= currentSeconds) {
+        const endSeconds = timeToSec(button.dataset.slotEnd);
+        if (isToday && endSeconds !== null && endSeconds <= earliestStartSeconds) {
             button.disabled = true;
             button.className = 'slot-badge slot-select text-center bg-secondary-subtle text-secondary';
             button.innerHTML = '<span class="d-block">' + button.dataset.slotStart + ' - ' + button.dataset.slotEnd + '</span><small>Đã qua</small>';
             button.setAttribute('aria-pressed', 'false');
+        } else if (!button.disabled && isToday
+            && startSeconds < earliestStartSeconds && endSeconds > earliestStartSeconds) {
+            button.innerHTML = '<span class="d-block">' + button.dataset.slotStart + ' - ' + button.dataset.slotEnd
+                + '</span><small>Đặt từ ' + getEarliestStartTime() + '</small>';
         }
     });
 
-    const PRICE_TABLE = [
-        { start: 6 * 3600, end: 8 * 3600, rate: 250000 },
-        { start: 8 * 3600, end: 12 * 3600, rate: 250000 },
-        { start: 12 * 3600, end: 17 * 3600, rate: 275000 },
-        { start: 17 * 3600, end: 20 * 3600, rate: 600000 },
-        { start: 20 * 3600, end: 23 * 3600, rate: 325000 },
-    ];
+    const HOURLY_RATE = <?php echo json_encode((float)$pitch['price_per_hour']); ?>;
     const PITCH_ID       = <?php echo (int)$pitch['id']; ?>;
     const BOOKING_DATE   = "<?php echo htmlspecialchars($date); ?>";
+    const OPENING_TIME   = "<?php echo htmlspecialchars($openingTime); ?>";
     const CHECK_URL      = "<?php echo route('admin/bookings/check-overlap'); ?>";
 
     const startEl   = document.getElementById('start_time');
@@ -585,6 +598,22 @@
         const [h,m] = t.split(':').map(Number);
         return h*3600 + m*60;
     }
+    function getEarliestStartTime(){
+        const now = new Date();
+        const earliest = new Date(now.getTime());
+        earliest.setSeconds(0, 0);
+        if(now.getTime() > earliest.getTime()) earliest.setMinutes(earliest.getMinutes() + 1);
+        return String(earliest.getHours()).padStart(2, '0') + ':'
+            + String(earliest.getMinutes()).padStart(2, '0');
+    }
+    function updateStartMinimum(){
+        let minimum = OPENING_TIME.slice(0, 5);
+        if(modeEl.value !== 'monthly' && isToday){
+            const earliest = getEarliestStartTime();
+            if(earliest > minimum) minimum = earliest;
+        }
+        startEl.min = minimum;
+    }
 
     function priceForPeriod(start, end){
         const startSeconds = timeToSec(start);
@@ -592,16 +621,7 @@
         if (startSeconds === null || endSeconds === null || endSeconds <= startSeconds) {
             return 0;
         }
-
-        let total = 0;
-        for (const block of PRICE_TABLE) {
-            const overlap = Math.max(0, Math.min(endSeconds, block.end) - Math.max(startSeconds, block.start));
-            if (overlap > 0) {
-                total += (overlap / 3600) * block.rate;
-            }
-        }
-
-        return Math.round(total);
+        return Math.round(((endSeconds - startSeconds) / 3600) * HOURLY_RATE);
     }
 
     function syncSlotButtons(){
@@ -611,7 +631,7 @@
             const slotStart = timeToSec(button.dataset.slotStart);
             const slotEnd = timeToSec(button.dataset.slotEnd);
             const selected = selectedStart !== null && selectedEnd !== null
-                && slotStart >= selectedStart && slotEnd <= selectedEnd;
+                && slotStart < selectedEnd && slotEnd > selectedStart;
             button.classList.toggle('is-selected', selected);
             button.setAttribute('aria-pressed', selected ? 'true' : 'false');
         });
@@ -622,8 +642,12 @@
         const slotEnd = timeToSec(button.dataset.slotEnd);
         const selectedStart = timeToSec(startEl.value);
         const selectedEnd = timeToSec(endEl.value);
+        const earliestStartTime = isToday ? getEarliestStartTime() : '';
+        const earliestStartSec = earliestStartTime ? timeToSec(earliestStartTime) : null;
+        const isLateSlot = isToday && slotStart < earliestStartSec && slotEnd > earliestStartSec;
 
-        if(selectedStart === slotStart && selectedEnd === slotEnd){
+        const selectedLateSlot = isLateSlot && selectedStart === earliestStartSec && selectedEnd === slotEnd;
+        if((selectedStart === slotStart && selectedEnd === slotEnd) || selectedLateSlot){
             startEl.value = '';
             endEl.value = '';
             overlapEl.classList.add('d-none');
@@ -632,10 +656,28 @@
             return;
         }
 
+        if(isToday && slotEnd <= earliestStartSec){
+            overlapEl.className = 'alert alert-warning mb-3';
+            overlapEl.textContent = 'Khung giờ này đã qua, vui lòng chọn khung giờ còn thời gian.';
+            overlapEl.classList.remove('d-none');
+            return;
+        }
+        if(isLateSlot && modeEl.value === 'monthly'){
+            overlapEl.className = 'alert alert-warning mb-3';
+            overlapEl.textContent = 'Khung giờ đang diễn ra chỉ áp dụng cho đặt một lần.';
+            overlapEl.classList.remove('d-none');
+            return;
+        }
+
         if(selectedStart !== null && selectedEnd !== null && selectedEnd > selectedStart
             && (slotStart === selectedEnd || slotEnd === selectedStart)){
-            startEl.value = slotEnd === selectedStart ? button.dataset.slotStart : startEl.value;
+            startEl.value = slotEnd === selectedStart
+                ? (isLateSlot ? earliestStartTime : button.dataset.slotStart)
+                : startEl.value;
             endEl.value = slotStart === selectedEnd ? button.dataset.slotEnd : endEl.value;
+        }else if(isLateSlot){
+            startEl.value = earliestStartTime;
+            endEl.value = button.dataset.slotEnd;
         }else{
             startEl.value = button.dataset.slotStart;
             endEl.value = button.dataset.slotEnd;
@@ -701,6 +743,22 @@
             overlapEl.classList.add('d-none');
             return true;
         }
+        if(isToday && startEl.value && endEl.value){
+            const selectedStart = timeToSec(startEl.value);
+            const selectedEnd = timeToSec(endEl.value);
+            const earliestStartTime = getEarliestStartTime();
+            const earliestStartSec = timeToSec(earliestStartTime);
+            const currentHourStart = Math.floor(earliestStartSec / 3600) * 3600;
+            if(selectedStart !== null && selectedStart < earliestStartSec && selectedEnd > earliestStartSec){
+                if(selectedStart < currentHourStart){
+                    overlapEl.className = 'alert alert-warning mb-3';
+                    overlapEl.textContent = 'Khung giờ đã bắt đầu từ trước. Vui lòng tải lại lịch và chọn thời gian còn lại.';
+                    overlapEl.classList.remove('d-none');
+                    return false;
+                }
+                startEl.value = earliestStartTime;
+            }
+        }
         if(!startEl.value || !endEl.value){ overlapEl.classList.add('d-none'); return true; }
         const calculation = recalc();
         if(calculation.hours === null){
@@ -745,6 +803,7 @@
         monthlyFields.classList.toggle('d-none', !isMonthly);
         monthEl.disabled = !isMonthly;
         monthEl.required = isMonthly;
+        updateStartMinimum();
         quantityLabel.textContent = isMonthly ? 'Số ngày đặt trong tháng' : 'Số giờ thuê';
         recalc();
         checkOverlap();

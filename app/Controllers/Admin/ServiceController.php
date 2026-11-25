@@ -95,6 +95,8 @@ class ServiceController extends Controller
             'categoryColor' => Service::getCategoryColor($service['category'] ?? 'other'),
             'stats'         => $stats,
             'related'       => $related,
+            'success'       => getFlash('success'),
+            'error'         => getFlash('error'),
         ]);
     }
 
@@ -193,7 +195,6 @@ class ServiceController extends Controller
             'category'    => 'required|in:drink,food,equipment,service,other',
             'price'       => 'required|numeric|min:0',
             'unit'        => 'required|min:1|max:30',
-            'stock'       => 'nullable|numeric|min:0',
             'description' => 'nullable|max:2000',
             'status'      => 'required|in:active,inactive',
         ];
@@ -222,7 +223,6 @@ class ServiceController extends Controller
             'category'    => $data['category'],
             'price'       => $data['price'],
             'unit'        => $data['unit'],
-            'stock'       => $data['stock'] ?? 0,
             'description' => $data['description'] ?? '',
             'status'      => $data['status'],
         ];
@@ -252,7 +252,6 @@ class ServiceController extends Controller
             'category'    => $service['category'],
             'price'       => $service['price'],
             'unit'        => $service['unit'],
-            'stock'       => $service['stock'],
             'description' => $service['description'] ?? '',
             'status'      => $newStatus,
         ]);
@@ -269,29 +268,42 @@ class ServiceController extends Controller
             return;
         }
 
-        $delta = (int)($_POST['delta'] ?? 0);
-        $note  = trim($_POST['note'] ?? '');
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/services/' . $id);
+            return;
+        }
 
-        if ($delta === 0) {
+        $deltaValue = $_POST['delta'] ?? null;
+        $delta = is_string($deltaValue) || is_int($deltaValue)
+            ? filter_var($deltaValue, FILTER_VALIDATE_INT)
+            : false;
+        $noteValue = $_POST['note'] ?? '';
+        $note = is_string($noteValue) ? trim($noteValue) : '';
+
+        if ($delta === false || $delta === 0) {
             setFlash('error', 'Số lượng điều chỉnh không hợp lệ');
             redirect('admin/services/' . $id);
             return;
         }
-
-        $newStock = (int)$service['stock'] + $delta;
-        if ($newStock < 0) {
-            setFlash('error', 'Số lượng tồn không được dưới 0');
+        if (mb_strlen($note) > 250) {
+            setFlash('error', 'Ghi chú không được vượt quá 250 ký tự.');
             redirect('admin/services/' . $id);
             return;
         }
 
-        $this->service->updateStock($id, $delta);
+        if (!$this->service->adjustStock((int)$id, $delta)) {
+            setFlash('error', 'Số lượng xuất vượt tồn kho hiện tại hoặc tồn kho vừa thay đổi. Vui lòng kiểm tra lại.');
+            redirect('admin/services/' . $id);
+            return;
+        }
 
         $msg = $delta > 0
             ? 'Nhập kho thành công (+' . $delta . ' ' . htmlspecialchars($service['unit']) . ')'
-            : 'Xuất kho thành công (' . $delta . ' ' . htmlspecialchars($service['unit']) . ')';
+            : 'Xuất kho thành công (' . abs($delta) . ' ' . htmlspecialchars($service['unit']) . ')';
 
-        setFlash('success', $msg . (empty($note) ? '' : ' - Ghi chú: ' . $note));
+        setFlash('success', $msg . ($note === '' ? '' : ' - Ghi chú: ' . $note));
         redirect('admin/services/' . $id);
     }
 

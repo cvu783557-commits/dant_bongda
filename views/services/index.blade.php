@@ -138,7 +138,7 @@
                                         <?php if ($inStock): ?>
                                             <span class="badge bg-success-subtle text-success border border-success-subtle">Còn hàng</span>
                                         <?php else: ?>
-                                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Tạm hết</span>
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Hết hàng</span>
                                         <?php endif; ?>
                                     </div>
                                     <h5 class="card-title fw-bold mb-2"><?php echo e($service['name']); ?></h5>
