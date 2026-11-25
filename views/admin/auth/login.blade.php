@@ -38,7 +38,7 @@
         <div class="col-lg-5 col-md-7">
             <div class="login-card card p-5">
                 <div class="text-center mb-4">
-                    <img class="brand-mark" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
+                    <img class="brand-mark" src="<?php echo route('site-logo'); ?>" alt="Ball247">
                     <h3 class="fw-bold mb-1">SânBóng.Pro</h3>
                     <p class="text-muted mb-4">Đăng nhập bằng tài khoản USER hoặc ADMIN</p>
                 </div>
