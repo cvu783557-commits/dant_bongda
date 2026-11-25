@@ -24,7 +24,9 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="<?php echo url('/'); ?>">⚽ SânBóng.Pro</a>
+        <a class="navbar-brand" href="<?php echo url('/'); ?>" aria-label="Ball247">
+            <img src="<?php echo url('assets/site-logo.png'); ?>" alt="Ball247" style="width:112px;height:78px;object-fit:contain;">
+        </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
             <span class="navbar-toggler-icon"></span>
         </button>

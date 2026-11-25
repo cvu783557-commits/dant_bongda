@@ -535,7 +535,7 @@
 
 <footer class="border-top py-4 bg-light mt-5">
     <div class="container text-center text-secondary small">
-        © <?php echo date('Y'); ?> SânBóng.Pro — Hệ thống đặt sân bóng online
+        © <?php echo date('Y'); ?> Ball247 — Hệ thống đặt sân bóng online
     </div>
 </footer>
 

@@ -30,13 +30,20 @@
             transform: translateY(-4px);
             box-shadow: 0 8px 24px rgba(0,0,0,.08);
         }
+        .ball-logo {
+            width: 112px;
+            height: 78px;
+            object-fit: contain;
+        }
     </style>
 </head>
 <body>
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="<?php echo url('/'); ?>">⚽ SânBóng.Pro</a>
+        <a class="navbar-brand" href="<?php echo url('/'); ?>" aria-label="Ball247">
+            <img class="ball-logo" src="<?php echo url('assets/site-logo.png'); ?>" alt="Ball247">
+        </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -110,7 +117,7 @@
 
 <footer class="border-top py-4 bg-light mt-5">
     <div class="container text-center text-secondary small">
-        © <?php echo date('Y'); ?> SânBóng.Pro — Hệ thống đặt sân bóng online
+        © <?php echo date('Y'); ?> Ball247 — Hệ thống đặt sân bóng online
     </div>
 </footer>
 
