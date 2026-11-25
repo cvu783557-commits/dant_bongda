@@ -13,7 +13,6 @@ use App\Models\Pitch;
 use App\Models\PitchLock;
 use App\Models\TimeSlot;
 use App\Models\User;
-use App\Services\Vnpay;
 use Rakit\Validation\Validator;
 
 class BookingController extends Controller
@@ -182,11 +181,11 @@ class BookingController extends Controller
         }
 
         $admin = $this->currentUser();
-        $refundRequestId = date('YmdHis') . bin2hex(random_bytes(4));
+        $reviewRequestId = date('YmdHis') . bin2hex(random_bytes(4));
         $request = $this->cancellationRequest->claimForReview(
             (int)$id,
             (int)$admin['id'],
-            $refundRequestId
+            $reviewRequestId
         );
         if (!$request) {
             setFlash('error', 'Yêu cầu đang được xử lý ở phiên khác.');
@@ -211,65 +210,13 @@ class BookingController extends Controller
             return;
         }
 
-        $refund = null;
-        if ((float)$request['refund_amount'] > 0) {
-            if (empty($request['vnpay_txn_ref'])
-                || empty($request['vnpay_transaction_no'])
-                || empty($request['vnpay_transaction_date'])) {
-                $message = 'Thiếu mã giao dịch VNPay gốc. Không gửi lệnh hoàn tiền; cần liên hệ VNPay/quản lý.';
-                $this->cancellationRequest->setStatus((int)$id, 'manual_review', null, $message);
-                $this->notifyCancellationStatus(
-                    $request,
-                    'manual_review',
-                    'Yêu cầu hủy cần được kiểm tra',
-                    $message
-                );
-                setFlash('error', $message);
-                redirect('admin/cancellation-requests');
-                return;
-            }
-
-            try {
-                $vnpay = new Vnpay();
-                $refund = $vnpay->refundDeposit(
-                    (string)$request['vnpay_txn_ref'],
-                    (int)$request['refund_amount'],
-                    (string)$request['vnpay_transaction_no'],
-                    (string)$request['vnpay_transaction_date'],
-                    (string)($admin['username'] ?? $admin['full_name'] ?? 'admin'),
-                    'Hoan tien don dat san #' . (int)$request['booking_id'],
-                    $_SERVER['SERVER_ADDR'] ?? '127.0.0.1',
-                    !empty($request['series_id']),
-                    $refundRequestId
-                );
-            } catch (\Throwable $e) {
-                $message = mb_substr($e->getMessage(), 0, 500);
-                $this->cancellationRequest->setStatus((int)$id, 'manual_review', null, $message);
-                $this->notifyCancellationStatus(
-                    $request,
-                    'manual_review',
-                    'Yêu cầu hủy cần được kiểm tra',
-                    'Chưa thể xác nhận hoàn tiền VNPay. Quản lý sẽ kiểm tra giao dịch trước khi cập nhật.'
-                );
-                setFlash('error', 'VNPay chưa xác nhận hoàn tiền. Đã khóa yêu cầu để tránh hoàn trùng; cần kiểm tra giao dịch thủ công.');
-                redirect('admin/cancellation-requests');
-                return;
-            }
-        }
-
         $cancelResult = $this->booking->cancel(
             (int)$request['booking_id'],
-            'Khách yêu cầu hủy: ' . $request['request_reason'],
-            (float)$request['refund_amount'] > 0
+            'Khách yêu cầu hủy: ' . $request['request_reason']
         );
         if (!$cancelResult['success']) {
-            $message = 'VNPay đã chấp nhận hoàn tiền nhưng không hủy được đơn. Cần đối soát thủ công.';
-            $this->cancellationRequest->setStatus(
-                (int)$id,
-                'manual_review',
-                $refund['response_code'] ?? null,
-                $message
-            );
+            $message = $cancelResult['error'] ?? 'Không thể hủy đơn đặt sân.';
+            $this->cancellationRequest->setStatus((int)$id, 'manual_review', null, $message);
             $this->notifyCancellationStatus(
                 $request,
                 'manual_review',
@@ -281,49 +228,12 @@ class BookingController extends Controller
             return;
         }
 
-        if ($refund && (float)$request['refund_amount'] > 0) {
-            try {
-                $this->booking->recordRefundTransaction(
-                    (int)$request['booking_id'],
-                    (float)$request['refund_amount'],
-                    'REFUND-' . $refundRequestId,
-                    (int)$admin['id']
-                );
-            } catch (\Throwable $e) {
-                error_log('Unable to record accepted VNPay refund for booking #' . (int)$request['booking_id'] . ': ' . $e->getMessage());
-                $message = 'VNPay đã tiếp nhận hoàn tiền nhưng không lưu được lịch sử hoàn. Cần đối soát thủ công.';
-                $this->cancellationRequest->setStatus(
-                    (int)$id,
-                    'manual_review',
-                    $refund['response_code'] ?? null,
-                    $message
-                );
-                $this->notifyCancellationStatus(
-                    $request,
-                    'manual_review',
-                    'Yêu cầu hoàn tiền cần được kiểm tra',
-                    $message
-                );
-                setFlash('error', $message);
-                redirect('admin/cancellation-requests');
-                return;
-            }
-        }
-
-        $status = $refund ? 'refunded' : 'approved';
-        $message = $refund
-            ? 'VNPay đã tiếp nhận hoàn ' . formatMoney($request['refund_amount']) . '.'
-            : 'Đơn đã hủy; đơn chưa thanh toán nên không phát sinh hoàn tiền.';
-        $this->cancellationRequest->setStatus(
-            (int)$id,
-            $status,
-            $refund['response_code'] ?? null,
-            $message
-        );
+        $message = 'Đơn đã được hủy';
+        $this->cancellationRequest->setStatus((int)$id, 'approved', null, $message);
         $this->notifyCancellationStatus(
             $request,
             'completed',
-            $refund ? 'Đơn đã hủy và hoàn cọc' : 'Đơn đã được hủy',
+            'Đơn đã được hủy',
             $message . ' Mã đơn #' . (int)$request['booking_id'] . '.'
         );
         setFlash('success', $message);

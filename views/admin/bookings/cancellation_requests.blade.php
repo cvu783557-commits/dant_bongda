@@ -1,10 +1,10 @@
 @extends('layouts.admin')
-@section('title', 'Yêu cầu hủy / hoàn cọc')
+@section('title', 'Yêu cầu hủy sân')
 @section('content')
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
     <div>
-        <h3 class="fw-bold mb-1">Yêu cầu hủy và hoàn cọc</h3>
-        <p class="text-secondary mb-0">Duyệt yêu cầu sẽ hủy đơn; tiền cọc VNPay được hoàn về phương thức thanh toán ban đầu.</p>
+        <h3 class="fw-bold mb-1">Yêu cầu hủy sân</h3>
+        <p class="text-secondary mb-0">Duyệt yêu cầu sẽ hủy đơn.</p>
     </div>
     <a href="<?php echo route('admin/bookings'); ?>" class="btn btn-outline-success">Danh sách đặt sân</a>
 </div>
@@ -50,7 +50,7 @@
                     <div class="row g-2 small mb-3">
                         <div class="col-md-4"><strong>Khách:</strong> <?php echo e($request['customer_name']); ?> · <?php echo e($request['customer_phone']); ?></div>
                         <div class="col-md-4"><strong>Lý do:</strong> <?php echo e($request['request_reason']); ?></div>
-                        <div class="col-md-4"><strong>Tiền cọc cần hoàn:</strong> <?php echo formatMoney($request['refund_amount']); ?></div>
+                        <div class="col-md-4"><strong>Tiền cọc không hoàn:</strong> <?php echo formatMoney($request['refund_amount']); ?></div>
                         <?php if (!empty($request['refund_message'])): ?>
                             <div class="col-12"><strong>Trạng thái xử lý:</strong> <?php echo e($request['refund_message']); ?></div>
                         <?php endif; ?>
@@ -58,9 +58,9 @@
                     <?php if ($request['status'] === 'pending'): ?>
                         <div class="d-flex flex-wrap gap-2">
                             <form method="post" action="<?php echo route('admin/cancellation-requests/' . (int)$request['id'] . '/approve'); ?>"
-                                  onsubmit="return confirm('Duyệt sẽ hủy đơn và gửi yêu cầu hoàn <?php echo e(formatMoney($request['refund_amount'])); ?> qua VNPay. Tiếp tục?');">
+                                  onsubmit="return confirm('Xác nhận hủy đơn?');">
                                 <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
-                                <button type="submit" class="btn btn-danger">Duyệt hủy<?php echo (float)$request['refund_amount'] > 0 ? ' và hoàn cọc' : ''; ?></button>
+                                <button type="submit" class="btn btn-danger">Duyệt hủy</button>
                             </form>
                             <details>
                                 <summary class="btn btn-outline-secondary" style="cursor:pointer;">Từ chối</summary>

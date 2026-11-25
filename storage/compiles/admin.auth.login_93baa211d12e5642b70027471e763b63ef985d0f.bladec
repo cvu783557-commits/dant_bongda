@@ -23,19 +23,13 @@
  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
  }
  .brand-mark {
- width: 64px; height: 64px;
- border-radius: 16px;
- background: linear-gradient(135deg, #198754, #4dd293);
- display: inline-flex;
- align-items: center;
- justify-content: center;
- font-size: 30px;
- color: #fff;
- font-weight: 700;
+ width: 220px;
+ max-width: 100%;
+ height: auto;
  margin-bottom: 16px;
- box-shadow: 0 10px 30px rgba(25,135,84,0.4);
  }
  </style>
+ <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
 </head>
 <body>
 
@@ -44,7 +38,7 @@
  <div class="col-lg-5 col-md-7">
  <div class="login-card card p-5">
  <div class="text-center mb-4">
- <div class="brand-mark">⚽</div>
+ <img class="brand-mark" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
  <h3 class="fw-bold mb-1">SânBóng.Pro</h3>
  <p class="text-muted mb-4">Đăng nhập bằng tài khoản USER hoặc ADMIN</p>
  </div>
