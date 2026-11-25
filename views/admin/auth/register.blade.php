@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng ký tài khoản — SânBóng.Pro</title>
+    <title>Đăng ký tài khoản — Ball247</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         html, body {
@@ -26,8 +26,8 @@
         <div class="col-lg-5 col-md-7">
             <div class="register-card card p-4 p-md-5">
                 <div class="text-center mb-4">
-                    <img class="img-fluid mb-3" src="<?php echo route('site-logo'); ?>"
-                         alt="Đặt sân bóng online" style="width: 220px;">
+                    <img class="img-fluid mb-3" src="<?php echo route('site-logo'); ?>" alt="Ball247"
+                         style="width: 220px;">
                     <h3 class="fw-bold mb-1">Đăng ký tài khoản</h3>
                     <p class="text-muted mb-0">Đăng ký xong là có thể đăng nhập ngay với quyền USER.</p>
                 </div>

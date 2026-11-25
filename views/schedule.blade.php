@@ -15,7 +15,7 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container">
         <a class="navbar-brand fw-bold" href="<?php echo route('/'); ?>">
-            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
+            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Ball247">
         </a>
         <div class="navbar-nav flex-row gap-3">
             <a class="nav-link" href="<?php echo route('/'); ?>">Danh sách sân</a>

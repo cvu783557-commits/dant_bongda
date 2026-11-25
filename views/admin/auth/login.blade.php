@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đăng nhập — SânBóng.Pro</title>
+    <title>Đăng nhập — Ball247</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         html, body {
@@ -38,8 +38,8 @@
         <div class="col-lg-5 col-md-7">
             <div class="login-card card p-5">
                 <div class="text-center mb-4">
-                    <img class="brand-mark" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
-                    <h3 class="fw-bold mb-1">SânBóng.Pro</h3>
+                    <img class="brand-mark" src="<?php echo route('site-logo'); ?>" alt="Ball247">
+                    <h3 class="fw-bold mb-1">Ball247</h3>
                     <p class="text-muted mb-4">Đăng nhập bằng tài khoản USER hoặc ADMIN</p>
                 </div>
 

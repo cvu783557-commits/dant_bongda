@@ -1,7 +1,7 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container-fluid">
         <a class="navbar-brand fw-bold" href="<?php echo route('admin/bookings'); ?>">
-            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
+            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Ball247">
             <span>Quản lý sân bóng</span>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminTopNav">

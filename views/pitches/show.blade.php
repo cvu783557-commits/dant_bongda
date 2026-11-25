@@ -37,7 +37,7 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
     <div class="container">
         <a class="navbar-brand fw-bold" href="<?php echo route('/'); ?>">
-            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Đặt sân bóng online">
+            <img class="site-brand-logo" src="<?php echo route('site-logo'); ?>" alt="Ball247">
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topNav">
             <span class="navbar-toggler-icon"></span>
@@ -535,7 +535,7 @@
 
 <footer class="border-top py-4 bg-light mt-5">
     <div class="container text-center text-secondary small">
-        © <?php echo date('Y'); ?> SânBóng.Pro — Hệ thống đặt sân bóng online
+        © <?php echo date('Y'); ?> Ball247 — Hệ thống đặt sân bóng online
     </div>
 </footer>
 
