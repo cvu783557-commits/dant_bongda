@@ -5,6 +5,7 @@ namespace App\Controllers\Admin;
 use App\Controller;
 use App\Models\Booking;
 use App\Models\Pitch;
+use App\Models\Service;
 use App\Models\User;
 use Rakit\Validation\Validator;
 
@@ -67,6 +68,7 @@ class PitchController extends Controller
         ));
 
         $booking = new Booking();
+        $service = new Service();
 
         $board       = [];
         $totalCourts = 0;
@@ -121,6 +123,7 @@ class PitchController extends Controller
             'totalCourts'  => $totalCourts,
             'busyCourts'   => $busyCourts,
             'freeCourts'   => $totalCourts - $busyCourts,
+            'availableServices' => $service->getAvailableForBooking(),
             'currentUser'  => $this->user->getActiveUser(),
             'success'      => getFlash('success'),
             'error'        => getFlash('error'),

@@ -43,6 +43,88 @@ class BookingService extends Model
         return (float)($row['total_service'] ?? 0);
     }
 
+    public function addToActiveBooking(int $bookingId, int $serviceId, int $quantity): array
+    {
+        if ($bookingId <= 0 || $serviceId <= 0 || $quantity < 1 || $quantity > 20) {
+            return ['success' => false, 'error' => 'Dịch vụ hoặc số lượng không hợp lệ.'];
+        }
+
+        $this->connection->beginTransaction();
+        try {
+            $now = date('H:i:s');
+            $booking = $this->connection->executeQuery(
+                "SELECT id, total_price, deposit, paid_amount
+                 FROM bookings
+                 WHERE id = ? AND booking_date = ?
+                   AND start_time <= ? AND end_time > ?
+                   AND status IN ('confirmed', 'in_progress')
+                 FOR UPDATE",
+                [$bookingId, date('Y-m-d'), $now, $now]
+            )->fetchAssociative();
+            if (!$booking) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Đơn đặt sân không còn trong thời gian hoạt động.'];
+            }
+
+            $service = $this->connection->executeQuery(
+                "SELECT id, price, stock
+                 FROM services
+                 WHERE id = ? AND status = 'active'
+                 FOR UPDATE",
+                [$serviceId]
+            )->fetchAssociative();
+            if (!$service) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Dịch vụ không tồn tại hoặc đã ngừng kinh doanh.'];
+            }
+            if ((int)$service['stock'] < $quantity) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Số lượng dịch vụ hiện không đủ trong kho.'];
+            }
+
+            $unitPrice = (float)$service['price'];
+            $subtotal = $unitPrice * $quantity;
+            $this->connection->insert($this->table, [
+                'booking_id' => $bookingId,
+                'service_id' => $serviceId,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'subtotal' => $subtotal,
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+            $stockUpdated = $this->connection->executeStatement(
+                "UPDATE services
+                 SET stock = stock - ?, updated_at = NOW()
+                 WHERE id = ? AND status = 'active' AND stock >= ?",
+                [$quantity, $serviceId, $quantity]
+            );
+            if ($stockUpdated !== 1) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Tồn kho vừa thay đổi; vui lòng kiểm tra và thử lại.'];
+            }
+
+            $newTotal = (float)$booking['total_price'] + $subtotal;
+            $paymentStatus = Booking::calcPaymentStatus(
+                $newTotal,
+                (float)$booking['deposit'],
+                (float)$booking['paid_amount']
+            );
+            $this->connection->executeStatement(
+                'UPDATE bookings SET total_price = ?, payment_status = ?, updated_at = NOW() WHERE id = ?',
+                [$newTotal, $paymentStatus, $bookingId]
+            );
+
+            $this->connection->commit();
+            return ['success' => true, 'subtotal' => $subtotal];
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('Adding service to active booking failed: ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Không thể thêm dịch vụ. Vui lòng thử lại.'];
+        }
+    }
+
     public function create(array $data)
     {
         $serviceId = (int)$data['service_id'];

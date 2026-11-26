@@ -98,6 +98,7 @@ $router->get('/admin/cancellation-requests',           AdminBookingController::c
 $router->get('/admin/service-requests',                AdminBookingController::class . '@serviceRequests');
 $router->post('/admin/service-requests/sales',          AdminBookingController::class . '@createServiceSale');
 $router->get('/admin/service-requests/sales/(\d+)/invoice', AdminBookingController::class . '@serviceSaleInvoice');
+$router->post('/admin/bookings/(\d+)/services',         AdminBookingController::class . '@addOperatingService');
 $router->post('/admin/service-requests/(\d+)/(accept|reject)', AdminBookingController::class . '@handleServiceRequest');
 $router->post('/admin/cancellation-requests/(\d+)/approve', AdminBookingController::class . '@approveCancellationRequest');
 $router->post('/admin/cancellation-requests/(\d+)/reject', AdminBookingController::class . '@rejectCancellationRequest');
