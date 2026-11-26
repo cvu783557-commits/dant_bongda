@@ -594,7 +594,7 @@ class BookingController extends Controller
         $token = strtolower($token);
         $booking = $this->booking->findByCheckInToken($token);
         if (!$booking) {
-            setFlash('error', 'Không tìm thấy đơn đặt sân tương ứng với mã QR này.');
+            setFlash('error', 'Mã QR đã hết hạn hoặc không tìm thấy đơn đặt sân trong ngày hôm nay.');
             redirect('admin/check-in');
             return;
         }
