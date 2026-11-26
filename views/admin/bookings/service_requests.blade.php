@@ -24,6 +24,78 @@ $pendingCount = count(array_filter(
 <?php if (!empty($success)): ?><div class="alert alert-success" role="alert"><?php echo e($success); ?></div><?php endif; ?>
 <?php if (!empty($error)): ?><div class="alert alert-danger" role="alert"><?php echo e($error); ?></div><?php endif; ?>
 
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <h5 class="fw-bold mb-1">Bán dịch vụ ngoài đơn đặt sân</h5>
+        <p class="text-muted mb-3">Ghi nhận khách mua trực tiếp, thanh toán tiền mặt và xuất hóa đơn riêng; giao dịch không cộng vào hóa đơn đặt sân.</p>
+        <?php if (empty($services)): ?>
+            <div class="alert alert-info mb-0">Hiện không có dịch vụ nào còn hàng để bán.</div>
+        <?php else: ?>
+            <form method="post" action="<?php echo route('admin/service-requests/sales'); ?>" class="row g-3 align-items-end">
+                <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
+                <div class="col-md-5">
+                    <label class="form-label" for="sale-service">Dịch vụ</label>
+                    <select class="form-select" id="sale-service" name="service_id" required>
+                        <?php foreach ($services as $service): ?>
+                            <option value="<?php echo (int)$service['id']; ?>">
+                                <?php echo e($service['name']); ?> · <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?> · Còn <?php echo (int)$service['stock']; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="sale-quantity">Số lượng</label>
+                    <input class="form-control" id="sale-quantity" type="number" name="quantity" min="1" max="20" value="1" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="sale-customer-name">Tên khách (không bắt buộc)</label>
+                    <input class="form-control" id="sale-customer-name" name="customer_name" maxlength="150">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="sale-customer-phone">Số điện thoại (không bắt buộc)</label>
+                    <input class="form-control" id="sale-customer-phone" name="customer_phone" maxlength="30">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="sale-payment-method">Thanh toán</label>
+                    <select class="form-select" id="sale-payment-method" name="payment_method" required>
+                        <option value="cash">Tiền mặt</option>
+                        <option value="banking">Chuyển khoản</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-grid">
+                    <button class="btn btn-success" type="submit">Bán</button>
+                </div>
+                <div class="col-12 small text-muted">Sau khi ghi nhận, hệ thống mở hóa đơn riêng để in.</div>
+            </form>
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php if (!empty($sales)): ?>
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white fw-bold">Giao dịch bán lẻ gần đây</div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr><th>Thời gian</th><th>Khách hàng</th><th>Dịch vụ</th><th>Thanh toán</th><th class="text-end">Thành tiền</th><th></th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($sales as $sale): ?>
+                        <tr>
+                            <td><?php echo e(formatDateTime($sale['created_at'])); ?></td>
+                            <td><?php echo e($sale['customer_name'] ?: 'Khách mua trực tiếp'); ?><?php if (!empty($sale['customer_phone'])): ?><div class="small text-muted"><?php echo e($sale['customer_phone']); ?></div><?php endif; ?></td>
+                            <td><?php echo e($sale['service_name']); ?> × <?php echo (int)$sale['quantity']; ?> <?php echo e($sale['unit']); ?></td>
+                            <td><?php echo $sale['payment_method'] === 'banking' ? 'Chuyển khoản' : 'Tiền mặt'; ?></td>
+                            <td class="text-end"><?php echo formatMoney($sale['total_amount']); ?></td>
+                            <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="<?php echo route('admin/service-requests/sales/' . (int)$sale['id'] . '/invoice'); ?>">Hóa đơn</a></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php endif; ?>
+
 <?php if (empty($requests)): ?>
     <div class="alert alert-info">Chưa có yêu cầu dịch vụ nào.</div>
 <?php else: ?>
