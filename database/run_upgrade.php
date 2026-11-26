@@ -630,6 +630,23 @@ try {
         stepSkip("Bảng bookings đã tồn tại (" . rowCount($pdo,'bookings') . " dòng)");
     }
 
+    $pdo->exec("CREATE TABLE IF NOT EXISTS booking_extensions (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        booking_id INT NOT NULL,
+        start_time TIME NOT NULL,
+        end_time TIME NOT NULL,
+        amount DECIMAL(12,0) NOT NULL DEFAULT 0,
+        recorded_by INT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_booking_extensions_booking (booking_id, id),
+        CONSTRAINT fk_booking_extensions_booking FOREIGN KEY (booking_id)
+            REFERENCES bookings(id) ON DELETE CASCADE,
+        CONSTRAINT fk_booking_extensions_user FOREIGN KEY (recorded_by)
+            REFERENCES users(id) ON DELETE SET NULL,
+        CONSTRAINT chk_booking_extensions_amount CHECK (amount >= 0)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    stepOK("Bảng booking_extensions đã sẵn sàng");
+
     $paymentMethodColumn = $pdo->query("SHOW COLUMNS FROM bookings LIKE 'payment_method'")->fetch();
     if (!$paymentMethodColumn) {
         throw new RuntimeException("Không tìm thấy cột bookings.payment_method");

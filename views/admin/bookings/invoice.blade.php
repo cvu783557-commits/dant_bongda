@@ -7,6 +7,10 @@ $serviceTotal = array_sum(array_map(
     static fn ($item) => (float)$item['subtotal'],
     $services
 ));
+$extensionTotal = (float)$extensionTotal;
+$baseEndTime = !empty($extensions)
+    ? $extensions[0]['start_time']
+    : $booking['end_time'];
 $received = (float)$received;
 $refunded = (float)$refunded;
 $netPaid = (float)$netPaid;
@@ -58,7 +62,7 @@ $remaining = (float)$remaining;
             </div>
         </div>
 
-        <h6 class="fw-bold">Chi tiết dịch vụ</h6>
+        <h6 class="fw-bold">Chi tiết thuê sân và dịch vụ</h6>
         <div class="table-responsive mb-4">
             <table class="table table-bordered align-middle">
                 <thead class="table-light">
@@ -67,10 +71,18 @@ $remaining = (float)$remaining;
                 <tbody>
                     <tr>
                         <td>Thuê sân</td>
-                        <td class="text-end"><?php echo e(substr((string)$booking['start_time'], 0, 5)); ?>–<?php echo e(substr((string)$booking['end_time'], 0, 5)); ?></td>
+                        <td class="text-end"><?php echo e(substr((string)$booking['start_time'], 0, 5)); ?>–<?php echo e(substr((string)$baseEndTime, 0, 5)); ?></td>
                         <td class="text-end"><?php echo formatMoney($pitchTotal); ?></td>
                         <td class="text-end"><?php echo formatMoney($pitchTotal); ?></td>
                     </tr>
+                    <?php foreach ($extensions as $extension): ?>
+                        <tr>
+                            <td>Gia hạn thuê sân</td>
+                            <td class="text-end"><?php echo e(substr((string)$extension['start_time'], 0, 5)); ?>–<?php echo e(substr((string)$extension['end_time'], 0, 5)); ?> (1 giờ)</td>
+                            <td class="text-end"><?php echo formatMoney($extension['amount']); ?></td>
+                            <td class="text-end"><?php echo formatMoney($extension['amount']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
                     <?php foreach ($services as $service): ?>
                         <tr>
                             <td><?php echo e($service['service_name'] ?? 'Dịch vụ'); ?></td>

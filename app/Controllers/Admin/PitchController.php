@@ -83,11 +83,16 @@ class PitchController extends Controller
 
             // Phân loại đơn đặt của từng sân con: đang sử dụng (bao trùm giờ hiện tại) / sắp đá.
             $currentByCourt  = [];
+            $expiredByCourt  = [];
             $upcomingByCourt = [];
             foreach ($rows as $b) {
                 $court = max(1, (int)($b['court_number'] ?? 1));
                 if ($now >= $b['start_time'] && $now < $b['end_time']) {
                     $currentByCourt[$court] = $b;
+                } elseif ($b['status'] === Booking::STATUS_IN_PROGRESS && $now >= $b['end_time']) {
+                    if (!isset($expiredByCourt[$court]) || $b['end_time'] > $expiredByCourt[$court]['end_time']) {
+                        $expiredByCourt[$court] = $b;
+                    }
                 } elseif ($b['start_time'] > $now) {
                     if (!isset($upcomingByCourt[$court]) || $b['start_time'] < $upcomingByCourt[$court]['start_time']) {
                         $upcomingByCourt[$court] = $b;
@@ -97,15 +102,23 @@ class PitchController extends Controller
 
             $courts = [];
             for ($c = 1; $c <= $courtCount; $c++) {
+                $isExpired = !isset($currentByCourt[$c]) && isset($expiredByCourt[$c]);
+                $courtBooking = $currentByCourt[$c] ?? $expiredByCourt[$c] ?? null;
+                $extensionQuote = $courtBooking
+                    && $courtBooking['status'] === Booking::STATUS_IN_PROGRESS
+                    ? $booking->getExtensionQuote((int)$courtBooking['id'])
+                    : null;
                 $courts[] = [
                     'number'   => $c,
-                    'busy'     => isset($currentByCourt[$c]),
-                    'booking'  => $currentByCourt[$c] ?? null,
+                    'busy'     => $courtBooking !== null,
+                    'expired'  => $isExpired,
+                    'booking'  => $courtBooking,
+                    'extension_quote' => $extensionQuote,
                     'upcoming' => $upcomingByCourt[$c] ?? null,
                 ];
             }
 
-            $busyCount    = count($currentByCourt);
+            $busyCount    = count(array_unique(array_merge(array_keys($currentByCourt), array_keys($expiredByCourt))));
             $totalCourts += $courtCount;
             $busyCourts  += $busyCount;
 

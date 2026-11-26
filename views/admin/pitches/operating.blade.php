@@ -94,7 +94,11 @@
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <span class="fw-semibold">Sân <?php echo (int)$court['number']; ?></span>
                                             <?php if ($court['busy']): ?>
-                                                <span class="badge bg-danger">Đang sử dụng</span>
+                                                <?php if ($court['expired']): ?>
+                                                    <span class="badge bg-warning text-dark">Hết giờ thuê</span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-danger">Đang sử dụng</span>
+                                                <?php endif; ?>
                                             <?php else: ?>
                                                 <span class="badge bg-success">Trống</span>
                                             <?php endif; ?>
@@ -115,6 +119,23 @@
                                                     <?php echo paymentStatusBadge($b['payment_status']); ?>
                                                 </div>
                                                 <a href="<?php echo route('admin/bookings/' . $b['id']); ?>" class="btn btn-sm btn-outline-danger mt-2 w-100">Xem đơn</a>
+                                                <?php if ($b['status'] === 'in_progress'): ?>
+                                                    <form method="POST" action="<?php echo route('admin/bookings/' . (int)$b['id'] . '/extend'); ?>" class="mt-2">
+                                                        <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
+                                                        <?php if (!empty($court['extension_quote']['success'])): ?>
+                                                            <button type="submit" class="btn btn-sm btn-warning w-100">
+                                                                Thêm 1 giờ · <?php echo formatMoney($court['extension_quote']['amount']); ?>
+                                                            </button>
+                                                        <?php else: ?>
+                                                            <button type="submit" class="btn btn-sm btn-warning w-100" disabled>Thêm 1 giờ</button>
+                                                        <?php endif; ?>
+                                                    </form>
+                                                    <?php if (empty($court['extension_quote']['success'])): ?>
+                                                        <div class="alert alert-warning small mt-2 mb-0 py-2">
+                                                            <?php echo e($court['extension_quote']['error'] ?? 'Không thể gia hạn khung giờ tiếp theo.'); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                <?php endif; ?>
                                             </div>
                                         <?php elseif (!empty($court['upcoming'])): ?>
                                             <?php $u = $court['upcoming']; ?>

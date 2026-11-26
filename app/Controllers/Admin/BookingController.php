@@ -219,6 +219,37 @@ class BookingController extends Controller
         }
     }
 
+    public function extendOperatingBooking($id)
+    {
+        if (!$this->user->canConfirm()) {
+            setFlash('error', 'Bạn không có quyền gia hạn lịch đặt sân.');
+            redirect('admin/pitches/operating');
+            return;
+        }
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/pitches/operating');
+            return;
+        }
+
+        $result = $this->booking->extendActiveBooking(
+            (int)$id,
+            (int)$this->currentUserId()
+        );
+        if (!$result['success']) {
+            setFlash('error', $result['error']);
+        } else {
+            setFlash(
+                'success',
+                'Đã gia hạn đến ' . substr($result['end_time'], 0, 5)
+                    . '. Chi phí gia hạn ' . formatMoney($result['amount'])
+                    . ' đã được ghi vào hóa đơn.'
+            );
+        }
+        redirect('admin/pitches/operating');
+    }
+
     public function serviceSaleInvoice($id)
     {
         $sale = $this->serviceSale->findForInvoice((int)$id);
@@ -912,16 +943,23 @@ class BookingController extends Controller
             static fn ($item) => (float)$item['subtotal'],
             $services
         ));
+        $extensions = $this->booking->getExtensionsForBooking((int)$booking['id']);
+        $extensionTotal = array_sum(array_map(
+            static fn ($item) => (float)$item['amount'],
+            $extensions
+        ));
 
         return view('admin.bookings.invoice', [
             'booking' => $booking,
             'services' => $services,
+            'extensions' => $extensions,
+            'extensionTotal' => $extensionTotal,
             'transactions' => $transactions,
             'received' => $received,
             'refunded' => $refunded,
             'netPaid' => $netPaid,
             'remaining' => max(0, (float)$booking['total_price'] - $netPaid),
-            'pitchTotal' => max(0, (float)$booking['total_price'] - $serviceTotal),
+            'pitchTotal' => max(0, (float)$booking['total_price'] - $serviceTotal - $extensionTotal),
         ]);
     }
 
