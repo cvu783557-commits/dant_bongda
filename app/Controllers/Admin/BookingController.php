@@ -6,6 +6,8 @@ use App\Controller;
 use App\Models\Booking;
 use App\Models\BookingService;
 use App\Models\ServiceRequest;
+use App\Models\Service;
+use App\Models\ServiceSale;
 use App\Models\Customer;
 use App\Models\CancellationRequest;
 use App\Models\Notification;
@@ -28,6 +30,8 @@ class BookingController extends Controller
     protected $cancellationRequest;
     protected $notification;
     protected $serviceRequest;
+    protected $serviceSale;
+    protected $service;
 
     public function __construct()
     {
@@ -41,6 +45,8 @@ class BookingController extends Controller
         $this->cancellationRequest = new CancellationRequest();
         $this->notification = new Notification();
         $this->serviceRequest = new ServiceRequest();
+        $this->serviceSale = new ServiceSale();
+        $this->service = new Service();
         $this->validator = new Validator();
 
         if (session_status() === PHP_SESSION_NONE) session_start();
@@ -110,8 +116,85 @@ class BookingController extends Controller
     {
         return view('admin.bookings.service_requests', [
             'requests' => $this->serviceRequest->allForAdmin(),
+            'services' => $this->service->getAvailableForBooking(),
+            'sales' => $this->serviceSale->recentForAdmin(),
             'success' => getFlash('success'),
             'error' => getFlash('error'),
+            'currentUser' => $this->currentUser(),
+        ]);
+    }
+
+    public function createServiceSale()
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/service-requests');
+            return;
+        }
+
+        $serviceIdValue = $_POST['service_id'] ?? null;
+        $quantityValue = $_POST['quantity'] ?? null;
+        $serviceId = is_string($serviceIdValue) || is_int($serviceIdValue)
+            ? filter_var($serviceIdValue, FILTER_VALIDATE_INT)
+            : false;
+        $quantity = is_string($quantityValue) || is_int($quantityValue)
+            ? filter_var($quantityValue, FILTER_VALIDATE_INT)
+            : false;
+        $customerName = $_POST['customer_name'] ?? '';
+        $customerPhone = $_POST['customer_phone'] ?? '';
+        if (!is_string($customerName) || !is_string($customerPhone)) {
+            setFlash('error', 'Thông tin khách hàng không hợp lệ.');
+            redirect('admin/service-requests');
+            return;
+        }
+        $customerName = trim($customerName);
+        $customerPhone = trim($customerPhone);
+        $paymentMethod = $_POST['payment_method'] ?? '';
+        if (mb_strlen($customerName) > 150 || mb_strlen($customerPhone) > 30) {
+            setFlash('error', 'Tên hoặc số điện thoại khách hàng vượt quá giới hạn.');
+            redirect('admin/service-requests');
+            return;
+        }
+        if ($serviceId === false || $quantity === false) {
+            setFlash('error', 'Vui lòng chọn dịch vụ và nhập số lượng hợp lệ.');
+            redirect('admin/service-requests');
+            return;
+        }
+        if (!is_string($paymentMethod) || !in_array($paymentMethod, ['cash', 'banking'], true)) {
+            setFlash('error', 'Vui lòng chọn phương thức thanh toán hợp lệ.');
+            redirect('admin/service-requests');
+            return;
+        }
+
+        $admin = $this->currentUser();
+        $result = $this->serviceSale->createSale(
+            (int)$serviceId,
+            (int)$quantity,
+            $customerName,
+            $customerPhone,
+            $paymentMethod,
+            (int)$admin['id']
+        );
+        if (!$result['success']) {
+            setFlash('error', $result['error']);
+            redirect('admin/service-requests');
+            return;
+        }
+
+        redirect('admin/service-requests/sales/' . (int)$result['id'] . '/invoice');
+    }
+
+    public function serviceSaleInvoice($id)
+    {
+        $sale = $this->serviceSale->findForInvoice((int)$id);
+        if (!$sale) {
+            redirect404();
+            return;
+        }
+
+        return view('admin.bookings.service_sale_invoice', [
+            'sale' => $sale,
             'currentUser' => $this->currentUser(),
         ]);
     }

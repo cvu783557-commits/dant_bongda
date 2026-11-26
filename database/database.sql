@@ -280,6 +280,28 @@ CREATE TABLE IF NOT EXISTS booking_services (
     CONSTRAINT chk_bs_subtotal_nonneg CHECK (subtotal >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS service_sales (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    service_id INT NOT NULL,
+    service_name VARCHAR(150) NOT NULL,
+    unit VARCHAR(30) NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(12,0) NOT NULL,
+    total_amount DECIMAL(12,0) NOT NULL,
+    customer_name VARCHAR(150) NULL,
+    customer_phone VARCHAR(30) NULL,
+    payment_method ENUM('cash','banking') NOT NULL DEFAULT 'cash',
+    recorded_by INT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_service_sales_created (created_at, id),
+    CONSTRAINT fk_service_sale_service FOREIGN KEY (service_id)
+        REFERENCES services(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_service_sale_user FOREIGN KEY (recorded_by)
+        REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT chk_service_sale_quantity CHECK (quantity > 0),
+    CONSTRAINT chk_service_sale_price CHECK (unit_price >= 0 AND total_amount >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS service_requests (
     id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
     booking_id INT NOT NULL,
