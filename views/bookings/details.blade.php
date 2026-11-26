@@ -138,11 +138,16 @@
                 </div>
                 <div class="form-check mb-4">
                     <input class="form-check-input cancellation-policy-checkbox" type="checkbox" id="cancellation_policy_accepted"
-                           name="cancellation_policy_accepted" value="1" required
+                           name="cancellation_policy_accepted" value="1"
+                           aria-describedby="cancellationPolicyError"
+                           aria-invalid="<?php echo !empty($old['cancellation_policy_error']) ? 'true' : 'false'; ?>"
                            <?php echo !empty($old['cancellation_policy_accepted']) ? 'checked' : ''; ?>>
                     <label class="form-check-label" for="cancellation_policy_accepted">
                         Tôi đã đọc và đồng ý: <span class="text-nowrap">hủy sân sẽ mất tiền cọc.&nbsp;<span class="text-danger">*</span></span>
                     </label>
+                </div>
+                <div id="cancellationPolicyError" class="small text-danger mt-n3 mb-3 <?php echo !empty($old['cancellation_policy_error']) ? '' : 'd-none'; ?>" aria-live="polite">
+                    Vui lòng xác nhận chính sách hủy sân để tiếp tục.
                 </div>
                 <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">
                     Xác nhận thông tin, tiếp tục thanh toán
@@ -165,6 +170,35 @@
     }
     update();
     setInterval(update, 1000);
+
+    const policyCheckbox = document.getElementById('cancellation_policy_accepted');
+    const policyError = document.getElementById('cancellationPolicyError');
+    const bookingForm = policyCheckbox.form;
+    function showPolicyError() {
+        policyError.classList.remove('d-none');
+        policyCheckbox.setAttribute('aria-invalid', 'true');
+    }
+    function preventUnconfirmedSubmission(event) {
+        if (!policyCheckbox.checked) {
+            event.preventDefault();
+            showPolicyError();
+            policyCheckbox.focus();
+        }
+    }
+    bookingForm.querySelector('button[type="submit"]').addEventListener('click', function (event) {
+        if (!policyCheckbox.checked && bookingForm.checkValidity()) {
+            preventUnconfirmedSubmission(event);
+        }
+    });
+    bookingForm.addEventListener('submit', function (event) {
+        preventUnconfirmedSubmission(event);
+    });
+    policyCheckbox.addEventListener('change', function () {
+        if (policyCheckbox.checked) {
+            policyError.classList.add('d-none');
+            policyCheckbox.setAttribute('aria-invalid', 'false');
+        }
+    });
 })();
 </script>
 </body>
