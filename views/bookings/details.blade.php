@@ -6,6 +6,39 @@
     <title>Thông tin người đặt sân</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="<?php echo route('site-theme'); ?>" rel="stylesheet">
+    <style>
+        .form-check .form-check-input.cancellation-policy-checkbox {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 1.15rem;
+            height: 1.15rem;
+            border: 1px solid #adb5bd;
+            border-radius: 50%;
+            background: #fff;
+            display: inline-grid;
+            place-content: center;
+            cursor: pointer;
+        }
+        .form-check .form-check-input.cancellation-policy-checkbox::after {
+            content: "\2713";
+            color: #fff;
+            font-size: .75rem;
+            font-weight: 700;
+            line-height: 1;
+            transform: scale(0);
+        }
+        .form-check .form-check-input.cancellation-policy-checkbox:checked {
+            border-color: #198754;
+            background: #198754;
+        }
+        .form-check .form-check-input.cancellation-policy-checkbox:checked::after {
+            transform: scale(1);
+        }
+        .form-check .form-check-input.cancellation-policy-checkbox:focus-visible {
+            outline: 3px solid rgba(25, 135, 84, .25);
+            outline-offset: 2px;
+        }
+    </style>
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-expand-lg navbar-dark bg-success">
@@ -99,9 +132,17 @@
                     <input type="email" id="customer_email" name="customer_email" class="form-control" autocomplete="email"
                            value="<?php echo e($old['customer_email'] ?? $currentUser['email'] ?? ''); ?>">
                 </div>
-                <div class="mb-4">
+                <div class="mb-3">
                     <label class="form-label fw-semibold" for="notes">Ghi chú (tùy chọn)</label>
                     <textarea id="notes" name="notes" rows="3" maxlength="500" class="form-control"><?php echo e($old['notes'] ?? ''); ?></textarea>
+                </div>
+                <div class="form-check mb-4">
+                    <input class="form-check-input cancellation-policy-checkbox" type="checkbox" id="cancellation_policy_accepted"
+                           name="cancellation_policy_accepted" value="1" required
+                           <?php echo !empty($old['cancellation_policy_accepted']) ? 'checked' : ''; ?>>
+                    <label class="form-check-label" for="cancellation_policy_accepted">
+                        Tôi đã đọc và đồng ý: <span class="text-nowrap">hủy sân sẽ mất tiền cọc.&nbsp;<span class="text-danger">*</span></span>
+                    </label>
                 </div>
                 <button type="submit" class="btn btn-success btn-lg w-100 fw-bold">
                     Xác nhận thông tin, tiếp tục thanh toán
