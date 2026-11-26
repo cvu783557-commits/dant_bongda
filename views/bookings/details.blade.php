@@ -143,7 +143,7 @@
                            aria-invalid="<?php echo !empty($old['cancellation_policy_error']) ? 'true' : 'false'; ?>"
                            <?php echo !empty($old['cancellation_policy_accepted']) ? 'checked' : ''; ?>>
                     <label class="form-check-label" for="cancellation_policy_accepted">
-                        Tôi đã đọc và đồng ý: <span class="text-nowrap">hủy sân sẽ mất tiền cọc.&nbsp;<span class="text-danger">*</span></span>
+                        Tôi đã đọc và đồng ý với chính sách hủy sân sẽ mất tiền cọc&nbsp;<span class="text-danger">*</span>
                     </label>
                 </div>
                 <div id="cancellationPolicyError" class="small text-danger mt-n3 mb-3 <?php echo !empty($old['cancellation_policy_error']) ? '' : 'd-none'; ?>" aria-live="polite">
