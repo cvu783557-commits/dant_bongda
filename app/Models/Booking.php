@@ -194,6 +194,217 @@ class Booking extends Model
         return $this->connection->executeQuery($sql, $params)->fetchAllAssociative();
     }
 
+    private function timeToSeconds(string $time): int
+    {
+        $parts = array_map('intval', explode(':', $time));
+        return ($parts[0] * 3600) + (($parts[1] ?? 0) * 60) + ($parts[2] ?? 0);
+    }
+
+    private function extensionQuote(array $booking): array
+    {
+        if ($booking['status'] !== self::STATUS_IN_PROGRESS
+            || $booking['booking_date'] !== date('Y-m-d')) {
+            return ['success' => false, 'error' => 'Chỉ có thể thêm giờ cho đơn đang sử dụng trong hôm nay.'];
+        }
+
+        $startTime = $booking['end_time'];
+        $startSeconds = $this->timeToSeconds($startTime);
+        $endSeconds = $startSeconds + 3600;
+        if ($endSeconds >= 86400) {
+            return ['success' => false, 'error' => 'Không thể gia hạn vượt quá ngày hoạt động hiện tại.'];
+        }
+
+        $endTime = sprintf(
+            '%02d:%02d:%02d',
+            intdiv($endSeconds, 3600),
+            intdiv($endSeconds % 3600, 60),
+            $endSeconds % 60
+        );
+        $openingSeconds = $this->timeToSeconds($booking['opening_time']);
+        $closingSeconds = substr($booking['closing_time'], 0, 5) === '00:00'
+            ? 86400
+            : $this->timeToSeconds($booking['closing_time']);
+        if ($closingSeconds < $openingSeconds) {
+            $closingSeconds += 86400;
+        }
+        if ($startSeconds < $openingSeconds || $endSeconds > $closingSeconds) {
+            return ['success' => false, 'error' => 'Khung giờ gia hạn vượt quá giờ hoạt động của sân.'];
+        }
+
+        $overlap = $this->checkOverlap(
+            (int)$booking['pitch_id'],
+            $booking['booking_date'],
+            $startTime,
+            $endTime,
+            (int)$booking['id'],
+            (int)$booking['court_number']
+        );
+        if ($overlap) {
+            return [
+                'success' => false,
+                'error' => 'Sân số ' . (int)$booking['court_number']
+                    . ' đã có lịch từ ' . substr($overlap['start_time'], 0, 5)
+                    . ' đến ' . substr($overlap['end_time'], 0, 5) . '. Không thể gia hạn.',
+            ];
+        }
+
+        $lock = $this->checkPitchLockOverlap(
+            (int)$booking['pitch_id'],
+            $booking['booking_date'],
+            $startTime,
+            $endTime,
+            (int)$booking['court_number']
+        );
+        if ($lock) {
+            return ['success' => false, 'error' => 'Khung giờ gia hạn đang bị khóa: ' . ($lock['reason'] ?: 'Bảo trì/Sự kiện') . '.'];
+        }
+
+        $prices = $this->connection->executeQuery(
+            'SELECT start_time, end_time, weekday_price, weekend_price
+             FROM pitch_time_prices WHERE pitch_id = ? ORDER BY start_time ASC',
+            [(int)$booking['pitch_id']]
+        )->fetchAllAssociative();
+
+        if (!$prices) {
+            $amount = (float)$booking['price_per_hour'];
+        } else {
+            $isWeekend = in_array((int)date('N', strtotime($booking['booking_date'])), [6, 7], true);
+            $coveredSeconds = 0;
+            $amount = 0.0;
+            foreach ($prices as $price) {
+                $priceStart = $this->timeToSeconds($price['start_time']);
+                $priceEnd = $this->timeToSeconds($price['end_time']);
+                if (substr($price['end_time'], 0, 5) === '00:00') {
+                    $priceEnd = 86400;
+                }
+                if ($priceEnd <= $priceStart) {
+                    $priceEnd += 86400;
+                }
+                $overlapStart = max($startSeconds, $priceStart);
+                $overlapEnd = min($endSeconds, $priceEnd);
+                if ($overlapEnd <= $overlapStart) {
+                    continue;
+                }
+                $coveredSeconds += $overlapEnd - $overlapStart;
+                $rate = (float)($isWeekend ? $price['weekend_price'] : $price['weekday_price']);
+                $amount += (($overlapEnd - $overlapStart) / 3600) * $rate;
+            }
+            if ($coveredSeconds !== 3600) {
+                return ['success' => false, 'error' => 'Chưa cấu hình giá cho toàn bộ khung giờ gia hạn.'];
+            }
+        }
+
+        return [
+            'success' => true,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+            'amount' => round($amount),
+        ];
+    }
+
+    public function getExtensionQuote(int $bookingId): array
+    {
+        $booking = $this->connection->executeQuery(
+            "SELECT b.*, p.opening_time, p.closing_time, p.price_per_hour
+             FROM {$this->table} b
+             INNER JOIN pitches p ON p.id = b.pitch_id
+             WHERE b.id = ? LIMIT 1",
+            [$bookingId]
+        )->fetchAssociative();
+        if (!$booking) {
+            return ['success' => false, 'error' => 'Đơn đặt sân không tồn tại.'];
+        }
+        return $this->extensionQuote($booking);
+    }
+
+    public function extendActiveBooking(int $bookingId, int $adminId): array
+    {
+        try {
+            $bookingIdentity = $this->connection->executeQuery(
+                "SELECT pitch_id FROM {$this->table} WHERE id = ?",
+                [$bookingId]
+            )->fetchAssociative();
+            if (!$bookingIdentity) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Đơn đặt sân không tồn tại.'];
+            }
+
+            $this->connection->beginTransaction();
+            $pitchId = (int)$bookingIdentity['pitch_id'];
+            $this->connection->executeQuery(
+                'SELECT id FROM pitches WHERE id = ? FOR UPDATE',
+                [$pitchId]
+            );
+            $booking = $this->connection->executeQuery(
+                "SELECT b.*, p.opening_time, p.closing_time, p.price_per_hour
+                 FROM {$this->table} b
+                 INNER JOIN pitches p ON p.id = b.pitch_id
+                 WHERE b.id = ? FOR UPDATE",
+                [$bookingId]
+            )->fetchAssociative();
+            if (!$booking) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Đơn đặt sân không tồn tại.'];
+            }
+            if ((int)$booking['pitch_id'] !== $pitchId) {
+                $this->connection->rollBack();
+                return ['success' => false, 'error' => 'Lịch đặt vừa được chuyển sân. Vui lòng tải lại và thử lại.'];
+            }
+            $quote = $this->extensionQuote($booking);
+            if (!$quote['success']) {
+                $this->connection->rollBack();
+                return $quote;
+            }
+
+            $newTotal = (float)$booking['total_price'] + (float)$quote['amount'];
+            $paymentStatus = self::calcPaymentStatus(
+                $newTotal,
+                (float)$booking['deposit'],
+                (float)$booking['paid_amount']
+            );
+            $this->connection->executeStatement(
+                "UPDATE {$this->table}
+                 SET end_time = ?, total_price = ?, payment_status = ?, updated_at = NOW()
+                 WHERE id = ? AND status = ?",
+                [
+                    $quote['end_time'],
+                    $newTotal,
+                    $paymentStatus,
+                    $bookingId,
+                    self::STATUS_IN_PROGRESS,
+                ]
+            );
+            $this->connection->insert('booking_extensions', [
+                'booking_id' => $bookingId,
+                'start_time' => $quote['start_time'],
+                'end_time' => $quote['end_time'],
+                'amount' => $quote['amount'],
+                'recorded_by' => $adminId,
+                'created_at' => date('Y-m-d H:i:s'),
+            ]);
+            $this->connection->commit();
+            return $quote;
+        } catch (\Throwable $e) {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+            error_log('Extending active booking #' . $bookingId . ' failed: ' . $e->getMessage());
+            return ['success' => false, 'error' => 'Không thể gia hạn sân. Vui lòng thử lại.'];
+        }
+    }
+
+    public function getExtensionsForBooking(int $bookingId): array
+    {
+        return $this->connection->executeQuery(
+            "SELECT be.*, u.full_name AS recorded_by_name
+             FROM booking_extensions be
+             LEFT JOIN users u ON u.id = be.recorded_by
+             WHERE be.booking_id = ?
+             ORDER BY be.id ASC",
+            [$bookingId]
+        )->fetchAllAssociative();
+    }
+
     public function getAllByDateRange($fromDate, $toDate, $pitchId = null)
     {
         $sql    = $this->buildBaseQuery() . " AND b.booking_date BETWEEN ? AND ?";
