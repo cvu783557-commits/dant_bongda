@@ -260,8 +260,8 @@ class Booking extends Model
     public function findByCheckInToken(string $token): ?array
     {
         return $this->connection->executeQuery(
-            $this->buildBaseQuery() . " AND b.checkin_token = ? LIMIT 1",
-            [$token]
+            $this->buildBaseQuery() . " AND b.checkin_token = ? AND b.booking_date = ? LIMIT 1",
+            [$token, date('Y-m-d')]
         )->fetchAssociative() ?: null;
     }
 
