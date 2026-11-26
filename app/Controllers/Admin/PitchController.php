@@ -3,6 +3,7 @@
 namespace App\Controllers\Admin;
 
 use App\Controller;
+use App\Models\Booking;
 use App\Models\Pitch;
 use App\Models\User;
 use Rakit\Validation\Validator;
@@ -46,6 +47,83 @@ class PitchController extends Controller
             'error'   => $error,
             'user'    => $this->user->getActiveUser(),
             'canDelete' => $this->user->canDelete(),
+        ]);
+    }
+
+    /**
+     * Trang "Sân đang hoạt động" - bảng giám sát vận hành theo thời gian thực.
+     * Hiển thị các sân đang hoạt động (status = active) và trạng thái từng sân con
+     * ngay tại thời điểm truy cập: Trống hoặc Đang sử dụng (kèm thông tin khách).
+     */
+    public function operating()
+    {
+        $date = date('Y-m-d');
+        $now  = date('H:i:s');
+
+        // Chỉ lấy các sân đang hoạt động, đồng bộ bộ lọc loại sân với trang Quản lý sân.
+        $pitches = array_values(array_filter(
+            $this->pitch->all('active'),
+            static fn ($pitch) => in_array((int)$pitch['type'], [5, 7], true)
+        ));
+
+        $booking = new Booking();
+
+        $board       = [];
+        $totalCourts = 0;
+        $busyCourts  = 0;
+
+        foreach ($pitches as $pitch) {
+            $courtCount = max(1, (int)($pitch['field_count'] ?? 1));
+            $rows       = $booking->getByPitchAndDate((int)$pitch['id'], $date, false);
+
+            // Phân loại đơn đặt của từng sân con: đang sử dụng (bao trùm giờ hiện tại) / sắp đá.
+            $currentByCourt  = [];
+            $upcomingByCourt = [];
+            foreach ($rows as $b) {
+                $court = max(1, (int)($b['court_number'] ?? 1));
+                if ($now >= $b['start_time'] && $now < $b['end_time']) {
+                    $currentByCourt[$court] = $b;
+                } elseif ($b['start_time'] > $now) {
+                    if (!isset($upcomingByCourt[$court]) || $b['start_time'] < $upcomingByCourt[$court]['start_time']) {
+                        $upcomingByCourt[$court] = $b;
+                    }
+                }
+            }
+
+            $courts = [];
+            for ($c = 1; $c <= $courtCount; $c++) {
+                $courts[] = [
+                    'number'   => $c,
+                    'busy'     => isset($currentByCourt[$c]),
+                    'booking'  => $currentByCourt[$c] ?? null,
+                    'upcoming' => $upcomingByCourt[$c] ?? null,
+                ];
+            }
+
+            $busyCount    = count($currentByCourt);
+            $totalCourts += $courtCount;
+            $busyCourts  += $busyCount;
+
+            $board[] = [
+                'pitch'       => $pitch,
+                'court_count' => $courtCount,
+                'courts'      => $courts,
+                'busy_count'  => $busyCount,
+                'free_count'  => $courtCount - $busyCount,
+            ];
+        }
+
+        return view('admin.pitches.operating', [
+            'board'        => $board,
+            'date'         => $date,
+            'now'          => $now,
+            'totalPitches' => count($board),
+            'totalCourts'  => $totalCourts,
+            'busyCourts'   => $busyCourts,
+            'freeCourts'   => $totalCourts - $busyCourts,
+            'currentUser'  => $this->user->getActiveUser(),
+            'success'      => getFlash('success'),
+            'error'        => getFlash('error'),
         ]);
     }
 
