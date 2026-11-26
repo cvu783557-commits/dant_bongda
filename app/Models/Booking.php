@@ -19,8 +19,8 @@ class Booking extends Model
     const PAY_PARTIAL   = 'partial';
     const PAY_PAID      = 'paid';
 
-    const MIN_OPERATING_HOUR = '06:00:00';
-    const MAX_OPERATING_HOUR = '23:00:00';
+    const MIN_OPERATING_HOUR = '00:00:00';
+    const MAX_OPERATING_HOUR = '24:00:00';
 
     public static function getBookingStatuses()
     {
@@ -327,12 +327,28 @@ class Booking extends Model
     }
 
     /**
-     * Kiểm tra xem thời gian đặt có nằm trong giờ hoạt động không (06:00 - 23:00)
+     * Kiểm tra giờ đặt trong khoảng hoạt động.
+     * 00:00 ở giờ kết thúc được hiểu là 24:00 (cuối ngày).
      */
-    public function isWithinOperatingHours($startTime, $endTime)
+    public function isWithinOperatingHours($startTime, $endTime, $openingTime = null, $closingTime = null)
     {
-        return ($startTime >= self::MIN_OPERATING_HOUR)
-            && ($endTime   <= self::MAX_OPERATING_HOUR);
+        $start = substr($startTime, 0, 5);
+        $end = substr($endTime, 0, 5);
+        if ($end === '00:00') $end = '24:00';
+
+        if ($openingTime !== null) {
+            $opening = substr($openingTime, 0, 5);
+            if ($opening === '24:00') $opening = '00:00';
+            if ($start < $opening) return false;
+        }
+        if ($closingTime !== null) {
+            $closing = substr($closingTime, 0, 5);
+            if ($closing === '00:00') $closing = '24:00';
+            if ($end > $closing) return false;
+        }
+
+        if ($end !== '24:00' && $end <= $start) return false;
+        return $start >= '00:00' && $end <= '24:00';
     }
 
     private function attachServicesToBookings(array $bookingIds, array $serviceItems)

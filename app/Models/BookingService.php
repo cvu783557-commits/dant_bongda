@@ -51,19 +51,16 @@ class BookingService extends Model
 
         $this->connection->beginTransaction();
         try {
-            $now = date('H:i:s');
             $booking = $this->connection->executeQuery(
                 "SELECT id, total_price, deposit, paid_amount
                  FROM bookings
-                 WHERE id = ? AND booking_date = ?
-                   AND start_time <= ? AND end_time > ?
-                   AND status IN ('confirmed', 'in_progress')
+                WHERE id = ? AND status <> 'cancelled'
                  FOR UPDATE",
-                [$bookingId, date('Y-m-d'), $now, $now]
+                [$bookingId]
             )->fetchAssociative();
             if (!$booking) {
                 $this->connection->rollBack();
-                return ['success' => false, 'error' => 'Đơn đặt sân không còn trong thời gian hoạt động.'];
+                return ['success' => false, 'error' => 'Đơn đặt sân không tồn tại hoặc đã bị hủy.'];
             }
 
             $service = $this->connection->executeQuery(

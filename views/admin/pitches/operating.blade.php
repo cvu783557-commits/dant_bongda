@@ -115,25 +115,6 @@
                                                     <?php echo paymentStatusBadge($b['payment_status']); ?>
                                                 </div>
                                                 <a href="<?php echo route('admin/bookings/' . $b['id']); ?>" class="btn btn-sm btn-outline-danger mt-2 w-100">Xem đơn</a>
-                                                <form method="post" action="<?php echo route('admin/bookings/' . (int)$b['id'] . '/services'); ?>" class="mt-2">
-                                                    <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
-                                                    <label class="form-label mb-1">Thêm dịch vụ vào hóa đơn</label>
-                                                    <div class="input-group input-group-sm">
-                                                        <select name="service_id" class="form-select" required <?php echo empty($availableServices) ? 'disabled' : ''; ?>>
-                                                            <option value="">Chọn dịch vụ</option>
-                                                            <?php foreach ($availableServices as $service): ?>
-                                                                <option value="<?php echo (int)$service['id']; ?>">
-                                                                    <?php echo e($service['name']); ?> · <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?> (còn <?php echo (int)$service['stock']; ?>)
-                                                                </option>
-                                                            <?php endforeach; ?>
-                                                        </select>
-                                                        <input type="number" name="quantity" class="form-control" value="1" min="1" max="20" required aria-label="Số lượng" style="max-width:76px;" <?php echo empty($availableServices) ? 'disabled' : ''; ?>>
-                                                        <button type="submit" class="btn btn-success" <?php echo empty($availableServices) ? 'disabled' : ''; ?>>Thêm</button>
-                                                    </div>
-                                                    <?php if (empty($availableServices)): ?>
-                                                        <div class="text-muted mt-1">Không có dịch vụ còn hàng.</div>
-                                                    <?php endif; ?>
-                                                </form>
                                             </div>
                                         <?php elseif (!empty($court['upcoming'])): ?>
                                             <?php $u = $court['upcoming']; ?>
