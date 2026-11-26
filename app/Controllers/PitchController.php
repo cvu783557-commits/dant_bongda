@@ -443,8 +443,8 @@ class PitchController extends Controller
             $formOld = $customerData;
             $formOld['cancellation_policy_accepted'] = ($_POST['cancellation_policy_accepted'] ?? '') === '1';
             if (!$formOld['cancellation_policy_accepted']) {
+                $formOld['cancellation_policy_error'] = true;
                 keepOld($formOld);
-                setFlash('error', 'Vui lòng xác nhận chính sách hủy sân trước khi tiếp tục thanh toán.');
                 redirect('bookings/details/' . $detailsToken);
                 return;
             }
