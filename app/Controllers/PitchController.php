@@ -440,6 +440,14 @@ class PitchController extends Controller
                 'customer_email' => is_string($_POST['customer_email'] ?? null) ? trim($_POST['customer_email']) : '',
                 'notes' => is_string($_POST['notes'] ?? null) ? trim($_POST['notes']) : '',
             ];
+            $formOld = $customerData;
+            $formOld['cancellation_policy_accepted'] = ($_POST['cancellation_policy_accepted'] ?? '') === '1';
+            if (!$formOld['cancellation_policy_accepted']) {
+                keepOld($formOld);
+                setFlash('error', 'Vui lòng xác nhận chính sách hủy sân trước khi tiếp tục thanh toán.');
+                redirect('bookings/details/' . $detailsToken);
+                return;
+            }
             $contactErrors = $this->validate($this->validator, $customerData, [
                 'customer_name' => 'required|min:2|max:100',
                 'customer_phone' => 'required|regex:/^0[0-9]{9,10}$/',
@@ -447,7 +455,7 @@ class PitchController extends Controller
                 'notes' => 'nullable|max:500',
             ]);
             if (!empty($contactErrors)) {
-                keepOld($customerData);
+                keepOld($formOld);
                 setFlash('error', reset($contactErrors));
                 redirect('bookings/details/' . $detailsToken);
                 return;
