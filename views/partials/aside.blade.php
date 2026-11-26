@@ -67,9 +67,18 @@
             </a>
         </li>
         <li class="nav-item mb-1">
-            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/pitches') !== false) ? 'bg-success text-white' : ''; ?>"
+            <a class="nav-link text-dark <?php echo (
+                (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/pitches') !== false)
+                && (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/pitches/operating') === false)
+            ) ? 'bg-success text-white' : ''; ?>"
                href="<?php echo route('admin/pitches'); ?>">
                 🏢 Quản lý sân
+            </a>
+        </li>
+        <li class="nav-item mb-1">
+            <a class="nav-link text-dark <?php echo (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin/pitches/operating') !== false) ? 'bg-success text-white' : ''; ?>"
+               href="<?php echo route('admin/pitches/operating'); ?>">
+                🟢 Sân đang hoạt động
             </a>
         </li>
         <li class="nav-item mb-1">

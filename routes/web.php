@@ -65,6 +65,7 @@ $router->get('/admin/dashboard',             AdminBookingController::class . '@d
 
 // Admin -> Quản lý sân
 $router->get('/admin/pitches',                    AdminPitchController::class . '@index');
+$router->get('/admin/pitches/operating',          AdminPitchController::class . '@operating');
 $router->get('/admin/pitches/create',             AdminPitchController::class . '@create');
 $router->post('/admin/pitches',                   AdminPitchController::class . '@store');
 $router->get('/admin/pitches/(\d+)',             AdminPitchController::class . '@show');
