@@ -407,6 +407,57 @@ try {
     } else {
         stepSkip("Bảng time_slots đã tồn tại (" . rowCount($pdo,'time_slots') . " dòng)");
     }
+    if (!tableExists($pdo, 'pitch_time_prices')) {
+        $pdo->exec("CREATE TABLE pitch_time_prices (
+            id INT PRIMARY KEY AUTO_INCREMENT,
+            pitch_id INT NOT NULL,
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            weekday_price DECIMAL(12,0) NOT NULL DEFAULT 0,
+            weekend_price DECIMAL(12,0) NOT NULL DEFAULT 0,
+            UNIQUE KEY uq_pitch_time_price (pitch_id, start_time, end_time),
+            INDEX idx_pitch_time_price_pitch (pitch_id),
+            CONSTRAINT fk_pitch_time_price_pitch FOREIGN KEY (pitch_id) REFERENCES pitches(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        stepOK("Tạo bảng pitch_time_prices");
+    } else {
+        stepSkip("Bảng pitch_time_prices đã tồn tại");
+    }
+    $pitchesWithoutPrices = $pdo->query(
+        "SELECT p.id, p.price_per_hour
+         FROM pitches p
+         LEFT JOIN pitch_time_prices ptp ON ptp.pitch_id = p.id
+         WHERE ptp.id IS NULL"
+    )->fetchAll(PDO::FETCH_ASSOC);
+    if ($pitchesWithoutPrices) {
+        $insertPrice = $pdo->prepare(
+            "INSERT IGNORE INTO pitch_time_prices
+             (pitch_id, start_time, end_time, weekday_price, weekend_price)
+             VALUES (?, ?, ?, ?, ?)"
+        );
+        foreach ($pitchesWithoutPrices as $pitchRow) {
+            $base = (int)$pitchRow['price_per_hour'];
+            for ($hour = 6; $hour < 23; $hour++) {
+                $start = sprintf('%02d:00:00', $hour);
+                $end = sprintf('%02d:00:00', $hour + 1);
+                if ($hour >= 17 && $hour < 20) {
+                    $weekday = 600000;
+                    $weekend = 600000;
+                } elseif ($hour >= 12 && $hour < 17) {
+                    $weekday = 275000;
+                    $weekend = 325000;
+                } elseif ($hour >= 20) {
+                    $weekday = 325000;
+                    $weekend = 375000;
+                } else {
+                    $weekday = 250000;
+                    $weekend = 300000;
+                }
+                $insertPrice->execute([(int)$pitchRow['id'], $start, $end, $weekday, $weekend]);
+            }
+        }
+        stepOK("Khởi tạo giá khung giờ cho " . count($pitchesWithoutPrices) . " sân");
+    }
 
     stepInfo("\n===== BUỚC 2: Tạo bảng USERS (phân quyền ADMIN/USER) =====");
     if (!tableExists($pdo, 'users')) {

@@ -94,7 +94,6 @@
             <div class="d-flex flex-wrap gap-2 mb-3">
                 <span class="badge bg-success-subtle text-success border border-success-subtle">Sân <?php echo (int)$pitch['type']; ?> người</span>
                 <span class="text-success fw-bold fs-5">Giá thường: <?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</span>
-                <span class="text-danger fw-semibold">17:00–20:00: <?php echo formatMoney(600000); ?> / giờ</span>
                 <span class="badge <?php echo ($pitch['status'] ?? 'active') === 'active' ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'; ?>">
                     <?php echo (($pitch['status'] ?? 'active') === 'active') ? 'Đang hoạt động' : 'Tạm đóng'; ?>
                 </span>
@@ -185,14 +184,16 @@
             </div>
 
             <?php
-                $basePrice = 250000;
-                $priceByHour = [
-                    ['from' => '06:00', 'to' => '08:00', 'weekday' => 250000, 'weekend' => 300000],
-                    ['from' => '08:00', 'to' => '12:00', 'weekday' => 250000, 'weekend' => 300000],
-                    ['from' => '12:00', 'to' => '17:00', 'weekday' => 275000, 'weekend' => 325000],
-                    ['from' => '17:00', 'to' => '20:00', 'weekday' => 600000, 'weekend' => 600000],
-                    ['from' => '20:00', 'to' => '23:00', 'weekday' => 325000, 'weekend' => 375000],
-                ];
+                $basePrice = (float)$pitch['price_per_hour'];
+                $priceByHour = [];
+                foreach ($timePrices as $priceRow) {
+                    $priceByHour[] = [
+                        'from' => substr($priceRow['start_time'], 0, 5),
+                        'to' => substr($priceRow['end_time'], 0, 5),
+                        'weekday' => (float)$priceRow['weekday_price'],
+                        'weekend' => (float)$priceRow['weekend_price'],
+                    ];
+                }
             ?>
             <div class="card border-0 bg-light mt-4">
                 <div class="card-body">
@@ -365,13 +366,15 @@
                                 <h6 class="fw-bold mb-3">Tình trạng Sân <?php echo (int)$courtNumber; ?> — Ngày <?php echo formatDate($date); ?></h6>
                                 <div class="row g-2">
                                     <?php
-                                        $statusPriceTable = [
-                                            ['from' => '06:00', 'to' => '08:00', 'rate' => 250000],
-                                            ['from' => '08:00', 'to' => '12:00', 'rate' => 250000],
-                                            ['from' => '12:00', 'to' => '17:00', 'rate' => 275000],
-                                            ['from' => '17:00', 'to' => '20:00', 'rate' => 600000],
-                                            ['from' => '20:00', 'to' => '23:00', 'rate' => 325000],
-                                        ];
+                                        $isWeekend = in_array((int)date('N', strtotime($date)), [6, 7], true);
+                                        $statusPriceTable = [];
+                                        foreach ($timePrices as $priceRow) {
+                                            $statusPriceTable[] = [
+                                                'from' => substr($priceRow['start_time'], 0, 5),
+                                                'to' => substr($priceRow['end_time'], 0, 5),
+                                                'rate' => (float)($isWeekend ? $priceRow['weekend_price'] : $priceRow['weekday_price']),
+                                            ];
+                                        }
                                     ?>
                                     <?php foreach ($hourSlots as $idx => $s): ?>
                                         <?php
@@ -381,7 +384,16 @@
                                             $unavailable = $locked || $taken || $past;
                                             $slotRate = (float)$pitch['price_per_hour'];
                                             foreach ($statusPriceTable as $priceBlock) {
-                                                if ($s['start'] >= $priceBlock['from'] && $s['start'] < $priceBlock['to']) {
+                                                $openingSec = ((int)substr($openingTime, 0, 2) * 3600)
+                                                    + ((int)substr($openingTime, 3, 2) * 60);
+                                                $priceStart = ((int)substr($priceBlock['from'], 0, 2) * 3600)
+                                                    + ((int)substr($priceBlock['from'], 3, 2) * 60);
+                                                $priceEnd = ((int)substr($priceBlock['to'], 0, 2) * 3600)
+                                                    + ((int)substr($priceBlock['to'], 3, 2) * 60);
+                                                if ($priceBlock['to'] === '00:00') $priceEnd = 86400;
+                                                if ($priceStart < $openingSec) $priceStart += 86400;
+                                                if ($priceEnd <= $priceStart) $priceEnd += 86400;
+                                                if ($s['start_sec'] >= $priceStart && $s['start_sec'] < $priceEnd) {
                                                     $slotRate = (float)$priceBlock['rate'];
                                                     break;
                                                 }
@@ -517,7 +529,6 @@
                             <div class="col-6 text-end">
                                 <label class="form-label">Giá theo khung giờ</label>
                                 <div class="small fw-semibold text-success">Thường: <?php echo formatMoney($pitch['price_per_hour']); ?> / giờ</div>
-                                <div class="small fw-semibold text-danger">17:00–20:00: <?php echo formatMoney(600000); ?> / giờ</div>
                             </div>
                         </div>
 
@@ -570,6 +581,14 @@
     });
 
     const HOURLY_RATE = <?php echo json_encode((float)$pitch['price_per_hour']); ?>;
+    const SLOT_RATES = <?php echo json_encode(array_map(static function ($row) use ($date) {
+        $isWeekend = in_array((int)date('N', strtotime($date)), [6, 7], true);
+        return [
+            'start' => substr($row['start_time'], 0, 5),
+            'end' => substr($row['end_time'], 0, 5),
+            'rate' => (float)($isWeekend ? $row['weekend_price'] : $row['weekday_price']),
+        ];
+    }, $timePrices)); ?>;
     const PITCH_ID       = <?php echo (int)$pitch['id']; ?>;
     const BOOKING_DATE   = "<?php echo htmlspecialchars($date); ?>";
     const OPENING_TIME   = "<?php echo htmlspecialchars($openingTime); ?>";
@@ -616,12 +635,40 @@
     }
 
     function priceForPeriod(start, end){
-        const startSeconds = timeToSec(start);
-        const endSeconds = timeToSec(end);
-        if (startSeconds === null || endSeconds === null || endSeconds <= startSeconds) {
+        let startSeconds = timeToSec(start);
+        let endSeconds = timeToSec(end);
+        const openingSeconds = timeToSec(OPENING_TIME);
+        if (startSeconds !== null && startSeconds < openingSeconds) {
+            startSeconds += 86400;
+        }
+        if (endSeconds === 0 && startSeconds > 0) {
+            endSeconds = 86400;
+        }
+        if (startSeconds === null || endSeconds === null) {
             return 0;
         }
-        return Math.round(((endSeconds - startSeconds) / 3600) * HOURLY_RATE);
+        if (endSeconds <= startSeconds) {
+            endSeconds += 86400;
+        }
+        let total = 0;
+        SLOT_RATES.forEach(function (slot) {
+            let slotStart = timeToSec(slot.start);
+            let slotEnd = timeToSec(slot.end);
+            if (slotEnd === 0 && slotStart > 0) {
+                slotEnd = 86400;
+            }
+            if (slotStart < openingSeconds) slotStart += 86400;
+            if (slotEnd <= slotStart) slotEnd += 86400;
+            const overlapStart = Math.max(startSeconds, slotStart);
+            const overlapEnd = Math.min(endSeconds, slotEnd);
+            if (overlapEnd > overlapStart) {
+                total += ((overlapEnd - overlapStart) / 3600) * Number(slot.rate);
+            }
+        });
+        if (total === 0) {
+            total = ((endSeconds - startSeconds) / 3600) * HOURLY_RATE;
+        }
+        return Math.round(total);
     }
 
     function syncSlotButtons(){

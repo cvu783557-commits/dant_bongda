@@ -187,10 +187,13 @@ class BookingController extends Controller
 
     public function addOperatingService($id)
     {
+        $redirectAfter = ($_POST['return_to'] ?? '') === 'detail'
+            ? 'admin/bookings/' . (int)$id
+            : 'admin/pitches/operating';
         if ($_SERVER['REQUEST_METHOD'] !== 'POST'
             || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
             setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
-            redirect('admin/pitches/operating');
+            redirect($redirectAfter);
             return;
         }
 
@@ -198,7 +201,7 @@ class BookingController extends Controller
         $quantity = filter_var($_POST['quantity'] ?? null, FILTER_VALIDATE_INT);
         if ($serviceId === false || $quantity === false) {
             setFlash('error', 'Vui lòng chọn dịch vụ và nhập số lượng hợp lệ.');
-            redirect('admin/pitches/operating');
+            redirect($redirectAfter);
             return;
         }
 
@@ -208,7 +211,12 @@ class BookingController extends Controller
         } else {
             setFlash('success', 'Đã thêm dịch vụ vào hóa đơn sân. Thành tiền: ' . formatMoney($result['subtotal']));
         }
-        redirect('admin/pitches/operating');
+        $returnTo = (string)($_POST['return_to'] ?? '');
+        if ($returnTo === 'detail') {
+            redirect('admin/bookings/' . (int)$id);
+        } else {
+            redirect('admin/pitches/operating');
+        }
     }
 
     public function serviceSaleInvoice($id)
@@ -874,6 +882,7 @@ class BookingController extends Controller
             'canDelete'       => $this->user->canDelete(),
             'canConfirm'      => $this->user->canConfirm(),
             'canPay'          => $this->user->canUpdatePayment(),
+            'availableServices' => $this->service->getAvailableForBooking(),
             'remaining'       => Booking::calcRemaining($booking['total_price'], $booking['paid_amount']),
             'hours'           => Booking::calcHoursDiff($booking['start_time'], $booking['end_time']),
         ]);
@@ -1159,12 +1168,23 @@ class BookingController extends Controller
             return;
         }
 
-        $rawAmount = $_POST['payment_amount'] ?? null;
-        $amount = filter_var($rawAmount, FILTER_VALIDATE_FLOAT);
+        $rawAmount = trim((string)($_POST['payment_amount'] ?? ''));
+        $rawAmount = preg_replace('/[^\d]/', '', $rawAmount);
+        $amount = ctype_digit($rawAmount) ? (float)$rawAmount : false;
         $method = (string)($_POST['payment_method'] ?? 'cash');
 
         if ($amount === false || $amount <= 0 || !array_key_exists($method, Booking::getPaymentMethods())) {
             setFlash('error', 'Số tiền hoặc phương thức thanh toán không hợp lệ.');
+            redirect('admin/bookings/' . $id);
+            return;
+        }
+
+        $booking = $this->booking->find((int)$id);
+        $remaining = $booking
+            ? Booking::calcRemaining((float)$booking['total_price'], (float)$booking['paid_amount'])
+            : 0.0;
+        if (!$booking || $amount > $remaining + 0.0001) {
+            setFlash('error', 'Số tiền thanh toán không được vượt quá số còn phải trả.');
             redirect('admin/bookings/' . $id);
             return;
         }
@@ -1203,9 +1223,10 @@ class BookingController extends Controller
         if (!$pitch) $errors[] = 'Sân không tồn tại';
         elseif ($courtNumber < 1 || $courtNumber > max(1, (int)($pitch['field_count'] ?? 1))) $errors[] = 'Sân con không hợp lệ';
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) $errors[] = 'Ngày không hợp lệ';
-        if ($startTime >= $endTime) $errors[] = 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc';
-        if (!$this->booking->isWithinOperatingHours($startTime, $endTime)) {
-            $errors[] = 'Thời gian đặt ngoài giờ hoạt động (06:00 - 23:00)';
+        $normalizedEnd = $endTime === '00:00:00' ? '24:00:00' : $endTime;
+        if ($normalizedEnd <= $startTime) $errors[] = 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc';
+        if (!$this->booking->isWithinOperatingHours($startTime, $normalizedEnd)) {
+            $errors[] = 'Thời gian đặt ngoài giờ hoạt động';
         }
         if (!empty($errors)) {
             echo json_encode(['ok' => false, 'errors' => $errors], JSON_UNESCAPED_UNICODE);
@@ -1281,9 +1302,10 @@ class BookingController extends Controller
         if ($endTime   === '00:00:00' && empty($data['end_time']))   $errors['end_time']   = 'Vui lòng chọn giờ kết thúc';
 
         if (empty($errors)) {
-            if ($startTime >= $endTime) $errors['start_time'] = 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc';
-            else if (!$this->booking->isWithinOperatingHours($startTime, $endTime)) {
-                $errors['start_time'] = 'Thời gian đặt phải nằm trong giờ hoạt động 06:00 -> 23:00';
+            $normalizedEnd = $endTime === '00:00:00' ? '24:00:00' : $endTime;
+            if ($normalizedEnd <= $startTime) $errors['start_time'] = 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc';
+            else if (!$this->booking->isWithinOperatingHours($startTime, $normalizedEnd)) {
+                $errors['start_time'] = 'Thời gian đặt nằm ngoài giờ hoạt động của sân';
             }
         }
 
@@ -1399,11 +1421,11 @@ class BookingController extends Controller
             $today = date('Y-m-d');
             if ($date < date('Y-m-d', strtotime('-1 day'))) $errors[] = 'Không khóa khung giờ trong quá khứ';
         }
-        if ($startTime === '00:00:00') $errors[] = 'Vui lòng chọn giờ bắt đầu';
-        if ($endTime   === '00:00:00') $errors[] = 'Vui lòng chọn giờ kết thúc';
-        if ($startTime >= $endTime) $errors[] = 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc';
-        if (!$this->booking->isWithinOperatingHours($startTime, $endTime)) {
-            $errors[] = 'Thời gian khóa phải nằm trong giờ hoạt động (06:00 - 23:00)';
+        if ($startTime === '00:00:00' && empty($data['start_time'])) $errors[] = 'Vui lòng chọn giờ bắt đầu';
+        $normalizedEnd = $endTime === '00:00:00' ? '24:00:00' : $endTime;
+        if ($normalizedEnd <= $startTime) $errors[] = 'Giờ bắt đầu phải nhỏ hơn giờ kết thúc';
+        if (!$this->booking->isWithinOperatingHours($startTime, $normalizedEnd)) {
+            $errors[] = 'Thời gian khóa phải nằm trong giờ hoạt động của sân';
         }
 
         if (!empty($errors)) {

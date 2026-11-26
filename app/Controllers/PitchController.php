@@ -10,6 +10,7 @@ use App\Models\Customer;
 use App\Models\CancellationRequest;
 use App\Models\Notification;
 use App\Models\PitchRating;
+use App\Models\TimeSlot;
 use App\Models\PitchLock;
 use App\Models\Service;
 use App\Models\ServiceRequest;
@@ -31,6 +32,7 @@ class PitchController extends Controller
     protected $cancellationRequest;
     protected $notification;
     protected $pitchRating;
+    protected $timeSlot;
     protected $user;
     protected $validator;
 
@@ -46,6 +48,7 @@ class PitchController extends Controller
         $this->cancellationRequest = new CancellationRequest();
         $this->notification = new Notification();
         $this->pitchRating = new PitchRating();
+        $this->timeSlot = new TimeSlot();
         $this->user      = new User();
         $this->validator = new Validator();
     }
@@ -164,18 +167,72 @@ class PitchController extends Controller
         ]);
     }
 
-    private function publicTimeSlots($openingTime = '06:00:00', $closingTime = '23:00:00')
+    private function calculatePitchPeriodPrice($pitchId, $startTime, $endTime, $date, $fallbackPrice)
+    {
+        $rows = $this->timeSlot->forPitch((int)$pitchId);
+        if (!$rows) {
+            return max(0, round(((strtotime('1970-01-01 ' . $endTime) - strtotime('1970-01-01 ' . $startTime)) / 3600) * (float)$fallbackPrice, 0));
+        }
+
+        $isWeekend = in_array((int)date('N', strtotime($date)), [6, 7], true);
+        $startSec = strtotime('1970-01-01 ' . $startTime);
+        $endSec = strtotime('1970-01-01 ' . $endTime);
+        if (substr($endTime, 0, 5) === '00:00') $endSec = 86400;
+        if ($endSec <= $startSec) $endSec += 86400;
+        $total = 0;
+        foreach ($rows as $row) {
+            $rowStart = strtotime('1970-01-01 ' . $row['start_time']);
+            $rowEnd = strtotime('1970-01-01 ' . $row['end_time']);
+            if (substr($row['end_time'], 0, 5) === '00:00') $rowEnd = 86400;
+            if ($rowEnd <= $rowStart) $rowEnd += 86400;
+            $overlapStart = max($startSec, $rowStart);
+            $overlapEnd = min($endSec, $rowEnd);
+            if ($overlapEnd <= $overlapStart) continue;
+            $hours = ($overlapEnd - $overlapStart) / 3600;
+            $total += $hours * (float)($isWeekend ? $row['weekend_price'] : $row['weekday_price']);
+        }
+        return (float)$total;
+    }
+
+    private function publicTimeSlots($openingTime = '06:00:00', $closingTime = '23:00:00', $pitchId = null)
     {
         $slots = [];
         $start = ((int)substr($openingTime, 0, 2) * 3600) + ((int)substr($openingTime, 3, 2) * 60);
         $close = ((int)substr($closingTime, 0, 2) * 3600) + ((int)substr($closingTime, 3, 2) * 60);
+        if (substr($closingTime, 0, 5) === '00:00') $close = 86400;
+        if ($close < $start) $close += 86400;
+
+        $customRows = $pitchId ? $this->timeSlot->forPitch((int)$pitchId) : [];
+        if ($customRows) {
+            foreach ($customRows as $row) {
+                $slotStart = ((int)substr($row['start_time'], 0, 2) * 3600)
+                    + ((int)substr($row['start_time'], 3, 2) * 60);
+                $slotEnd = ((int)substr($row['end_time'], 0, 2) * 3600)
+                    + ((int)substr($row['end_time'], 3, 2) * 60);
+                if (substr($row['end_time'], 0, 5) === '00:00') $slotEnd = 86400;
+                if ($slotStart < $start) $slotStart += 86400;
+                if ($slotEnd <= $slotStart) $slotEnd += 86400;
+                if ($slotStart < $start || $slotEnd > $close || $slotEnd <= $slotStart) continue;
+                $slots[] = [
+                    'label' => substr($row['start_time'], 0, 5) . ' - ' . substr($row['end_time'], 0, 5),
+                    'start' => substr($row['start_time'], 0, 5),
+                    'end' => substr($row['end_time'], 0, 5),
+                    'start_sec' => $slotStart,
+                    'end_sec' => $slotEnd,
+                ];
+            }
+            usort($slots, static fn ($a, $b) => $a['start_sec'] <=> $b['start_sec']);
+            return $slots;
+        }
+
         for ($slotStart = $start; $slotStart + 3600 <= $close; $slotStart += 3600) {
             $slotEnd = $slotStart + 3600;
             $slots[] = [
-                'label'    => gmdate('H:i', $slotStart) . ' - ' . gmdate('H:i', $slotEnd),
-                'start'    => gmdate('H:i', $slotStart),
-                'end'      => gmdate('H:i', $slotEnd),
+                'label' => gmdate('H:i', $slotStart) . ' - ' . gmdate('H:i', $slotEnd),
+                'start' => gmdate('H:i', $slotStart),
+                'end' => gmdate('H:i', $slotEnd),
                 'start_sec' => $slotStart,
+                'end_sec' => $slotEnd,
             ];
         }
         return $slots;
@@ -204,7 +261,8 @@ class PitchController extends Controller
         foreach ($this->pitch->all('active') as $pitch) {
             $baseSlots = $this->publicTimeSlots(
                 $pitch['opening_time'] ?? Booking::MIN_OPERATING_HOUR,
-                $pitch['closing_time'] ?? Booking::MAX_OPERATING_HOUR
+                $pitch['closing_time'] ?? Booking::MAX_OPERATING_HOUR,
+                (int)$pitch['id']
             );
             $fieldCount = max(1, (int)($pitch['field_count'] ?? 1));
 
@@ -214,7 +272,7 @@ class PitchController extends Controller
                 $locks = $this->pitchLock->getByPitchAndDate((int)$pitch['id'], $date, $courtNumber);
                 foreach ($slots as &$slot) {
                     $slotStart = $slot['start_sec'];
-                    $slotEnd = $slotStart + 3600;
+                    $slotEnd = $slot['end_sec'] ?? ($slotStart + 3600);
                     $slot['status'] = 'available';
                     $slot['late_booking'] = false;
 
@@ -223,6 +281,9 @@ class PitchController extends Controller
                             + ((int)substr($lock['start_time'], 3, 2) * 60);
                         $lockEnd = ((int)substr($lock['end_time'], 0, 2) * 3600)
                             + ((int)substr($lock['end_time'], 3, 2) * 60);
+                        if (substr($lock['end_time'], 0, 5) === '00:00') $lockEnd = 86400;
+                        if ($lockStart < $start) $lockStart += 86400;
+                        if ($lockEnd <= $lockStart) $lockEnd += 86400;
                         if ($slotStart < $lockEnd && $slotEnd > $lockStart) {
                             $slot['status'] = 'locked';
                             break;
@@ -235,6 +296,9 @@ class PitchController extends Controller
                                 + ((int)substr($booking['start_time'], 3, 2) * 60);
                             $bookingEnd = ((int)substr($booking['end_time'], 0, 2) * 3600)
                                 + ((int)substr($booking['end_time'], 3, 2) * 60);
+                            if (substr($booking['end_time'], 0, 5) === '00:00') $bookingEnd = 86400;
+                            if ($bookingStart < $start) $bookingStart += 86400;
+                            if ($bookingEnd <= $bookingStart) $bookingEnd += 86400;
                             if ($slotStart < $bookingEnd && $slotEnd > $bookingStart) {
                                 $slot['status'] = 'booked';
                                 break;
@@ -291,7 +355,7 @@ class PitchController extends Controller
 
         $openingTime = $pitch['opening_time'] ?? '06:00:00';
         $closingTime = $pitch['closing_time'] ?? '23:00:00';
-        $hourSlots = $this->publicTimeSlots($openingTime, $closingTime);
+        $hourSlots = $this->publicTimeSlots($openingTime, $closingTime, (int)$id);
         $bookings  = $this->booking->getByPitchAndDate($id, $date, false, $courtNumber);
         $locks = $this->pitchLock->getByPitchAndDate($id, $date, $courtNumber);
         $nowTimestamp = time();
@@ -302,7 +366,8 @@ class PitchController extends Controller
         $pastSlots = [];
         if ($date === date('Y-m-d')) {
             foreach ($hourSlots as $idx => $slot) {
-                if ($slot['start_sec'] + 3600 <= $earliestStartSeconds) {
+                $slotEnd = $slot['end_sec'] ?? ($slot['start_sec'] + 3600);
+                if ($slotEnd <= $earliestStartSeconds) {
                     $pastSlots[$idx] = true;
                 }
             }
@@ -310,6 +375,8 @@ class PitchController extends Controller
 
         $takenSlots = [];
         $lockedSlots = [];
+        $openingSec = ((int)substr($openingTime, 0, 2) * 3600)
+            + ((int)substr($openingTime, 3, 2) * 60);
         foreach ($bookings as $bk) {
             $sH = (int)substr($bk['start_time'], 0, 2);
             $sM = (int)substr($bk['start_time'], 3, 2);
@@ -317,9 +384,12 @@ class PitchController extends Controller
             $eM = (int)substr($bk['end_time'], 3, 2);
             $sStart = $sH * 3600 + $sM * 60;
             $sEnd   = $eH * 3600 + $eM * 60;
+            if (substr($bk['end_time'], 0, 5) === '00:00') $sEnd = 86400;
+            if ($sStart < $openingSec) $sStart += 86400;
+            if ($sEnd <= $sStart) $sEnd += 86400;
             foreach ($hourSlots as $idx => $hs) {
                 $slotStart = $hs['start_sec'];
-                $slotEnd   = $slotStart + 3600;
+                $slotEnd   = $hs['end_sec'] ?? ($slotStart + 3600);
                 if ($slotStart < $sEnd && $slotEnd > $sStart) {
                     $takenSlots[$idx] = $bk;
                 }
@@ -330,8 +400,12 @@ class PitchController extends Controller
                 + ((int)substr($lock['start_time'], 3, 2) * 60);
             $sEnd = ((int)substr($lock['end_time'], 0, 2) * 3600)
                 + ((int)substr($lock['end_time'], 3, 2) * 60);
+            if (substr($lock['end_time'], 0, 5) === '00:00') $sEnd = 86400;
+            if ($sStart < $openingSec) $sStart += 86400;
+            if ($sEnd <= $sStart) $sEnd += 86400;
             foreach ($hourSlots as $idx => $hs) {
-                if ($hs['start_sec'] < $sEnd && $hs['start_sec'] + 3600 > $sStart) {
+                $slotEnd = $hs['end_sec'] ?? ($hs['start_sec'] + 3600);
+                if ($hs['start_sec'] < $sEnd && $slotEnd > $sStart) {
                     $lockedSlots[$idx] = $lock;
                 }
             }
@@ -339,6 +413,20 @@ class PitchController extends Controller
 
         $success = getFlash('success');
         $error   = getFlash('error');
+        $timePrices = $this->timeSlot->forPitch((int)$id);
+        if (!$timePrices) {
+            $timePrices = [];
+            for ($hour = 6; $hour < 23; $hour++) {
+                $start = sprintf('%02d:00', $hour);
+                $end = sprintf('%02d:00', $hour + 1);
+                $timePrices[] = [
+                    'start_time' => $start . ':00',
+                    'end_time' => $end . ':00',
+                    'weekday_price' => (float)$pitch['price_per_hour'],
+                    'weekend_price' => (float)$pitch['price_per_hour'],
+                ];
+            }
+        }
 
         $currentUser = $this->user->getActiveUser();
         return view('pitches.show', [
@@ -365,6 +453,7 @@ class PitchController extends Controller
             'success'       => $success,
             'error'         => $error,
             'old'           => $_SESSION['old'] ?? [],
+            'timePrices'    => $timePrices,
             'currentUser'   => $currentUser,
             'notificationCount' => ($currentUser['role'] ?? '') === 'USER'
                 ? $this->notification->unreadCount((int)$currentUser['id'])
@@ -548,17 +637,25 @@ class PitchController extends Controller
         }
 
         if (empty($errors)) {
-            if ($startTime >= $endTime) {
+            $pitchOpening = $pitch['opening_time'] ?? Booking::MIN_OPERATING_HOUR;
+            $pitchClosing = $pitch['closing_time'] ?? Booking::MAX_OPERATING_HOUR;
+            $openingSec = strtotime('1970-01-01 ' . $pitchOpening);
+            $closingSec = substr($pitchClosing, 0, 5) === '00:00'
+                ? 86400
+                : strtotime('1970-01-01 ' . $pitchClosing);
+            if ($closingSec < $openingSec) $closingSec += 86400;
+
+            $startSec = strtotime('1970-01-01 ' . $startTime);
+            $endSec = $endTime === '00:00:00'
+                ? 86400
+                : strtotime('1970-01-01 ' . $endTime);
+            if ($startSec < $openingSec) $startSec += 86400;
+            if ($endSec <= $startSec) $endSec += 86400;
+            if ($endSec <= $startSec) {
                 $errors['end_time'] = 'Giờ kết thúc phải lớn hơn giờ bắt đầu';
-            } else {
-                $pitchOpening = $pitch['opening_time'] ?? Booking::MIN_OPERATING_HOUR;
-                $pitchClosing = $pitch['closing_time'] ?? Booking::MAX_OPERATING_HOUR;
-                if (!$this->booking->isWithinOperatingHours($startTime, $endTime)
-                    || $startTime < $pitchOpening
-                    || $endTime > $pitchClosing) {
-                    $errors['start_time'] = 'Giờ đặt nằm ngoài khung hoạt động của sân ('
-                        . substr($pitchOpening, 0, 5) . ' - ' . substr($pitchClosing, 0, 5) . ')';
-                }
+            } elseif ($startSec < $openingSec || $endSec > $closingSec) {
+                $errors['start_time'] = 'Giờ đặt nằm ngoài khung hoạt động của sân ('
+                    . substr($pitchOpening, 0, 5) . ' - ' . substr($pitchClosing, 0, 5) . ')';
             }
         }
 
@@ -643,8 +740,14 @@ class PitchController extends Controller
             static fn ($item) => $item['quantity'] * $item['unit_price'],
             $serviceItems
         ));
-        $sessionTotal = max(0, round($hours * (float)$pitch['price_per_hour'], 0))
-            + $serviceTotalPerSession;
+        $pitchPrice = $this->calculatePitchPeriodPrice(
+            (int)$pitch['id'],
+            $startTime,
+            $endTime,
+            $bookingDate ?: date('Y-m-d'),
+            (float)$pitch['price_per_hour']
+        );
+        $sessionTotal = max(0, round($pitchPrice, 0)) + $serviceTotalPerSession;
         $sessionDeposit = max(1, (int)ceil($sessionTotal * 0.30));
         $total = $bookingMode === 'monthly' ? $sessionTotal * count($occurrenceDates) : $sessionTotal;
         $deposit = $bookingMode === 'monthly'

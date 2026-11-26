@@ -60,6 +60,18 @@ CREATE TABLE IF NOT EXISTS time_slots (
     INDEX idx_slot_start (start_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS pitch_time_prices (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    pitch_id INT NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    weekday_price DECIMAL(12,0) NOT NULL DEFAULT 0,
+    weekend_price DECIMAL(12,0) NOT NULL DEFAULT 0,
+    UNIQUE KEY uq_pitch_time_price (pitch_id, start_time, end_time),
+    INDEX idx_pitch_time_price_pitch (pitch_id),
+    CONSTRAINT fk_pitch_time_price_pitch FOREIGN KEY (pitch_id) REFERENCES pitches(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS pitch_locks (
     id         INT PRIMARY KEY AUTO_INCREMENT,
     pitch_id   INT NOT NULL,

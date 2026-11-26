@@ -200,6 +200,44 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
 
     <!-- CỘT PHẢI -->
     <div class="col-lg-5">
+        <?php if ($stt !== 'cancelled'): ?>
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-transparent">
+                <h5 class="fw-bold mb-0">➕ Thêm dịch vụ vào đơn</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" action="<?php echo route('admin/bookings/' . $id . '/services'); ?>">
+                    <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
+                    <input type="hidden" name="return_to" value="detail">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Dịch vụ</label>
+                        <select name="service_id" class="form-select" required <?php echo empty($availableServices) ? 'disabled' : ''; ?>>
+                            <option value="">Chọn dịch vụ</option>
+                            <?php foreach ($availableServices as $service): ?>
+                                <option value="<?php echo (int)$service['id']; ?>">
+                                    <?php echo e($service['name']); ?> · <?php echo formatMoney($service['price']); ?> / <?php echo e($service['unit']); ?> (còn <?php echo (int)$service['stock']; ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Số lượng</label>
+                        <input type="number" name="quantity" class="form-control"
+                               value="1" min="1" max="20" required
+                               <?php echo empty($availableServices) ? 'disabled' : ''; ?>>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100"
+                            <?php echo empty($availableServices) ? 'disabled' : ''; ?>>
+                        Thêm vào hóa đơn
+                    </button>
+                    <?php if (empty($availableServices)): ?>
+                        <div class="text-muted small mt-2">Không có dịch vụ còn hàng.</div>
+                    <?php endif; ?>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="card border-0 shadow-sm mb-4">
             <div class="card-header bg-transparent">
                 <h5 class="fw-bold mb-0">💰 Thanh toán</h5>
@@ -250,16 +288,16 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
                 <h5 class="fw-bold mb-0">💳 Nhập thêm thanh toán</h5>
             </div>
             <div class="card-body">
-                <form method="post" action="<?php echo route('admin/bookings/' . $id . '/payment'); ?>">
+                <form id="bookingPaymentForm" method="post" action="<?php echo route('admin/bookings/' . $id . '/payment'); ?>" novalidate>
                     <input type="hidden" name="_csrf_token" value="<?php echo e(csrfToken()); ?>">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Số tiền (VNĐ)</label>
                         <div class="input-group">
-                            <input type="number" name="payment_amount" required
+                            <input type="text" name="payment_amount" id="payment_amount" required
+                                   inputmode="numeric" pattern="[0-9]+"
                                    class="form-control"
-                                   min="1000" step="1000"
-                                   max="<?php echo (int)ceil($remaining); ?>"
-                                   value="<?php echo (int)ceil($remaining); ?>"
+                                   data-remaining="<?php echo (int)ceil($remaining); ?>"
+                                   value="<?php echo (int)$remaining; ?>"
                                    placeholder="Số tiền khách trả thêm">
                             <span class="input-group-text">VNĐ</span>
                         </div>
@@ -359,4 +397,35 @@ $pitchTotal = max(0, (float)$booking['total_price'] - $bookingServicesTotal);
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    var form = document.getElementById('bookingPaymentForm');
+    var amountInput = document.getElementById('payment_amount');
+    if (!form || !amountInput) return;
+    form.addEventListener('submit', function (event) {
+        var raw = amountInput.value.replace(/[^\d]/g, '');
+        var amount = parseInt(raw || '0', 10);
+        var remaining = parseInt(amountInput.getAttribute('data-remaining') || '0', 10);
+        if (!amount || amount < 1) {
+            event.preventDefault();
+            amountInput.setCustomValidity('Vui lòng nhập số tiền hợp lệ');
+            amountInput.reportValidity();
+            return;
+        }
+        if (amount > remaining) {
+            event.preventDefault();
+            amountInput.setCustomValidity('Số tiền không được vượt quá số còn phải trả');
+            amountInput.reportValidity();
+            return;
+        }
+        amountInput.setCustomValidity('');
+        amountInput.value = String(amount);
+    });
+    amountInput.addEventListener('input', function () {
+        amountInput.setCustomValidity('');
+    });
+})();
+</script>
+
 @endsection

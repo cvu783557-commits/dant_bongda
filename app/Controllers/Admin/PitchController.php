@@ -6,6 +6,7 @@ use App\Controller;
 use App\Models\Booking;
 use App\Models\Pitch;
 use App\Models\Service;
+use App\Models\TimeSlot;
 use App\Models\User;
 use Rakit\Validation\Validator;
 
@@ -14,12 +15,14 @@ class PitchController extends Controller
     protected $pitch;
     protected $validator;
     protected $user;
+    protected $timeSlot;
 
     public function __construct()
     {
         $this->pitch     = new Pitch();
         $this->validator = new Validator();
         $this->user      = new User();
+        $this->timeSlot  = new TimeSlot();
 
         if (session_status() === PHP_SESSION_NONE) session_start();
         if (!$this->user->canAccessAdmin()) {
@@ -151,13 +154,109 @@ class PitchController extends Controller
         return view('admin.pitches.create', [
             'old'   => $old,
             'error' => $error,
+            'timePrices' => $this->defaultTimePrices(250000),
         ]);
+    }
+
+    private function defaultTimePrices($basePrice)
+    {
+        $defaults = [
+            ['06:00', '08:00', 250000, 300000],
+            ['08:00', '12:00', 250000, 300000],
+            ['12:00', '17:00', 275000, 325000],
+            ['17:00', '20:00', 600000, 600000],
+            ['20:00', '23:00', 325000, 375000],
+        ];
+        $rows = [];
+        for ($hour = 6; $hour < 23; $hour++) {
+            $start = sprintf('%02d:00', $hour);
+            $end = sprintf('%02d:00', $hour + 1);
+            $weekday = (int)$basePrice;
+            $weekend = (int)$basePrice;
+            foreach ($defaults as $block) {
+                if ($start >= $block[0] && $start < $block[1]) {
+                    $weekday = $block[2];
+                    $weekend = $block[3];
+                    break;
+                }
+            }
+            $rows[] = [
+                'start_time' => $start,
+                'end_time' => $end,
+                'weekday_price' => $weekday,
+                'weekend_price' => $weekend,
+            ];
+        }
+        return $rows;
+    }
+
+    private function submittedTimePrices(array $data)
+    {
+        $prices = [];
+        $starts = $data['time_prices']['start'] ?? [];
+        $ends = $data['time_prices']['end'] ?? [];
+        $weekdays = $data['time_prices']['weekday'] ?? [];
+        $weekends = $data['time_prices']['weekend'] ?? [];
+
+        if (!is_array($starts)) return $prices;
+        foreach ($starts as $index => $start) {
+            $start = trim((string)$start);
+            $end = trim((string)($ends[$index] ?? ''));
+            if ($start === '' || $end === '') continue;
+            $prices[] = [
+                'start_time' => $start . ':00',
+                'end_time' => $end . ':00',
+                'weekday_price' => max(0, (int)($weekdays[$index] ?? 0)),
+                'weekend_price' => max(0, (int)($weekends[$index] ?? 0)),
+            ];
+        }
+        return $prices;
+    }
+
+    private function validateTimePrices(array $prices, $openingTime = '06:00', $closingTime = '23:00')
+    {
+        if (!$prices) return 'Vui lòng thêm ít nhất một khung giờ';
+
+        $openingSec = ((int)substr($openingTime, 0, 2) * 3600) + ((int)substr($openingTime, 3, 2) * 60);
+        $closingSec = $closingTime === '00:00'
+            ? 86400
+            : ((int)substr($closingTime, 0, 2) * 3600) + ((int)substr($closingTime, 3, 2) * 60);
+        if ($closingSec < $openingSec) $closingSec += 86400;
+
+        foreach ($prices as &$row) {
+            $row['_start_sec'] = ((int)substr($row['start_time'], 0, 2) * 3600)
+                + ((int)substr($row['start_time'], 3, 2) * 60);
+            $row['_end_sec'] = ((int)substr($row['end_time'], 0, 2) * 3600)
+                + ((int)substr($row['end_time'], 3, 2) * 60);
+            if ($row['_start_sec'] < $openingSec) $row['_start_sec'] += 86400;
+            if ($row['_end_sec'] <= $row['_start_sec']) $row['_end_sec'] += 86400;
+        }
+        unset($row);
+        usort($prices, static fn ($a, $b) => $a['_start_sec'] <=> $b['_start_sec']);
+
+        $previousEnd = null;
+        foreach ($prices as $row) {
+            $start = substr($row['start_time'], 0, 5);
+            $end = substr($row['end_time'], 0, 5);
+            if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D', $start)
+                || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D', $end)) {
+                return 'Giờ bắt đầu/kết thúc của khung giờ không hợp lệ';
+            }
+            if ($row['_start_sec'] < $openingSec || $row['_end_sec'] > $closingSec) {
+                return 'Khung giờ phải nằm trong giờ mở cửa và đóng cửa';
+            }
+            if ($previousEnd !== null && $row['_start_sec'] < $previousEnd) {
+                return 'Các khung giờ không được bị chồng lấn';
+            }
+            $previousEnd = $row['_end_sec'];
+        }
+        return null;
     }
 
     private function validatePitchHours(array $data)
     {
-        $openingTime = $data['opening_time'] ?? '';
-        $closingTime = $data['closing_time'] ?? '';
+        $openingTime = substr((string)($data['opening_time'] ?? ''), 0, 5);
+        $closingTime = substr((string)($data['closing_time'] ?? ''), 0, 5);
         $errors = [];
 
         if (!is_string($openingTime) || !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/D', $openingTime)) {
@@ -168,10 +267,12 @@ class PitchController extends Controller
         }
 
         if (!$errors) {
-            if ($openingTime >= $closingTime) {
-                $errors['opening_time'] = 'Giờ mở cửa phải trước giờ đóng cửa';
-            } elseif ($openingTime < '06:00' || $closingTime > '23:00') {
-                $errors['opening_time'] = 'Khung giờ hoạt động phải nằm trong khoảng 06:00 - 23:00';
+            $openingAllowsMidnight = $openingTime === '00:00';
+            $closingIsMidnight = $closingTime === '00:00';
+            if (!$openingAllowsMidnight && $openingTime >= '24:00') {
+                $errors['opening_time'] = 'Giờ mở cửa không hợp lệ';
+            } elseif ($openingTime < '00:00' || (!$closingIsMidnight && $closingTime < '00:00')) {
+                $errors['opening_time'] = 'Giờ hoạt động không hợp lệ';
             }
         }
 
@@ -220,6 +321,18 @@ class PitchController extends Controller
             return;
         }
 
+        $timePrices = $this->submittedTimePrices($data);
+        $timePriceError = $this->validateTimePrices(
+            $timePrices,
+            substr($data['opening_time'] ?? '06:00', 0, 5),
+            substr($data['closing_time'] ?? '23:00', 0, 5)
+        );
+        if ($timePriceError) {
+            setFlash('error', $timePriceError);
+            redirect('admin/pitches/create');
+            return;
+        }
+
         $id = $this->pitch->create([
             'name'           => trim($data['name']),
             'type'           => (int)$data['type'],
@@ -237,6 +350,7 @@ class PitchController extends Controller
             'extra_services' => trim($data['extra_services'] ?? ''),
             'status'         => $data['status'],
         ]);
+        $this->timeSlot->replaceForPitch($id, $timePrices);
 
         unset($_SESSION['old']);
         setFlash('success', 'Thêm sân thành công');
@@ -258,11 +372,16 @@ class PitchController extends Controller
 
         $old   = $_SESSION['old'] ?? [];
         $error = getFlash('error');
+        $timePrices = $this->timeSlot->forPitch((int)$id);
+        if (!$timePrices) {
+            $timePrices = $this->defaultTimePrices((int)$pitch['price_per_hour']);
+        }
 
         return view('admin.pitches.edit', [
             'pitch' => $pitch,
             'old'   => $old,
             'error' => $error,
+            'timePrices' => $timePrices,
         ]);
     }
 
@@ -341,7 +460,19 @@ class PitchController extends Controller
             $updateData['image'] = $imagePath;
         }
 
+        $timePrices = $this->submittedTimePrices($data);
+        $timePriceError = $this->validateTimePrices(
+            $timePrices,
+            substr($data['opening_time'] ?? '06:00', 0, 5),
+            substr($data['closing_time'] ?? '23:00', 0, 5)
+        );
+        if ($timePriceError) {
+            setFlash('error', $timePriceError);
+            redirect('admin/pitches/' . $id . '/edit');
+            return;
+        }
         $this->pitch->update($id, $updateData);
+        $this->timeSlot->replaceForPitch($id, $timePrices);
 
         unset($_SESSION['old']);
         setFlash('success', 'Cập nhật sân thành công');
