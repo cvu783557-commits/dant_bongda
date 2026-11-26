@@ -185,6 +185,32 @@ class BookingController extends Controller
         redirect('admin/service-requests/sales/' . (int)$result['id'] . '/invoice');
     }
 
+    public function addOperatingService($id)
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST'
+            || !isValidCsrfToken($_POST['_csrf_token'] ?? null)) {
+            setFlash('error', 'Phiên yêu cầu không hợp lệ hoặc đã hết hạn.');
+            redirect('admin/pitches/operating');
+            return;
+        }
+
+        $serviceId = filter_var($_POST['service_id'] ?? null, FILTER_VALIDATE_INT);
+        $quantity = filter_var($_POST['quantity'] ?? null, FILTER_VALIDATE_INT);
+        if ($serviceId === false || $quantity === false) {
+            setFlash('error', 'Vui lòng chọn dịch vụ và nhập số lượng hợp lệ.');
+            redirect('admin/pitches/operating');
+            return;
+        }
+
+        $result = $this->bookingService->addToActiveBooking((int)$id, (int)$serviceId, (int)$quantity);
+        if (!$result['success']) {
+            setFlash('error', $result['error']);
+        } else {
+            setFlash('success', 'Đã thêm dịch vụ vào hóa đơn sân. Thành tiền: ' . formatMoney($result['subtotal']));
+        }
+        redirect('admin/pitches/operating');
+    }
+
     public function serviceSaleInvoice($id)
     {
         $sale = $this->serviceSale->findForInvoice((int)$id);
